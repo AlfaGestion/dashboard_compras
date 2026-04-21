@@ -41,6 +41,7 @@ Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Crear acceso directo en el escritorio"; GroupDescription: "Accesos directos:"; Flags: unchecked
+Name: "installservice"; Description: "Instalar como servicio de Windows (inicio automatico con el servidor)"; GroupDescription: "Servicio de Windows:"; Flags: checkedonce
 Name: "openreadme"; Description: "Abrir manual de instalacion al finalizar"; GroupDescription: "Acciones sugeridas:"; Flags: checkedonce
 Name: "openfirewall"; Description: "Abrir el puerto en Firewall de Windows al finalizar"; GroupDescription: "Acciones sugeridas:"; Flags: unchecked
 Name: "launchapp"; Description: "Iniciar Dashboard de Compras al finalizar"; GroupDescription: "Acciones sugeridas:"; Flags: unchecked
@@ -58,9 +59,13 @@ Name: "{autoprograms}\Alfa Gestion\Dashboard de Compras\Manual de instalacion"; 
 Name: "{autodesktop}\Dashboard de Compras"; Filename: "{app}\{#MyAppLauncher}"; WorkingDir: "{app}"; Tasks: desktopicon; IconFilename: "{app}\{#MyAppExeName}"
 
 [Run]
+Filename: "{cmd}"; Parameters: "/c ""{app}\instalar_servicio.bat"" /silent"; Flags: runhidden waituntilterminated; Tasks: installservice
 Filename: "{app}\{#MyReadmeName}"; Description: "Abrir manual de instalacion"; Flags: postinstall shellexec skipifsilent; Tasks: openreadme
 Filename: "{cmd}"; Parameters: "/c ""{app}\abrir_firewall.bat"""; Description: "Abrir el puerto en Firewall de Windows"; Flags: postinstall runhidden waituntilterminated skipifsilent; Tasks: openfirewall
 Filename: "{cmd}"; Parameters: "/c ""{app}\{#MyAppLauncher}"""; Description: "Iniciar Dashboard de Compras"; Flags: postinstall skipifsilent; Tasks: launchapp
+
+[UninstallRun]
+Filename: "{cmd}"; Parameters: "/c ""{app}\desinstalar_servicio.bat"" /silent"; Flags: runhidden waituntilterminated
 
 [UninstallDelete]
 Type: files; Name: "{app}\shell_backend_stdout.log"
@@ -138,18 +143,20 @@ begin
 end;
 
 function InitializeSetup(): Boolean;
+var
+  ErrorCode: Integer;
 begin
   Result := True;
   #ifndef IncludeHostingBundle
   if NeedsHostingBundle() then
   begin
     if MsgBox(
-      'Falta el componente requerido: ASP.NET Core 8 Runtime.' + #13#10#13#10 +
-      'Instale el ".NET 8 Hosting Bundle" y vuelva a ejecutar el instalador.' + #13#10#13#10 +
-      '¿Desea abrir la pagina de descarga ahora?',
+      'No se detecto ASP.NET Core 8 Runtime en este equipo.' + #13#10#13#10 +
+      'Si ya lo tiene instalado (SDK o Hosting Bundle), puede continuar igual.' + #13#10 +
+      'Si no lo tiene, la aplicacion no iniciara correctamente.' + #13#10#13#10 +
+      '¿Desea abrir la pagina de descarga del Hosting Bundle?',
       mbConfirmation, MB_YESNO) = IDYES then
       ShellExec('open', 'https://dotnet.microsoft.com/es-es/download/dotnet/8.0', '', '', SW_SHOW, ewNoWait, ErrorCode);
-    Result := False;
   end;
   #endif
 end;

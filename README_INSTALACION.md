@@ -1,175 +1,182 @@
 # Dashboard de Compras - Alfa Gestión
 
-## Qué ya queda resuelto
-- La app corre con Kestrel sin IIS.
-- Escucha en LAN por el puerto configurado.
-- Abre el navegador automáticamente en la PC servidor.
-- Muestra en logs la URL local y las URLs de acceso por nombre/IP.
-- La cadena SQL Server y el puerto quedan configurables por `appsettings.json`.
-- La publicación deja una carpeta final lista para copiar.
-- Ahora también se puede generar un instalador `Setup.exe` para distribuir desde web o por enlace.
+## Instalación desde el Setup.exe (recomendado)
 
-## Instalador para distribuir por web
-Si querés subir un instalador a tu web para que el cliente lo descargue e instale en la PC servidor:
+1. Ejecutá `DashboardComprasSetup_X.X.X.exe` como administrador.
+2. El instalador verifica si falta el .NET 8 Hosting Bundle y lo instala automáticamente.
+3. Durante la instalación podés elegir:
+   - ✅ **Instalar como servicio de Windows** — la app arranca sola con el servidor (recomendado).
+   - Abrir el puerto en Firewall de Windows.
+   - Abrir el manual al finalizar.
+4. La primera vez que la app arranca pedirá los datos de conexión SQL Server por consola.
+5. Esos datos se guardan en `appsettings.Production.json` y no se vuelven a pedir.
 
-1. Ejecutá:
-   - `scripts\publicar_instalador.bat`
-2. El script hace esto:
-   - publica la app en limpio
-   - arma una carpeta de entrada para setup
-   - si detecta Inno Setup 6, compila el instalador
-3. La salida queda en:
-   - `publish\DashboardComprasInstaller\Output`
+---
 
-Notas:
-- Si Inno Setup no está instalado, igual queda preparada la carpeta:
-  - `publish\DashboardComprasInstaller\Input`
-- El archivo del instalador queda definido en:
-  - `installer\DashboardComprasServidor.iss`
-- Después solo hay que abrir ese `.iss` con Inno Setup y compilar.
+## Primera configuración de conexión
 
-Resultado esperado:
-- un archivo tipo:
-  - `DashboardComprasSetup_1.0.0.exe`
-- ese es el archivo que podés subir a tu web para descarga.
+Si `appsettings.Production.json` no existe o no tiene datos de conexión, la app los pedirá por consola al iniciar:
 
-## Publicación recomendada
-1. Ejecutá:
-   - `scripts\publicar_release.bat`
-2. Se genera la carpeta:
-   - `publish\DashboardComprasLAN`
-3. Esa carpeta ya incluye:
-   - `DashboardCompras.exe`
-   - `DashboardComprasShell.exe`
-   - `iniciar_dashboard.bat`
-   - `abrir_dashboard_shell.bat`
-   - `abrir_firewall.bat`
-   - `Abrir-Firewall.ps1`
-   - `README_INSTALACION.md`
-   - `appsettings.Server.sample.json`
+```
+Servidor: AGSERVER\ALFANET
+Base:      ALFANET
+Usuario:   ALFANET
+Clave:     ****
+```
 
-## Instalación en PC servidor
-1. Copiá la carpeta `publish\DashboardComprasLAN` a la PC servidor.
-2. Si querés partir de una plantilla limpia, abrí `appsettings.Server.sample.json` y copiá sus valores a `appsettings.Production.json`.
-3. Editá `appsettings.Production.json`.
-4. Configurá:
-   - `ConnectionStrings:AlfaGestion`
-   - `ServidorWeb:Puerto`
-   - opcionalmente `ServidorWeb:UrlBasePublica`
-5. Si querés mantener todo simple, dejá `ServidorWeb:EscucharEnRed` en `true`.
-6. Ejecutá `abrir_firewall.bat` como administrador.
-7. Ejecutá `iniciar_dashboard.bat`.
-8. Verificá acceso local:
-   - `http://localhost:5055`
+Los datos quedan guardados en `appsettings.Production.json` en la carpeta de instalación.  
+Si necesitás cambiarlos, editá ese archivo directamente o eliminalo para que los vuelva a pedir.
 
-## Uso con shell de escritorio
-- `DashboardComprasShell.exe`
-  Abre el dashboard en una ventana de escritorio con `WebView2`.
-- `abrir_dashboard_shell.bat`
-  Atajo simple para abrir el shell.
+---
 
-Ejemplos:
-- Local con backend incluido:
-  - `DashboardComprasShell.exe`
-- Remoto contra servidor:
-  - `DashboardComprasShell.exe --server=NOMBRE-PC --port=5055`
-- URL directa:
-  - `DashboardComprasShell.exe --url=http://NOMBRE-PC:5055`
+## Servicio de Windows
 
-## Separación de configuración
-- `appsettings.json`
-  Configuración base general.
-- `appsettings.Production.json`
-  Configuración recomendada para la PC servidor cuando ejecutás `DashboardCompras.exe`.
-- `appsettings.Server.sample.json`
-  Plantilla para armar una configuración nueva sin tocar el entorno de desarrollo.
+El setup instala la app como servicio de Windows (`DashboardCompras`). Esto significa que:
+- Arranca automáticamente con el servidor.
+- Se reinicia solo si falla (hasta 3 reintentos).
+- No requiere que nadie inicie sesión para que funcione.
 
-Sugerencia práctica:
-- Desarrollo: mantener `appsettings.json`.
-- Servidor: dejar valores finales en `appsettings.Production.json`.
-- Si cambiás el puerto, abrí nuevamente el firewall para ese nuevo puerto.
+**Gestionar el servicio:**
+```batch
+# Ver estado
+sc query DashboardCompras
 
-## Acceso desde otras PCs
-Desde cualquier PC cliente de la red:
-- Abrí un navegador.
-- Ingresá por nombre de equipo:
-  - `http://NOMBRE-PC:5055`
-- O por IP:
-  - `http://192.168.1.50:5055`
+# Iniciar / detener
+sc start DashboardCompras
+sc stop DashboardCompras
 
-Sugerencia práctica:
-- Crear un acceso directo en cada cliente apuntando a:
-  - `http://NOMBRE-PC:5055`
+# O desde el buscador de Windows: services.msc
+```
+
+**Scripts manuales** (en la carpeta de instalación o en `scripts\`):
+- `instalar_servicio.bat` — instala o reinstala el servicio (requiere admin).
+- `desinstalar_servicio.bat` — detiene y elimina el servicio (requiere admin).
+
+Al desinstalar la app con el desinstalador de Windows, el servicio se elimina automáticamente.
+
+---
+
+## Acceso al dashboard
+
+Desde el servidor:
+- `http://localhost:5055`
+
+Desde cualquier PC de la red:
+- `http://NOMBRE-PC:5055`
+- `http://192.168.1.XX:5055`
+
+Sugerencia: crear un acceso directo en cada cliente apuntando a `http://NOMBRE-PC:5055`.
+
+---
+
+## Instalación manual (sin Setup.exe)
+
+1. Ejecutá `scripts\publicar_release.bat` para generar `publish\DashboardComprasLAN`.
+2. Copiá esa carpeta a la PC servidor.
+3. Editá `appsettings.Production.json` con los datos de conexión y puerto.
+4. Ejecutá `abrir_firewall.bat` como administrador.
+5. Para instalar el servicio: ejecutá `instalar_servicio.bat` como administrador.
+6. Para iniciar sin servicio: ejecutá `iniciar_dashboard.bat`.
+
+---
+
+## Generar el instalador Setup.exe
+
+```batch
+scripts\publicar_instalador.bat 1.0.0
+```
+
+El script hace todo en orden:
+1. Publica la app en `publish\DashboardComprasLAN`.
+2. Copia los archivos a `publish\DashboardComprasInstaller\Input` (connection string vacío).
+3. Descarga o usa el .NET 8 Hosting Bundle cacheado en `installer\prereqs\`.
+4. Compila el instalador con Inno Setup 6 o 7 → `publish\DashboardComprasInstaller\Output\`.
+
+Requisito: tener [Inno Setup](https://jrsoftware.org/isinfo.php) instalado (v6 o v7).  
+Si no está instalado, igual queda preparada la carpeta Input para compilar manualmente.
+
+---
+
+## Actualizar una instalación existente
+
+Copiá el contenido de `publish\DashboardComprasLAN\` al directorio de instalación, **sin pisar `appsettings.Production.json`**:
+
+```batch
+robocopy publish\DashboardComprasLAN "C:\ruta\instalacion" /MIR /XF appsettings.Production.json *.log
+```
+
+Después reiniciá el servicio:
+```batch
+sc stop DashboardCompras && sc start DashboardCompras
+```
+
+---
+
+## Configuración
+
+### appsettings.Production.json
+Archivo con la configuración real del servidor. Se crea automáticamente la primera vez o se puede editar a mano:
+
+```json
+{
+  "ConnectionStrings": {
+    "AlfaGestion": "Server=AGSERVER\\ALFANET;Database=ALFANET;User ID=ALFANET;Password=ALFANET;TrustServerCertificate=True;"
+  },
+  "ServidorWeb": {
+    "Puerto": 5055,
+    "EscucharEnRed": true
+  }
+}
+```
+
+### Separación de archivos
+| Archivo | Uso |
+|---|---|
+| `appsettings.json` | Configuración base (no tocar en producción) |
+| `appsettings.Production.json` | Configuración real del servidor |
+| `appsettings.Server.sample.json` | Plantilla de referencia |
+
+---
 
 ## Scripts incluidos
-- `scripts\publicar_release.bat`
-  Publica la app y arma la carpeta final.
-- `scripts\publicar_instalador.bat`
-  Publica la app, prepara la carpeta del setup y compila el instalador si Inno Setup está instalado.
-- `publish\DashboardComprasLAN\iniciar_dashboard.bat`
-  Inicia la app publicada usando el `.exe`.
-- `publish\DashboardComprasLAN\abrir_dashboard_shell.bat`
-  Abre el dashboard en modo escritorio usando `WebView2`.
-- `publish\DashboardComprasLAN\abrir_firewall.bat`
-  Abre el puerto configurado en Firewall de Windows.
-- `publish\DashboardComprasLAN\Abrir-Firewall.ps1`
-  Script PowerShell usado por el `.bat`. Toma el puerto desde `appsettings.Production.json` o `appsettings.json`.
 
-## Flujo recomendado de uso real
-1. Publicar con `scripts\publicar_release.bat`.
-2. Copiar `publish\DashboardComprasLAN` a la PC servidor.
-3. Editar `appsettings.Production.json`.
-4. Ejecutar `abrir_firewall.bat` como administrador.
-5. Ejecutar `iniciar_dashboard.bat`.
-6. Desde otra PC entrar por:
-   - `http://NOMBRE-PC:PUERTO`
-   - `http://IP:PUERTO`
+| Script | Descripción |
+|---|---|
+| `scripts\publicar_release.bat` | Publica la app y arma la carpeta final |
+| `scripts\publicar_instalador.bat [version]` | Genera el Setup.exe completo |
+| `scripts\instalar_servicio.bat` | Instala el servicio de Windows (requiere admin) |
+| `scripts\desinstalar_servicio.bat` | Desinstala el servicio de Windows (requiere admin) |
+| `iniciar_dashboard.bat` | Inicia la app sin servicio (modo consola) |
+| `abrir_firewall.bat` | Abre el puerto en Firewall de Windows |
 
-## Flujo recomendado si lo vas a distribuir desde web
-1. Ejecutar `scripts\publicar_instalador.bat`.
-2. Tomar el archivo `Setup.exe` de:
-   - `publish\DashboardComprasInstaller\Output`
-3. Subir ese archivo a tu web o compartirlo por enlace.
-4. El cliente lo descarga en la PC servidor.
-5. Instala el dashboard.
-6. Abre `Manual de instalacion` o ejecuta `Iniciar Dashboard`.
-7. Desde otras PCs entra por navegador.
+---
 
 ## Solución de problemas
+
+### La app no arranca / servicio no inicia
+- Revisá el log: `backend_startup.log` en la carpeta de instalación.
+- Verificá que .NET 8 Hosting Bundle esté instalado.
+- Revisá datos de conexión en `appsettings.Production.json`.
+
 ### Puerto ocupado
-- Cambiá `ServidorWeb:Puerto` en `appsettings.json` o `appsettings.Production.json`.
-- Volvé a iniciar la app.
+- Cambiá `ServidorWeb:Puerto` en `appsettings.Production.json`.
+- Ejecutá `abrir_firewall.bat` nuevamente para el nuevo puerto.
+- Reiniciá el servicio.
 
 ### Firewall bloqueando
 - Ejecutá `abrir_firewall.bat` como administrador.
-- Verificá que el puerto configurado coincida con el de la app.
-- Si cambiaste el puerto después de abrir el firewall, ejecutá otra vez el script.
+- Verificá que el puerto del firewall coincida con `ServidorWeb:Puerto`.
 
-### No resuelve el nombre de la PC
-- Probá con la IP:
-  - `http://IP:PUERTO`
-- Revisá conectividad de red entre equipos.
-
-### Falla SQL Server
-- Revisá servidor, base, usuario y clave en `ConnectionStrings:AlfaGestion`.
-- Confirmá que la PC servidor tenga acceso al SQL Server.
-- La app mostrará mensajes de error y el log conservará la excepción.
-
-### El navegador local abre pero otra PC no entra
+### Otra PC no puede entrar
 - Confirmá que `ServidorWeb:EscucharEnRed` esté en `true`.
-- Confirmá que el puerto del firewall coincida con `ServidorWeb:Puerto`.
 - Probá por IP si el nombre de la PC no resuelve.
+- Verificá que el firewall esté abierto para ese puerto.
 
-## Ejemplo de configuración
-```json
-"ConnectionStrings": {
-  "AlfaGestion": "Server=AGSERVER\\ALFANET;Database=ALFANET;User ID=ALFANET;Password=ALFANET;TrustServerCertificate=True;"
-},
-"ServidorWeb": {
-  "Puerto": 5055,
-  "EscucharEnRed": true,
-  "AbrirNavegadorAlIniciar": true,
-  "Protocolo": "http",
-  "UrlBasePublica": "http://NOMBRE-PC:5055"
-}
-```
+### Falla la conexión SQL Server
+- Revisá servidor, base, usuario y clave en `appsettings.Production.json`.
+- Confirmá que la PC servidor tenga acceso de red al SQL Server.
+- Eliminá `appsettings.Production.json` para volver a ingresar los datos desde cero.
+
+### Cambiar los datos de conexión
+- Editá directamente `appsettings.Production.json`, o
+- Eliminá el archivo y reiniciá el servicio — la app pedirá los datos nuevamente.

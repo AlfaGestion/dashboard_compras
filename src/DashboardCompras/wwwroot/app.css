@@ -164,6 +164,41 @@ html[data-theme="light"] .data-table td {
     border-bottom-color: rgba(15, 23, 42, 0.08);
 }
 
+html[data-theme="light"] .ia-query-box__input {
+    background: #ffffff;
+    border-color: rgba(15, 23, 42, 0.15);
+    color: #0f172a;
+}
+
+html[data-theme="light"] .ia-query-box__input:focus {
+    outline: 2px solid rgba(2, 132, 199, 0.3);
+    border-color: rgba(2, 132, 199, 0.5);
+}
+
+html[data-theme="light"] .ia-launcher-options {
+    background: #f1f5f9;
+    border-color: rgba(15, 23, 42, 0.1);
+}
+
+html[data-theme="light"] .ia-inline-message--info {
+    background: rgba(2, 132, 199, 0.08);
+    color: #0369a1;
+    border-color: rgba(2, 132, 199, 0.2);
+}
+
+html[data-theme="light"] .ia-inline-message--safe {
+    background: rgba(13, 148, 136, 0.08);
+    color: #0f766e;
+    border-color: rgba(13, 148, 136, 0.2);
+}
+
+html[data-theme="light"] .ia-inline-message--error,
+html[data-theme="light"] .ia-report--error .ia-inline-message {
+    background: rgba(220, 38, 38, 0.07);
+    color: #b91c1c;
+    border-color: rgba(220, 38, 38, 0.2);
+}
+
 html[data-theme="light"] .help-search {
     background: #f8fafc;
     border-color: rgba(15, 23, 42, 0.12);
@@ -1099,28 +1134,12 @@ select {
 /* ── LineChart ───────────────────────────────────────────────── */
 .line-chart {
     width: 100%;
-    min-height: 260px;
 }
 
 .line-chart__svg {
     width: 100%;
-    height: 260px;
-}
-
-.line-chart__legend,
-.line-chart__labels {
-    display: flex;
-    justify-content: space-between;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-}
-
-.line-chart__legend {
-    margin-top: 0.5rem;
-}
-
-.line-chart__labels {
-    margin-top: 0.35rem;
+    height: auto;
+    display: block;
 }
 
 .line-chart__grid {
@@ -1128,15 +1147,10 @@ select {
     stroke-width: 1;
 }
 
-.line-chart__axis {
-    color: var(--color-muted);
-    font-size: 11px;
-}
-
 .line-chart__path {
     fill: none;
     stroke: #38bdf8;
-    stroke-width: 4;
+    stroke-width: 2.5;
     stroke-linecap: round;
     stroke-linejoin: round;
 }
@@ -1144,12 +1158,19 @@ select {
 .line-chart__point {
     fill: #ecfeff;
     stroke: #14b8a6;
-    stroke-width: 3;
+    stroke-width: 2.5;
 }
 
-.line-chart__label {
-    color: var(--color-muted);
+.line-chart__label-svg {
+    fill: var(--color-muted);
     font-size: 11px;
+    font-family: inherit;
+}
+
+.line-chart__axis-svg {
+    fill: var(--color-muted);
+    font-size: 11px;
+    font-family: inherit;
 }
 
 .chart-empty {

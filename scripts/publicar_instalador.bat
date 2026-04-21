@@ -62,6 +62,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$f = '%INPUT_DIR_FULL%\appsettings.json'; $j = Get-Content $f -Raw | ConvertFrom-Json; $j.ConnectionStrings.AlfaGestion = ''; $j | ConvertTo-Json -Depth 10 | Set-Content $f -Encoding UTF8"
 if exist "%INPUT_DIR_FULL%\appsettings.Production.json" del /Q "%INPUT_DIR_FULL%\appsettings.Production.json"
 
+echo [2.6/5] Copiando scripts de servicio...
+copy /Y ".\scripts\instalar_servicio.bat" "%INPUT_DIR_FULL%\instalar_servicio.bat" >nul
+copy /Y ".\scripts\desinstalar_servicio.bat" "%INPUT_DIR_FULL%\desinstalar_servicio.bat" >nul
+
 echo [3/5] Verificando .NET 8 Hosting Bundle...
 if not exist "%PREREQS_CACHE%" mkdir "%PREREQS_CACHE%"
 set "CACHED_BUNDLE=%PREREQS_CACHE%\dotnet-hosting-win.exe"
