@@ -13,7 +13,7 @@
     <link rel="icon" type="image/png" href="favicon.png" />
     <script>
         (function () {
-            var t = localStorage.getItem('dashboard.theme') || 'dark';
+            var t = localStorage.getItem('dashboard.theme') || 'light';
             document.documentElement.setAttribute('data-theme', t);
         })();
         window.dashboardTheme = {
@@ -22,7 +22,7 @@
                 localStorage.setItem('dashboard.theme', theme);
             },
             get: function () {
-                return document.documentElement.getAttribute('data-theme') || 'dark';
+                return document.documentElement.getAttribute('data-theme') || 'light';
             }
         };
     </script>
