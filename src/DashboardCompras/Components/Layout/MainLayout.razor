@@ -1,0 +1,200 @@
+﻿@inherits LayoutComponentBase
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<div class="shell @(_sidebarCollapsed ? "shell--collapsed" : string.Empty)">
+    <aside class="shell__sidebar">
+        <div class="brand">
+            <div class="brand__logo">AG</div>
+            <div class="brand__content">
+                <p class="brand__eyebrow">Business Intelligence</p>
+                <a class="brand__title" href="">Dashboard de Compras</a>
+            </div>
+            <button type="button"
+                    class="sidebar-toggle"
+                    @onclick="ToggleSidebar"
+                    title="@(_sidebarCollapsed ? "Mostrar menú" : "Ocultar menú")"
+                    aria-label="@(_sidebarCollapsed ? "Mostrar menú lateral" : "Ocultar menú lateral")">
+                <i class="bi @(_sidebarCollapsed ? "bi-layout-sidebar-inset" : "bi-layout-sidebar")"></i>
+            </button>
+        </div>
+
+        <div class="menu">
+            <p class="menu__section">Principal</p>
+            <nav class="menu__nav">
+                <NavLink class="menu__link" href="" Match="NavLinkMatch.All">
+                    <span class="menu__icon"><i class="bi bi-house-fill"></i></span>
+                    <span>Inicio</span>
+                </NavLink>
+
+                <NavLink class="menu__link" href="proveedores">
+                    <span class="menu__icon"><i class="bi bi-people-fill"></i></span>
+                    <span>Proveedores</span>
+                </NavLink>
+
+                <NavLink class="menu__link" href="comprobantes">
+                    <span class="menu__icon"><i class="bi bi-receipt"></i></span>
+                    <span>Comprobantes</span>
+                </NavLink>
+
+                <NavLink class="menu__link" href="rubros">
+                    <span class="menu__icon"><i class="bi bi-tag-fill"></i></span>
+                    <span>Rubros</span>
+                </NavLink>
+
+                <NavLink class="menu__link" href="familias">
+                    <span class="menu__icon"><i class="bi bi-collection-fill"></i></span>
+                    <span>Familias</span>
+                </NavLink>
+
+                <NavLink class="menu__link" href="articulos">
+                    <span class="menu__icon"><i class="bi bi-box-fill"></i></span>
+                    <span>Artículos</span>
+                </NavLink>
+
+                <NavLink class="menu__link" href="actividad">
+                    <span class="menu__icon"><i class="bi bi-bar-chart-steps"></i></span>
+                    <span>Actividad</span>
+                </NavLink>
+
+                <NavLink class="menu__link" href="informesia">
+                    <span class="menu__icon"><i class="bi bi-stars"></i></span>
+                    <span>InformesIA</span>
+                </NavLink>
+
+            </nav>
+
+            <div class="menu__footer">
+                <NavLink class="menu__link menu__link--help" href="ayuda">
+                    <span class="menu__icon"><i class="bi bi-question-circle-fill"></i></span>
+                    <span>Ayuda</span>
+                </NavLink>
+            </div>
+        </div>
+    </aside>
+
+    <main class="shell__main">
+        <header class="shell__header">
+            <div>
+                <p class="shell__eyebrow">Alfa Gestión</p>
+                <h1 class="shell__title">Dashboard de Compras</h1>
+            </div>
+            <div class="shell__actions">
+                <button type="button" class="btn btn--ghost no-print" @onclick="ToggleThemeAsync" title="@(_isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro")">
+                    <i class="bi @(_isDark ? "bi-sun" : "bi-moon")"></i>
+                </button>
+                <button type="button" class="btn btn--ghost shell__print no-print" @onclick="ExportCurrentPageToPdfAsync" title="Exportar pantalla actual a PDF">
+                    <i class="bi bi-file-earmark-pdf"></i>
+                    <span>Exportar PDF</span>
+                </button>
+                <div class="shell__status">
+                    <span class="shell__dot"></span>
+                    <span>Actualizado en tiempo real</span>
+                    <span class="shell__date">@DateTime.Now.ToString("dd/MM/yyyy")</span>
+                    <a class="help-btn no-print" href="ayuda" title="Manual de usuario">
+                        <i class="bi bi-question-circle"></i>
+                    </a>
+                </div>
+            </div>
+        </header>
+
+        <section class="shell__content">
+            <div class="print-banner print-only">
+                <div>
+                    <p class="print-banner__eyebrow">Dashboard de Compras</p>
+                    <h2 class="print-banner__title">@CurrentPageTitle</h2>
+                </div>
+                <p class="print-banner__meta">Exportado el @DateTime.Now.ToString("dd/MM/yyyy HH:mm")</p>
+            </div>
+            @Body
+        </section>
+    </main>
+</div>
+
+@code {
+    private bool _sidebarCollapsed;
+    private bool _sidebarInitialized;
+    private bool _isDark = true;
+    private string CurrentPageTitle => GetCurrentPageTitle();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        try
+        {
+            var sidebar = await JS.InvokeAsync<string?>("localStorage.getItem", "dashboard.sidebar.collapsed");
+            _sidebarCollapsed = string.Equals(sidebar, "true", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            _sidebarCollapsed = false;
+        }
+
+        try
+        {
+            var theme = await JS.InvokeAsync<string>("dashboardTheme.get");
+            _isDark = !string.Equals(theme, "light", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            _isDark = true;
+        }
+
+        _sidebarInitialized = true;
+        StateHasChanged();
+    }
+
+    private async Task ToggleSidebar()
+    {
+        _sidebarCollapsed = !_sidebarCollapsed;
+
+        if (!_sidebarInitialized)
+            return;
+
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", "dashboard.sidebar.collapsed", _sidebarCollapsed ? "true" : "false");
+        }
+        catch
+        {
+            // Si localStorage no está disponible, dejamos el estado solo en memoria.
+        }
+    }
+
+    private async Task ToggleThemeAsync()
+    {
+        _isDark = !_isDark;
+        try
+        {
+            await JS.InvokeVoidAsync("dashboardTheme.set", _isDark ? "dark" : "light");
+        }
+        catch { }
+    }
+
+    private async Task ExportCurrentPageToPdfAsync()
+    {
+        await JS.InvokeVoidAsync("dashboardExport.printCurrentPage", CurrentPageTitle);
+    }
+
+    private string GetCurrentPageTitle()
+    {
+        var relative = Nav.ToBaseRelativePath(Nav.Uri);
+        var path = relative.Split('?', '#', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim('/').ToLowerInvariant() ?? string.Empty;
+
+        return path switch
+        {
+            "" => "Inicio",
+            "proveedores" => "Proveedores",
+            "comprobantes" => "Comprobantes",
+            "rubros" => "Rubros",
+            "familias" => "Familias",
+            "articulos" => "Artículos",
+            "actividad" => "Actividad",
+            "informesia" => "Informes IA",
+            "ayuda" => "Ayuda",
+            _ => "Dashboard"
+        };
+    }
+}

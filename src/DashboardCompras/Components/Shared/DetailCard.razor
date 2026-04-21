@@ -1,0 +1,20 @@
+<section class="panel-card">
+    <div class="panel-card__header">
+        <div>
+            <h3 class="panel-card__title">@Titulo</h3>
+            @if (!string.IsNullOrWhiteSpace(Subtitulo))
+            {
+                <p class="panel-card__subtitle">@Subtitulo</p>
+            }
+        </div>
+    </div>
+    <div class="detail-list">
+        @ChildContent
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string Titulo { get; set; } = string.Empty;
+    [Parameter] public string? Subtitulo { get; set; }
+    [Parameter, EditorRequired] public RenderFragment ChildContent { get; set; } = default!;
+}

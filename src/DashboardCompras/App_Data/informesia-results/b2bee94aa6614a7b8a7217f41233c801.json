@@ -1,0 +1,632 @@
+{
+  "executionId": "b2bee94a-a661-4a7b-8a72-17f41233c801",
+  "exitoso": true,
+  "consultaOriginal": "listado de compras del mes de marzo, mostrame las columnas fecha factura, tc ,idcomprobante, cuenta, nombre, importe sin iva, iva, total, usuario que cargo el comprobante y la fecha y hora, no generes grafico, solo los campos del libro de iva compras.\nnecesito que cada columna de importes sea totalizada.",
+  "titulo": "Listado de compras",
+  "subtitulo": "Vista tabular de comprobantes para an\u00E1lisis operativo",
+  "resumen": "Se obtuvieron 40 filas para el informe.",
+  "mensaje": "Se prioriz\u00F3 el per\u00EDodo pedido en la consulta: marzo de 2026.",
+  "notaSeguridad": "InformesIA trabaja en modo solo lectura y solo consulta las vistas autorizadas del dashboard.",
+  "tipoResultado": "listado",
+  "generadoEn": "2026-04-17T10:16:52.4350193-03:00",
+  "filtrosAplicados": {
+    "fechaDesde": "2026-03-01T00:00:00",
+    "fechaHasta": "2026-03-31T00:00:00",
+    "proveedor": null,
+    "articulo": null,
+    "articuloCodigo": null,
+    "articuloDescripcion": null,
+    "rubro": null,
+    "familia": null,
+    "usuario": null,
+    "sucursal": null,
+    "deposito": null,
+    "estado": null,
+    "tipoComprobante": null
+  },
+  "fuentesAutorizadas": [
+    "vw_compras_cabecera_dashboard"
+  ],
+  "columnas": [
+    {
+      "key": "FechaFactura",
+      "label": "Fecha factura",
+      "format": "fecha",
+      "align": "left"
+    },
+    {
+      "key": "Tc",
+      "label": "TC",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "Cuenta",
+      "label": "Cuenta",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "Nombre",
+      "label": "Nombre",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "ImporteSinIva",
+      "label": "Importe sin IVA",
+      "format": "moneda",
+      "align": "right"
+    },
+    {
+      "key": "Iva",
+      "label": "IVA",
+      "format": "moneda",
+      "align": "right"
+    },
+    {
+      "key": "Total",
+      "label": "Total",
+      "format": "moneda",
+      "align": "right"
+    },
+    {
+      "key": "Usuario",
+      "label": "Usuario",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "FechaHora",
+      "label": "Fecha y hora",
+      "format": "fechahora",
+      "align": "left"
+    }
+  ],
+  "filas": [
+    {
+      "values": [
+        "31/03/2026",
+        "FPC",
+        "211014000",
+        "VARIOS",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 30.000,00",
+        "ROCIO",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "LT",
+        "111030002",
+        "111030002",
+        "$ 326.351,54",
+        "$ 68.533,82",
+        "$ 1.388.832,20",
+        "ROCIO",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "LT",
+        "111030001",
+        "111030001",
+        "$ 158.135,17",
+        "$ 33.208,39",
+        "$ 409.304,29",
+        "ROCIO",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "LT",
+        "111030017",
+        "111030017",
+        "$ 2.848,88",
+        "$ 598,26",
+        "$ 4.739,77",
+        "ROCIO",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "LT",
+        "111030001",
+        "111030001",
+        "$ 290.142,84",
+        "$ 60.930,00",
+        "$ 1.085.133,59",
+        "Sistemas",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "LT",
+        "111030002",
+        "111030002",
+        "$ 232.515,35",
+        "$ 48.828,22",
+        "$ 869.607,29",
+        "Sistemas",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "LT",
+        "111030004",
+        "111030004",
+        "$ 3.545,84",
+        "$ 744,63",
+        "$ 13.155,06",
+        "Sistemas",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "LT",
+        "111030008",
+        "111030008",
+        "$ 3.223,86",
+        "$ 677,01",
+        "$ 7.568,78",
+        "Sistemas",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "LT",
+        "111030008",
+        "111030008",
+        "$ 21.297,65",
+        "$ 4.472,51",
+        "$ 34.173,01",
+        "Sistemas",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "LT",
+        "111030002",
+        "111030002",
+        "$ 646.496,61",
+        "$ 135.764,29",
+        "$ 1.462.587,53",
+        "Sistemas",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "LT",
+        "111030007",
+        "111030007",
+        "$ 11.654,39",
+        "$ 2.447,42",
+        "$ 30.176,68",
+        "Sistemas",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "LT",
+        "111030001",
+        "111030001",
+        "$ 554.653,22",
+        "$ 116.477,18",
+        "$ 1.254.688,50",
+        "Sistemas",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "GB",
+        "111020001",
+        "111020001",
+        "$ 38.712,67",
+        "$ 8.129,66",
+        "$ 1.081.085,83",
+        "ROCIO",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "GB",
+        "111020002",
+        "111020002",
+        "$ 77.327,00",
+        "$ 16.238,67",
+        "$ 4.654.239,47",
+        "ROCIO",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "GB",
+        "111020002",
+        "111020002",
+        "$ 185.950,44",
+        "$ 39.049,59",
+        "$ 225.000,03",
+        "ROCIO",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "GB",
+        "111020001",
+        "111020001",
+        "$ 111.775,14",
+        "$ 23.472,78",
+        "$ 483.216,01",
+        "ROCIO",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "FCC",
+        "211010022",
+        "DAVID ROSENTAL E HIJOS SACI",
+        "$ 2.846.215,01",
+        "$ 597.705,16",
+        "$ 3.561.593,51",
+        "Sistemas",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "FPC",
+        "211014000",
+        "VARIOS",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 200.000,00",
+        "ROCIO",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "FPC",
+        "211014000",
+        "VARIOS",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 72.900,00",
+        "ROCIO",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "FPC",
+        "211014000",
+        "VARIOS",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 380.000,00",
+        "ROCIO",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "FCC",
+        "211010076",
+        "COOP DE OBRAS Y SERVICIOS PUBLICOS SOCIALES Y VIVI",
+        "$ 4.043,63",
+        "$ 1.091,78",
+        "$ 8.851,41",
+        "ROCIO",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "FCC",
+        "211010076",
+        "COOP DE OBRAS Y SERVICIOS PUBLICOS SOCIALES Y VIVI",
+        "$ 45.780,17",
+        "$ 9.604,30",
+        "$ 55.496,74",
+        "ROCIO",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "FCC",
+        "211010010",
+        "MIGUEL A PI\u00D1EYRO E HIJOS SRL",
+        "$ 230.662,46",
+        "$ 48.439,12",
+        "$ 300.108,41",
+        "ROCIO",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "30/03/2026",
+        "LT",
+        "111030017",
+        "111030017",
+        "$ 2.656,19",
+        "$ 557,80",
+        "$ 4.419,19",
+        "ROCIO",
+        "30/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "30/03/2026",
+        "FCC",
+        "211010010",
+        "MIGUEL A PI\u00D1EYRO E HIJOS SRL",
+        "$ 319.739,55",
+        "$ 67.145,31",
+        "$ 416.002,91",
+        "ROCIO",
+        "30/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "30/03/2026",
+        "NCC",
+        "211010028",
+        "CASPANI HNOS SA",
+        "-$ 22.830,60",
+        "-$ 4.794,43",
+        "-$ 28.538,26",
+        "Sistemas",
+        "30/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "30/03/2026",
+        "FPC",
+        "211014012",
+        "SUCESION DE SANCHEZ HORACIO ARTURO",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 3.500.000,00",
+        "ALBERTO",
+        "30/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "30/03/2026",
+        "FPC",
+        "211014034",
+        "VENTURA GOYA SOCIEDAD SIMPLE",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 4.000.000,00",
+        "ALBERTO",
+        "30/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "30/03/2026",
+        "FCC",
+        "211010057",
+        "BONI VARINIA MERCEDES",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 393.400,00",
+        "ROCIO",
+        "30/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "30/03/2026",
+        "LIQC",
+        "211014008",
+        "JONES JUSTO DAVID ANDRES",
+        "$ 4.315.500,00",
+        "$ 453.127,50",
+        "$ 4.768.627,50",
+        "ALBERTO",
+        "30/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "29/03/2026",
+        "FPC",
+        "211014000",
+        "VARIOS",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 31.500,00",
+        "ROCIO",
+        "29/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "28/03/2026",
+        "FPC",
+        "211014000",
+        "VARIOS",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 227.899,60",
+        "ROCIO",
+        "28/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "28/03/2026",
+        "FPC",
+        "211014000",
+        "VARIOS",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 42.000,00",
+        "ROCIO",
+        "28/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "28/03/2026",
+        "FCC",
+        "211010072",
+        "LOS ABEDULES SA",
+        "$ 81.928,33",
+        "$ 17.204,95",
+        "$ 100.000,82",
+        "ROCIO",
+        "28/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "28/03/2026",
+        "FCC",
+        "211010108",
+        "ADRION SRL",
+        "$ 217.389,03",
+        "$ 45.651,70",
+        "$ 263.040,73",
+        "Sistemas",
+        "28/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "27/03/2026",
+        "LT",
+        "111030017",
+        "111030017",
+        "$ 5.308,38",
+        "$ 1.114,76",
+        "$ 8.831,70",
+        "ROCIO",
+        "27/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "27/03/2026",
+        "FCC",
+        "211010003",
+        "CAGNOLI S.A",
+        "$ 1.533.331,67",
+        "$ 321.999,65",
+        "$ 1.916.664,59",
+        "Sistemas",
+        "27/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "27/03/2026",
+        "FCC",
+        "211010028",
+        "CASPANI HNOS SA",
+        "$ 114.972,41",
+        "$ 24.144,21",
+        "$ 143.715,51",
+        "Sistemas",
+        "27/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "27/03/2026",
+        "FCC",
+        "211010028",
+        "CASPANI HNOS SA",
+        "$ 334.287,37",
+        "$ 70.200,35",
+        "$ 417.859,21",
+        "Sistemas",
+        "27/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "27/03/2026",
+        "FPC",
+        "211014000",
+        "VARIOS",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 120.000,00",
+        "ROCIO",
+        "27/03/2026 00:00"
+      ]
+    }
+  ],
+  "grafico": null,
+  "sugerenciasRelacionadas": [
+    {
+      "texto": "Familias que m\u00E1s crecieron",
+      "descripcion": "Compara ramas familiares contra el per\u00EDodo anterior.",
+      "categoria": "Comparaci\u00F3n"
+    },
+    {
+      "texto": "Comprobantes con mayor importe",
+      "descripcion": "Lista los comprobantes m\u00E1s altos del per\u00EDodo.",
+      "categoria": "Top"
+    },
+    {
+      "texto": "Usuarios con m\u00E1s actividad",
+      "descripcion": "Resume qui\u00E9nes cargaron m\u00E1s comprobantes y monto.",
+      "categoria": "Actividad"
+    },
+    {
+      "texto": "Compar\u00E1 rubros contra el per\u00EDodo anterior",
+      "descripcion": "Diferencia y variaci\u00F3n de rubros vs per\u00EDodo previo.",
+      "categoria": "Comparaci\u00F3n"
+    }
+  ],
+  "sqlGenerado": "SELECT TOP (40)\n    c.FECHA AS FechaFactura,\n    c.CUENTA AS Cuenta,\n    COALESCE(NULLIF(c.RAZON_SOCIAL, \u0027\u0027), c.CUENTA) AS Nombre,\n    c.NetoDashboard AS ImporteSinIva,\n    c.IvaDashboard AS Iva,\n    c.ImporteDashboard AS Total,\n    c.USUARIO AS Usuario,\n    c.FECHA AS FechaHora,\n    c.TC AS Tc,\n    c.NUMERO AS Numero,\n    c.EstadoComprobante AS Estado\nFROM vw_compras_cabecera_dashboard c\nWHERE (@CurFechaDesde IS NULL OR c.FECHA \u003E= @CurFechaDesde)\nAND (@CurFechaHasta IS NULL OR c.FECHA \u003C DATEADD(day, 1, @CurFechaHasta))\nAND (@CurProveedor IS NULL OR c.CUENTA LIKE \u0027%\u0027 \u002B @CurProveedor \u002B \u0027%\u0027 OR c.RAZON_SOCIAL LIKE \u0027%\u0027 \u002B @CurProveedor \u002B \u0027%\u0027)\nAND (@CurUsuario IS NULL OR c.USUARIO = @CurUsuario)\nAND (@CurSucursal IS NULL OR c.SUCURSAL = @CurSucursal)\nAND (@CurDeposito IS NULL OR CONVERT(varchar(20), c.IdDeposito) = @CurDeposito)\nAND (@CurEstado IS NULL OR c.EstadoComprobante = @CurEstado)\nAND (@CurTipoComprobante IS NULL OR c.TC = @CurTipoComprobante)\nAND (\n    (@CurArticulo IS NULL AND @CurArticuloCodigo IS NULL AND @CurArticuloDescripcion IS NULL AND @CurRubro IS NULL AND @CurFamilia IS NULL)\n    OR EXISTS (\n        SELECT 1\n        FROM vw_compras_detalle_dashboard detailFilter\n        WHERE detailFilter.TC = c.TC\n          AND detailFilter.IDCOMPROBANTE = c.IDCOMPROBANTE\n          AND detailFilter.CUENTA = c.CUENTA\n          AND (@CurArticulo IS NULL OR LTRIM(RTRIM(detailFilter.IDARTICULO)) = LTRIM(RTRIM(@CurArticulo)))\n          AND (@CurArticuloCodigo IS NULL OR LTRIM(RTRIM(detailFilter.IDARTICULO)) = LTRIM(RTRIM(@CurArticuloCodigo)))\n          AND (@CurArticuloDescripcion IS NULL OR detailFilter.DESCRIPCION_ARTICULO LIKE \u0027%\u0027 \u002B @CurArticuloDescripcion \u002B \u0027%\u0027)\n          AND (@CurRubro IS NULL OR detailFilter.RUBRO = @CurRubro)\n          AND (@CurFamilia IS NULL OR detailFilter.FAMILIA = @CurFamilia)\n    )\n)\nORDER BY c.FECHA DESC, c.NUMERO DESC"
+}

@@ -1,0 +1,19 @@
+<article class="kpi-card @(Destacado ? "kpi-card--highlight" : string.Empty)">
+    <div class="kpi-card__icon @(Destacado ? "kpi-card__icon--highlight" : string.Empty)">@((MarkupString)Icono)</div>
+    <div class="kpi-card__body">
+        <p class="kpi-card__label">@Titulo</p>
+        <h3 class="kpi-card__value">@Valor</h3>
+        @if (!string.IsNullOrWhiteSpace(Descripcion))
+        {
+            <p class="kpi-card__description">@Descripcion</p>
+        }
+    </div>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public string Titulo { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Valor { get; set; } = string.Empty;
+    [Parameter] public string Descripcion { get; set; } = string.Empty;
+    [Parameter] public string Icono { get; set; } = "•";
+    [Parameter] public bool Destacado { get; set; }
+}

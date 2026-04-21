@@ -1,0 +1,64 @@
+{
+  "executionId": "157bed37-7bde-4ae2-9f72-f5a25e6f7e28",
+  "exitoso": false,
+  "consultaOriginal": "quiero el libro de iva compras del mes de diciembre 2025",
+  "titulo": "Informes IA",
+  "subtitulo": "Consulta no resuelta",
+  "resumen": "",
+  "mensaje": "No pude resolver esa consulta con las plantillas seguras disponibles. Prob\u00E1 reformularla usando proveedores, rubros, familias, art\u00EDculos, usuarios, comprobantes o evoluci\u00F3n.",
+  "notaSeguridad": "Solo se permiten consultas de lectura sobre las vistas autorizadas del dashboard.",
+  "tipoResultado": "",
+  "generadoEn": "2026-04-17T09:11:40.8409557-03:00",
+  "filtrosAplicados": {
+    "fechaDesde": "2026-04-01T00:00:00",
+    "fechaHasta": "2026-04-17T00:00:00-03:00",
+    "proveedor": null,
+    "articulo": null,
+    "articuloCodigo": null,
+    "articuloDescripcion": null,
+    "rubro": null,
+    "familia": null,
+    "usuario": null,
+    "sucursal": null,
+    "deposito": null,
+    "estado": null,
+    "tipoComprobante": null
+  },
+  "fuentesAutorizadas": [
+    "vw_compras_cabecera_dashboard",
+    "vw_compras_detalle_dashboard",
+    "vw_estadisticas_ingresos_diarias",
+    "vw_familias_jerarquia"
+  ],
+  "columnas": [],
+  "filas": [],
+  "grafico": null,
+  "sugerenciasRelacionadas": [
+    {
+      "texto": "Proveedores con mayor crecimiento en el per\u00EDodo",
+      "descripcion": "Compara el gasto actual contra el per\u00EDodo anterior y ordena por variaci\u00F3n.",
+      "categoria": "Ranking"
+    },
+    {
+      "texto": "Art\u00EDculos con mayor aumento",
+      "descripcion": "Detecta subas de costo promedio respecto del per\u00EDodo anterior.",
+      "categoria": "Variaci\u00F3n"
+    },
+    {
+      "texto": "Rubros con m\u00E1s participaci\u00F3n",
+      "descripcion": "Muestra concentraci\u00F3n del gasto por rubro en el per\u00EDodo filtrado.",
+      "categoria": "Concentraci\u00F3n"
+    },
+    {
+      "texto": "Familias que m\u00E1s crecieron",
+      "descripcion": "Compara ramas familiares contra el per\u00EDodo anterior.",
+      "categoria": "Comparaci\u00F3n"
+    },
+    {
+      "texto": "Comprobantes con mayor importe",
+      "descripcion": "Lista los comprobantes m\u00E1s altos del per\u00EDodo.",
+      "categoria": "Top"
+    }
+  ],
+  "sqlGenerado": ""
+}

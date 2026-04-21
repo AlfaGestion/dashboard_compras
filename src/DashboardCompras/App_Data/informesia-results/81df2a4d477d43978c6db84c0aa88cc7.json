@@ -1,0 +1,678 @@
+{
+  "executionId": "81df2a4d-477d-4397-8c6d-b84c0aa88cc7",
+  "exitoso": true,
+  "consultaOriginal": "listado de compras del mes de marzo, mostrame las columnas fecha factura, tc ,idcomprobante, cuenta, nombre, importe sin iva, iva, total, usuario que cargo el comprobante y la fecha y hora, no generes grafico, solo los campos del libro de iva compras.\nnecesito que cada columna de importes sea totalizada.",
+  "titulo": "Listado de compras",
+  "subtitulo": "Vista tabular de comprobantes para an\u00E1lisis operativo",
+  "resumen": "Se obtuvieron 40 filas para el informe.",
+  "mensaje": "Se prioriz\u00F3 el per\u00EDodo pedido en la consulta: marzo de 2026.",
+  "notaSeguridad": "InformesIA trabaja en modo solo lectura y solo consulta las vistas autorizadas del dashboard.",
+  "tipoResultado": "listado",
+  "generadoEn": "2026-04-17T14:09:18.2251619-03:00",
+  "filtrosAplicados": {
+    "fechaDesde": "2026-03-01T00:00:00",
+    "fechaHasta": "2026-03-31T00:00:00",
+    "proveedor": null,
+    "articulo": null,
+    "articuloCodigo": null,
+    "articuloDescripcion": null,
+    "rubro": null,
+    "familia": null,
+    "usuario": null,
+    "sucursal": null,
+    "deposito": null,
+    "estado": null,
+    "tipoComprobante": null
+  },
+  "fuentesAutorizadas": [
+    "vw_compras_cabecera_dashboard"
+  ],
+  "columnas": [
+    {
+      "key": "FechaFactura",
+      "label": "Fecha factura",
+      "format": "fecha",
+      "align": "left"
+    },
+    {
+      "key": "Tc",
+      "label": "TC",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "IdComprobante",
+      "label": "Comprobante",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "Cuenta",
+      "label": "Cuenta",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "Nombre",
+      "label": "Nombre",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "ImporteSinIva",
+      "label": "Importe sin IVA",
+      "format": "moneda",
+      "align": "right"
+    },
+    {
+      "key": "Iva",
+      "label": "IVA",
+      "format": "moneda",
+      "align": "right"
+    },
+    {
+      "key": "Total",
+      "label": "Total",
+      "format": "moneda",
+      "align": "right"
+    },
+    {
+      "key": "Usuario",
+      "label": "Usuario",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "FechaHora",
+      "label": "Fecha y hora",
+      "format": "fechahora",
+      "align": "left"
+    }
+  ],
+  "filas": [
+    {
+      "values": [
+        "31/03/2026",
+        "FCC",
+        "002500007998A",
+        "211010562",
+        "ACUARELA SRL",
+        "$ 457.296,55",
+        "$ 96.032,32",
+        "$ 553.328,87",
+        "Sistemas",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "FCC",
+        "002300356796A",
+        "211010106",
+        "SERRA SRL",
+        "$ 1.444.879,15",
+        "$ 303.424,62",
+        "$ 1.806.098,93",
+        "Sistemas",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "FCC",
+        "002000230157A",
+        "211010089",
+        "LUCACEN S.R.L.",
+        "$ 275.425,40",
+        "$ 57.839,33",
+        "$ 336.018,98",
+        "Sistemas",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "FCC",
+        "002000230152A",
+        "211010089",
+        "LUCACEN S.R.L.",
+        "$ 443.091,01",
+        "$ 93.049,11",
+        "$ 540.571,03",
+        "Sistemas",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "FCC",
+        "002000230144A",
+        "211010089",
+        "LUCACEN S.R.L.",
+        "$ 61.717,92",
+        "$ 12.960,76",
+        "$ 75.295,86",
+        "Sistemas",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "FCC",
+        "001400017589A",
+        "211010360",
+        "POLYFILM S R L",
+        "$ 32.174.253,04",
+        "$ 6.756.593,14",
+        "$ 38.930.846,18",
+        "Sistemas",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "FCC",
+        "000622191747A",
+        "211010150",
+        "POSNET SRL",
+        "$ 100.385,40",
+        "$ 21.080,93",
+        "$ 125.481,74",
+        "Sistemas",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "FCC",
+        "000400042512A",
+        "211010464",
+        "LORENZO ANNECCHINI S.A.",
+        "$ 359.716,95",
+        "$ 75.540,56",
+        "$ 435.257,51",
+        "Sistemas",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "31/03/2026",
+        "FCC",
+        "000200094723A",
+        "211010003",
+        "SILKSTONE S.A.",
+        "$ 1.128.537,90",
+        "$ 236.992,96",
+        "$ 1.365.530,86",
+        "Sistemas",
+        "31/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "30/03/2026",
+        "FCC",
+        "000300102221A",
+        "211010401",
+        "ALIMENTOS DEL LAGO SRL",
+        "$ 105.726,06",
+        "$ 22.202,47",
+        "$ 131.100,31",
+        "Sistemas",
+        "30/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "30/03/2026",
+        "FCC",
+        "000200001947A",
+        "211010576",
+        "SURTOYS SRL",
+        "$ 3.805.612,00",
+        "$ 799.178,52",
+        "$ 4.604.790,52",
+        "Sistemas",
+        "30/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "28/03/2026",
+        "FCC",
+        "001300075766A",
+        "211010137",
+        "COMPA\u00D1IA AMERICANA DE ALIMENTOS S.A.-NEVARES",
+        "$ 1.175.110,00",
+        "$ 246.773,10",
+        "$ 1.421.883,10",
+        "Sistemas",
+        "28/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "27/03/2026",
+        "FCC",
+        "002300001866A",
+        "211010115",
+        "WASSA S.R.L.",
+        "$ 892.561,98",
+        "$ 187.438,02",
+        "$ 1.080.000,00",
+        "Sistemas",
+        "27/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "27/03/2026",
+        "FCC",
+        "000600022904A",
+        "211010445",
+        "COLOURS SA",
+        "$ 664.544,00",
+        "$ 139.554,24",
+        "$ 804.098,24",
+        "Sistemas",
+        "27/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "27/03/2026",
+        "FCC",
+        "000500231604A",
+        "211010009",
+        "NEVADA SRL",
+        "$ 9.722,22",
+        "$ 2.041,67",
+        "$ 11.763,89",
+        "Sistemas",
+        "27/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "27/03/2026",
+        "FCC",
+        "000500231603A",
+        "211010009",
+        "NEVADA SRL",
+        "$ 85.363,20",
+        "$ 17.926,27",
+        "$ 103.289,47",
+        "Sistemas",
+        "27/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "27/03/2026",
+        "FCC",
+        "000500231600A",
+        "211010009",
+        "NEVADA SRL",
+        "$ 349.943,01",
+        "$ 73.488,03",
+        "$ 433.929,33",
+        "Sistemas",
+        "27/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "27/03/2026",
+        "FCC",
+        "000500231599A",
+        "211010009",
+        "NEVADA SRL",
+        "$ 400.454,28",
+        "$ 84.095,40",
+        "$ 496.563,31",
+        "Sistemas",
+        "27/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "27/03/2026",
+        "FCC",
+        "000500231598A",
+        "211010009",
+        "NEVADA SRL",
+        "$ 408.001,33",
+        "$ 85.680,28",
+        "$ 505.921,65",
+        "Sistemas",
+        "27/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "27/03/2026",
+        "FCC",
+        "000500231597A",
+        "211010009",
+        "NEVADA SRL",
+        "$ 1.308.872,94",
+        "$ 274.863,32",
+        "$ 1.623.002,46",
+        "Sistemas",
+        "27/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "27/03/2026",
+        "NCC",
+        "000500019159A",
+        "211010009",
+        "NEVADA SRL",
+        "-$ 145.277,27",
+        "-$ 30.508,23",
+        "-$ 180.143,82",
+        "sistemas",
+        "27/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "26/03/2026",
+        "FCC",
+        "010802334841A",
+        "211010330",
+        "PUELCHE S.A.I.C.Y F",
+        "$ 4.310,31",
+        "$ 905,17",
+        "$ 6.321,95",
+        "Sistemas",
+        "26/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "26/03/2026",
+        "FCC",
+        "001500250562A",
+        "211010395",
+        "RAMON CHOZAS S A HUSARES",
+        "$ 1.081.510,20",
+        "$ 227.117,14",
+        "$ 1.308.627,34",
+        "Sistemas",
+        "26/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "26/03/2026",
+        "FCC",
+        "000700212556A",
+        "211010132",
+        "VELAS DE LOS MILAGROS SRL-ILUMINARTE",
+        "$ 33.114,30",
+        "$ 6.954,00",
+        "$ 40.068,30",
+        "Sistemas",
+        "26/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "26/03/2026",
+        "FCC",
+        "000700212555A",
+        "211010132",
+        "VELAS DE LOS MILAGROS SRL-ILUMINARTE",
+        "$ 232.145,00",
+        "$ 48.750,45",
+        "$ 280.895,45",
+        "Sistemas",
+        "26/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "26/03/2026",
+        "FCC",
+        "000700212554A",
+        "211010132",
+        "VELAS DE LOS MILAGROS SRL-ILUMINARTE",
+        "$ 1.022.536,91",
+        "$ 214.732,75",
+        "$ 1.237.269,66",
+        "Sistemas",
+        "26/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "26/03/2026",
+        "FCC",
+        "000300000538C",
+        "211010602",
+        "ESCOBAR DAVID SALOMON- ZONA CRISTIANA LIBRERIA",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 866.550,00",
+        "Sistemas",
+        "26/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "25/03/2026",
+        "FCC",
+        "247001548451A",
+        "211010342",
+        "TELEFONICA MOVILES ARGENTINA S.A.",
+        "$ 559.775,82",
+        "$ 4.881,29",
+        "$ 731.911,67",
+        "sistemas",
+        "25/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "25/03/2026",
+        "FCC",
+        "002100005367A",
+        "211010127",
+        "NOUBAR PARNAKIAN S A",
+        "$ 1.019.619,52",
+        "$ 214.120,10",
+        "$ 1.233.739,62",
+        "Sistemas",
+        "25/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "25/03/2026",
+        "FCC",
+        "002000229943A",
+        "211010089",
+        "LUCACEN S.R.L.",
+        "$ 85.128,64",
+        "$ 17.877,01",
+        "$ 103.856,94",
+        "sistemas",
+        "25/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "25/03/2026",
+        "FCC",
+        "001100049580A",
+        "211010127",
+        "NOUBAR PARNAKIAN S A",
+        "$ 3.279.447,14",
+        "$ 688.683,90",
+        "$ 3.968.131,04",
+        "Sistemas",
+        "25/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "25/03/2026",
+        "FCC",
+        "000200035601A",
+        "211010257",
+        "GRUPO SUDAMERICANO DE GOLOSINAS SRL-EL GORDITO",
+        "$ 417.371,90",
+        "$ 87.648,09",
+        "$ 517.541,14",
+        "Sistemas",
+        "25/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "24/03/2026",
+        "FCC",
+        "002000229878A",
+        "211010089",
+        "LUCACEN S.R.L.",
+        "$ 287.164,80",
+        "$ 60.304,61",
+        "$ 350.341,06",
+        "sistemas",
+        "24/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "23/03/2026",
+        "FCC",
+        "002300001830A",
+        "211010115",
+        "WASSA S.R.L.",
+        "$ 3.880.796,43",
+        "$ 814.967,25",
+        "$ 4.695.763,68",
+        "Sistemas",
+        "23/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "23/03/2026",
+        "FCC",
+        "002200001788A",
+        "211010115",
+        "WASSA S.R.L.",
+        "$ 768.948,10",
+        "$ 161.479,10",
+        "$ 930.427,20",
+        "Sistemas",
+        "23/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "23/03/2026",
+        "FCC",
+        "001200074483A",
+        "211010016",
+        "ALEXVIAN S.A.C.I.F.I.A. / GUAYMALLEN",
+        "$ 2.513.400,00",
+        "$ 527.814,00",
+        "$ 3.141.750,00",
+        "Sistemas",
+        "23/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "23/03/2026",
+        "FCC",
+        "000500231159A",
+        "211010009",
+        "NEVADA SRL",
+        "$ 39.943,65",
+        "$ 8.388,17",
+        "$ 48.331,82",
+        "Sistemas",
+        "23/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "23/03/2026",
+        "FCC",
+        "000500231158A",
+        "211010009",
+        "NEVADA SRL",
+        "$ 39.957,33",
+        "$ 8.391,04",
+        "$ 48.348,37",
+        "Sistemas",
+        "23/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "23/03/2026",
+        "FCC",
+        "000500231157A",
+        "211010009",
+        "NEVADA SRL",
+        "$ 39.454,55",
+        "$ 8.285,46",
+        "$ 47.740,01",
+        "Sistemas",
+        "23/03/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "23/03/2026",
+        "FCC",
+        "000500231156A",
+        "211010009",
+        "NEVADA SRL",
+        "$ 223.363,63",
+        "$ 46.906,36",
+        "$ 276.970,91",
+        "Sistemas",
+        "23/03/2026 00:00"
+      ]
+    }
+  ],
+  "grafico": null,
+  "sugerenciasRelacionadas": [
+    {
+      "texto": "Familias que m\u00E1s crecieron",
+      "descripcion": "Compara ramas familiares contra el per\u00EDodo anterior.",
+      "categoria": "Comparaci\u00F3n"
+    },
+    {
+      "texto": "Comprobantes con mayor importe",
+      "descripcion": "Lista los comprobantes m\u00E1s altos del per\u00EDodo.",
+      "categoria": "Top"
+    },
+    {
+      "texto": "Usuarios con m\u00E1s actividad",
+      "descripcion": "Resume qui\u00E9nes cargaron m\u00E1s comprobantes y monto.",
+      "categoria": "Actividad"
+    },
+    {
+      "texto": "Compar\u00E1 rubros contra el per\u00EDodo anterior",
+      "descripcion": "Diferencia y variaci\u00F3n de rubros vs per\u00EDodo previo.",
+      "categoria": "Comparaci\u00F3n"
+    }
+  ],
+  "sqlGenerado": "SELECT TOP (40)\n    c.FECHA AS FechaFactura,\n    c.CUENTA AS Cuenta,\n    COALESCE(NULLIF(c.RAZON_SOCIAL, \u0027\u0027), c.CUENTA) AS Nombre,\n    c.NetoDashboard AS ImporteSinIva,\n    c.IvaDashboard AS Iva,\n    c.ImporteDashboard AS Total,\n    c.USUARIO AS Usuario,\n    c.FECHA AS FechaHora,\n    c.TC AS Tc,\n    c.IDCOMPROBANTE AS IdComprobante,\n    c.EstadoComprobante AS Estado\nFROM vw_compras_cabecera_dashboard c\nWHERE (@CurFechaDesde IS NULL OR c.FECHA \u003E= @CurFechaDesde)\nAND (@CurFechaHasta IS NULL OR c.FECHA \u003C DATEADD(day, 1, @CurFechaHasta))\nAND (@CurProveedor IS NULL OR c.CUENTA LIKE \u0027%\u0027 \u002B @CurProveedor \u002B \u0027%\u0027 OR c.RAZON_SOCIAL LIKE \u0027%\u0027 \u002B @CurProveedor \u002B \u0027%\u0027)\nAND (@CurUsuario IS NULL OR c.USUARIO = @CurUsuario)\nAND (@CurSucursal IS NULL OR c.SUCURSAL = @CurSucursal)\nAND (@CurDeposito IS NULL OR CONVERT(varchar(20), c.IdDeposito) = @CurDeposito)\nAND (@CurEstado IS NULL OR c.EstadoComprobante = @CurEstado)\nAND (@CurTipoComprobante IS NULL OR c.TC = @CurTipoComprobante)\nAND (\n    (@CurArticulo IS NULL AND @CurArticuloCodigo IS NULL AND @CurArticuloDescripcion IS NULL AND @CurRubro IS NULL AND @CurFamilia IS NULL)\n    OR EXISTS (\n        SELECT 1\n        FROM vw_compras_detalle_dashboard detailFilter\n        WHERE detailFilter.TC = c.TC\n          AND detailFilter.IDCOMPROBANTE = c.IDCOMPROBANTE\n          AND detailFilter.CUENTA = c.CUENTA\n          AND (@CurArticulo IS NULL OR LTRIM(RTRIM(detailFilter.IDARTICULO)) = LTRIM(RTRIM(@CurArticulo)))\n          AND (@CurArticuloCodigo IS NULL OR LTRIM(RTRIM(detailFilter.IDARTICULO)) = LTRIM(RTRIM(@CurArticuloCodigo)))\n          AND (@CurArticuloDescripcion IS NULL OR detailFilter.DESCRIPCION_ARTICULO LIKE \u0027%\u0027 \u002B @CurArticuloDescripcion \u002B \u0027%\u0027)\n          AND (@CurRubro IS NULL OR detailFilter.RUBRO = @CurRubro)\n          AND (@CurFamilia IS NULL OR detailFilter.FAMILIA = @CurFamilia)\n    )\n)\nORDER BY c.FECHA DESC, c.IDCOMPROBANTE DESC"
+}

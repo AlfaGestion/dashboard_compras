@@ -1,0 +1,38 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <title>Dashboard de Compras - Alfa Gestión</title>
+    <link rel="stylesheet" href="bootstrap/bootstrap.min.css" />
+    <link rel="stylesheet" href="app.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="DashboardCompras.styles.css" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <script>
+        (function () {
+            var t = localStorage.getItem('dashboard.theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', t);
+        })();
+        window.dashboardTheme = {
+            set: function (theme) {
+                document.documentElement.setAttribute('data-theme', theme);
+                localStorage.setItem('dashboard.theme', theme);
+            },
+            get: function () {
+                return document.documentElement.getAttribute('data-theme') || 'dark';
+            }
+        };
+    </script>
+    <HeadOutlet />
+</head>
+
+<body>
+    <Routes @rendermode="InteractiveServer" />
+    <script src="_framework/blazor.web.js"></script>
+    <script src="js/dashboard-export.js?v=20260417"></script>
+</body>
+
+</html>

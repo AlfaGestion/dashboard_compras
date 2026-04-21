@@ -1,0 +1,16 @@
+@page "/inicio"
+@inject NavigationManager Navigation
+
+<PageTitle>Inicio | Dashboard de Compras</PageTitle>
+
+<div class="panel-card empty-state">
+    <span class="empty-state__eyebrow">Atajo</span>
+    <h2>Redirigiendo al inicio principal</h2>
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        Navigation.NavigateTo("/");
+    }
+}

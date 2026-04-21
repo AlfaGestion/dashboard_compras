@@ -1,0 +1,121 @@
+@if (!string.IsNullOrWhiteSpace(Titulo) || !string.IsNullOrWhiteSpace(Subtitulo))
+{
+    <div class="panel-card__header">
+        <div>
+            @if (!string.IsNullOrWhiteSpace(Titulo))
+            {
+                <h3 class="panel-card__title">@Titulo</h3>
+            }
+            @if (!string.IsNullOrWhiteSpace(Subtitulo))
+            {
+                <p class="panel-card__subtitle">@Subtitulo</p>
+            }
+        </div>
+    </div>
+}
+
+@if (Data.Count == 0)
+{
+    <p class="chart-empty">Sin datos para graficar.</p>
+}
+else
+{
+    <div class="line-chart">
+        <svg viewBox="0 0 640 260" preserveAspectRatio="none" class="line-chart__svg" role="img" aria-label="@Titulo">
+            <defs>
+                <linearGradient id="@_gradientId" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="rgba(14,165,233,0.35)" />
+                    <stop offset="100%" stop-color="rgba(14,165,233,0.02)" />
+                </linearGradient>
+            </defs>
+
+            @foreach (var gridLine in _gridLines)
+            {
+                <line x1="56" y1="@gridLine.Y" x2="620" y2="@gridLine.Y" class="line-chart__grid" />
+            }
+
+            <path d="@_areaPath" fill="url(#@_gradientId)" />
+            <path d="@_linePath" class="line-chart__path" />
+
+            @foreach (var point in _points)
+            {
+                <circle cx="@point.X" cy="@point.Y" r="4.5" class="line-chart__point" />
+            }
+        </svg>
+        <div class="line-chart__legend">
+            @foreach (var gridLine in _gridLines)
+            {
+                <span class="line-chart__axis">@FormatearValor(gridLine.Value)</span>
+            }
+        </div>
+        <div class="line-chart__labels">
+            @foreach (var point in _points)
+            {
+                <span class="line-chart__label">@point.Label</span>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private readonly string _gradientId = $"g{Guid.NewGuid():N}";
+    private string _linePath = string.Empty;
+    private string _areaPath = string.Empty;
+    private List<ChartPoint> _points = [];
+    private List<GridLine> _gridLines = [];
+
+    [Parameter, EditorRequired] public IReadOnlyList<MonthlyPointDto> Data { get; set; } = [];
+    [Parameter] public string Titulo { get; set; } = "Evolución";
+    [Parameter] public string Subtitulo { get; set; } = string.Empty;
+    [Parameter] public bool MostrarMoneda { get; set; } = true;
+
+    protected override void OnParametersSet()
+    {
+        if (Data.Count == 0)
+        {
+            _points = [];
+            _gridLines = [];
+            _linePath = string.Empty;
+            _areaPath = string.Empty;
+            return;
+        }
+
+        const double width = 564;
+        const double height = 176;
+        const double startX = 56;
+        const double startY = 26;
+        var max = Math.Max(Data.Max(x => x.Total), 1);
+        var min = Math.Min(Data.Min(x => x.Total), 0);
+        var range = Math.Max(max - min, 1);
+
+        _points = Data.Select((item, index) =>
+        {
+            var x = startX + (width / Math.Max(Data.Count - 1, 1)) * index;
+            var y = startY + height - ((double)((item.Total - min) / range) * height);
+            return new ChartPoint(x, y, item.Periodo);
+        }).ToList();
+
+        _linePath = $"M {_points[0].X:F2} {_points[0].Y:F2} " +
+                    string.Join(" ", _points.Skip(1).Select(p => $"L {p.X:F2} {p.Y:F2}"));
+
+        _areaPath = $"{_linePath} L {_points[^1].X:F2} 202 L {_points[0].X:F2} 202 Z";
+
+        _gridLines = Enumerable.Range(0, 4)
+            .Select(i =>
+            {
+                var value = min + ((max - min) / 3m) * i;
+                var y = startY + height - ((double)((value - min) / range) * height);
+                return new GridLine(y, value);
+            })
+            .Reverse()
+            .ToList();
+    }
+
+    private string FormatearValor(decimal valor)
+        => MostrarMoneda
+            ? valor.ToString("$ #,##0", System.Globalization.CultureInfo.GetCultureInfo("es-AR"))
+            : valor.ToString("#,##0", System.Globalization.CultureInfo.GetCultureInfo("es-AR"));
+
+    private sealed record ChartPoint(double X, double Y, string Label);
+    private sealed record GridLine(double Y, decimal Value);
+}

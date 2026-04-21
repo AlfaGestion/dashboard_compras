@@ -1,0 +1,300 @@
+{
+  "executionId": "9d875df1-2bc2-4379-905b-85450bf9355b",
+  "exitoso": true,
+  "consultaOriginal": "DAME UN LISTADO DE COMPRAS DE NEOPEL, DE LOS ULTIMOS 3 MESES",
+  "titulo": "Listado de compras",
+  "subtitulo": "Vista tabular de comprobantes para an\u00E1lisis operativo",
+  "resumen": "Se obtuvieron 8 filas para el informe.",
+  "mensaje": "",
+  "notaSeguridad": "InformesIA trabaja en modo solo lectura y solo consulta las vistas autorizadas del dashboard.",
+  "tipoResultado": "listado",
+  "generadoEn": "2026-04-17T14:10:48.872504-03:00",
+  "filtrosAplicados": {
+    "fechaDesde": "2026-01-17T00:00:00-03:00",
+    "fechaHasta": "2026-04-17T00:00:00-03:00",
+    "proveedor": "211010001",
+    "articulo": null,
+    "articuloCodigo": null,
+    "articuloDescripcion": null,
+    "rubro": null,
+    "familia": null,
+    "usuario": null,
+    "sucursal": null,
+    "deposito": null,
+    "estado": null,
+    "tipoComprobante": null
+  },
+  "fuentesAutorizadas": [
+    "vw_compras_cabecera_dashboard"
+  ],
+  "columnas": [
+    {
+      "key": "FechaFactura",
+      "label": "Fecha factura",
+      "format": "fecha",
+      "align": "left"
+    },
+    {
+      "key": "Cuenta",
+      "label": "Cuenta",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "Nombre",
+      "label": "Nombre",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "ImporteSinIva",
+      "label": "Importe sin IVA",
+      "format": "moneda",
+      "align": "right"
+    },
+    {
+      "key": "Iva",
+      "label": "IVA",
+      "format": "moneda",
+      "align": "right"
+    },
+    {
+      "key": "Total",
+      "label": "Total",
+      "format": "moneda",
+      "align": "right"
+    },
+    {
+      "key": "Usuario",
+      "label": "Usuario",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "FechaHora",
+      "label": "Fecha y hora",
+      "format": "fechahora",
+      "align": "left"
+    },
+    {
+      "key": "Tc",
+      "label": "TC",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "IdComprobante",
+      "label": "Comprobante",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "Estado",
+      "label": "Estado",
+      "format": "texto",
+      "align": "left"
+    }
+  ],
+  "filas": [
+    {
+      "values": [
+        "10/04/2026",
+        "211010001",
+        "NEOPEL S.R.L.",
+        "$ 9.381.969,28",
+        "$ 1.970.213,55",
+        "$ 11.446.002,52",
+        "Sistemas",
+        "10/04/2026 00:00",
+        "FCC",
+        "000900024185A",
+        "Activo"
+      ]
+    },
+    {
+      "values": [
+        "18/03/2026",
+        "211010001",
+        "NEOPEL S.R.L.",
+        "$ 2.725.880,31",
+        "$ 572.434,87",
+        "$ 3.325.573,98",
+        "Sistemas",
+        "18/03/2026 00:00",
+        "FCC",
+        "000900024052A",
+        "Activo"
+      ]
+    },
+    {
+      "values": [
+        "09/03/2026",
+        "211010001",
+        "NEOPEL S.R.L.",
+        "$ 7.118.281,72",
+        "$ 1.494.839,16",
+        "$ 8.684.303,70",
+        "Sistemas",
+        "09/03/2026 00:00",
+        "FCC",
+        "000900024000A",
+        "Activo"
+      ]
+    },
+    {
+      "values": [
+        "18/02/2026",
+        "211010001",
+        "NEOPEL S.R.L.",
+        "$ 6.973.429,03",
+        "$ 1.464.420,10",
+        "$ 8.507.583,42",
+        "LAURA",
+        "18/02/2026 00:00",
+        "FCC",
+        "000900023856A",
+        "Activo"
+      ]
+    },
+    {
+      "values": [
+        "13/02/2026",
+        "211010001",
+        "NEOPEL S.R.L.",
+        "-$ 161.894,54",
+        "-$ 33.997,85",
+        "-$ 197.511,34",
+        "LAURA",
+        "13/02/2026 00:00",
+        "NCC",
+        "000900002845A",
+        "Activo"
+      ]
+    },
+    {
+      "values": [
+        "29/01/2026",
+        "211010001",
+        "NEOPEL S.R.L.",
+        "$ 3.681.090,71",
+        "$ 773.029,05",
+        "$ 4.490.930,67",
+        "LAURA",
+        "29/01/2026 00:00",
+        "FCC",
+        "000900023752A",
+        "Activo"
+      ]
+    },
+    {
+      "values": [
+        "29/01/2026",
+        "211010001",
+        "NEOPEL S.R.L.",
+        "$ 4.669.000,54",
+        "$ 980.490,11",
+        "$ 5.696.180,66",
+        "LAURA",
+        "29/01/2026 00:00",
+        "FCC",
+        "000900023751A",
+        "Activo"
+      ]
+    },
+    {
+      "values": [
+        "29/01/2026",
+        "211010001",
+        "NEOPEL S.R.L.",
+        "-$ 383.666,62",
+        "-$ 80.569,99",
+        "-$ 468.073,28",
+        "LAURA",
+        "29/01/2026 00:00",
+        "NCC",
+        "000900002831A",
+        "Activo"
+      ]
+    }
+  ],
+  "grafico": {
+    "tipo": "bar",
+    "titulo": "Listado de compras",
+    "subtitulo": "Representaci\u00F3n gr\u00E1fica del informe",
+    "formato": "moneda",
+    "barras": [
+      {
+        "categoria": "NEOPEL S.R.L.",
+        "codigo": null,
+        "total": 11446002.5200,
+        "participacion": 0
+      },
+      {
+        "categoria": "NEOPEL S.R.L.",
+        "codigo": null,
+        "total": 3325573.9800,
+        "participacion": 0
+      },
+      {
+        "categoria": "NEOPEL S.R.L.",
+        "codigo": null,
+        "total": 8684303.7000,
+        "participacion": 0
+      },
+      {
+        "categoria": "NEOPEL S.R.L.",
+        "codigo": null,
+        "total": 8507583.4200,
+        "participacion": 0
+      },
+      {
+        "categoria": "NEOPEL S.R.L.",
+        "codigo": null,
+        "total": -197511.3400,
+        "participacion": 0
+      },
+      {
+        "categoria": "NEOPEL S.R.L.",
+        "codigo": null,
+        "total": 4490930.6700,
+        "participacion": 0
+      },
+      {
+        "categoria": "NEOPEL S.R.L.",
+        "codigo": null,
+        "total": 5696180.6600,
+        "participacion": 0
+      },
+      {
+        "categoria": "NEOPEL S.R.L.",
+        "codigo": null,
+        "total": -468073.2800,
+        "participacion": 0
+      }
+    ],
+    "linea": []
+  },
+  "sugerenciasRelacionadas": [
+    {
+      "texto": "Familias que m\u00E1s crecieron",
+      "descripcion": "Compara ramas familiares contra el per\u00EDodo anterior.",
+      "categoria": "Comparaci\u00F3n"
+    },
+    {
+      "texto": "Comprobantes con mayor importe",
+      "descripcion": "Lista los comprobantes m\u00E1s altos del per\u00EDodo.",
+      "categoria": "Top"
+    },
+    {
+      "texto": "Usuarios con m\u00E1s actividad",
+      "descripcion": "Resume qui\u00E9nes cargaron m\u00E1s comprobantes y monto.",
+      "categoria": "Actividad"
+    },
+    {
+      "texto": "Compar\u00E1 rubros contra el per\u00EDodo anterior",
+      "descripcion": "Diferencia y variaci\u00F3n de rubros vs per\u00EDodo previo.",
+      "categoria": "Comparaci\u00F3n"
+    }
+  ],
+  "sqlGenerado": "SELECT TOP (40)\n    c.FECHA AS FechaFactura,\n    c.CUENTA AS Cuenta,\n    COALESCE(NULLIF(c.RAZON_SOCIAL, \u0027\u0027), c.CUENTA) AS Nombre,\n    c.NetoDashboard AS ImporteSinIva,\n    c.IvaDashboard AS Iva,\n    c.ImporteDashboard AS Total,\n    c.USUARIO AS Usuario,\n    c.FECHA AS FechaHora,\n    c.TC AS Tc,\n    c.IDCOMPROBANTE AS IdComprobante,\n    c.EstadoComprobante AS Estado\nFROM vw_compras_cabecera_dashboard c\nWHERE (@CurFechaDesde IS NULL OR c.FECHA \u003E= @CurFechaDesde)\nAND (@CurFechaHasta IS NULL OR c.FECHA \u003C DATEADD(day, 1, @CurFechaHasta))\nAND (@CurProveedor IS NULL OR c.CUENTA LIKE \u0027%\u0027 \u002B @CurProveedor \u002B \u0027%\u0027 OR c.RAZON_SOCIAL LIKE \u0027%\u0027 \u002B @CurProveedor \u002B \u0027%\u0027)\nAND (@CurUsuario IS NULL OR c.USUARIO = @CurUsuario)\nAND (@CurSucursal IS NULL OR c.SUCURSAL = @CurSucursal)\nAND (@CurDeposito IS NULL OR CONVERT(varchar(20), c.IdDeposito) = @CurDeposito)\nAND (@CurEstado IS NULL OR c.EstadoComprobante = @CurEstado)\nAND (@CurTipoComprobante IS NULL OR c.TC = @CurTipoComprobante)\nAND (\n    (@CurArticulo IS NULL AND @CurArticuloCodigo IS NULL AND @CurArticuloDescripcion IS NULL AND @CurRubro IS NULL AND @CurFamilia IS NULL)\n    OR EXISTS (\n        SELECT 1\n        FROM vw_compras_detalle_dashboard detailFilter\n        WHERE detailFilter.TC = c.TC\n          AND detailFilter.IDCOMPROBANTE = c.IDCOMPROBANTE\n          AND detailFilter.CUENTA = c.CUENTA\n          AND (@CurArticulo IS NULL OR LTRIM(RTRIM(detailFilter.IDARTICULO)) = LTRIM(RTRIM(@CurArticulo)))\n          AND (@CurArticuloCodigo IS NULL OR LTRIM(RTRIM(detailFilter.IDARTICULO)) = LTRIM(RTRIM(@CurArticuloCodigo)))\n          AND (@CurArticuloDescripcion IS NULL OR detailFilter.DESCRIPCION_ARTICULO LIKE \u0027%\u0027 \u002B @CurArticuloDescripcion \u002B \u0027%\u0027)\n          AND (@CurRubro IS NULL OR detailFilter.RUBRO = @CurRubro)\n          AND (@CurFamilia IS NULL OR detailFilter.FAMILIA = @CurFamilia)\n    )\n)\nORDER BY c.FECHA DESC, c.IDCOMPROBANTE DESC"
+}

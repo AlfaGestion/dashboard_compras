@@ -1,0 +1,63 @@
+@if (!string.IsNullOrWhiteSpace(Titulo) || !string.IsNullOrWhiteSpace(Subtitulo))
+{
+    <div class="panel-card__header">
+        <div>
+            @if (!string.IsNullOrWhiteSpace(Titulo))
+            {
+                <h3 class="panel-card__title">@Titulo</h3>
+            }
+            @if (!string.IsNullOrWhiteSpace(Subtitulo))
+            {
+                <p class="panel-card__subtitle">@Subtitulo</p>
+            }
+        </div>
+    </div>
+}
+
+@if (Data.Count == 0)
+{
+    <p class="chart-empty">Sin datos para graficar.</p>
+}
+else
+{
+    var max = Math.Max(Data.Max(x => x.Total), 1);
+
+    <div class="bar-chart">
+        @foreach (var item in Data)
+        {
+            var percentage = Math.Clamp((double)(item.Total / max) * 100d, 4d, 100d);
+            <div class="bar-chart__row">
+                <div class="bar-chart__header">
+                    <div class="bar-chart__meta">
+                        <span class="bar-chart__label">@item.Categoria</span>
+                        @if (LinkSelector is not null && !string.IsNullOrWhiteSpace(LinkSelector(item)))
+                        {
+                            <a class="action-link" href="@LinkSelector(item)">@LinkLabel</a>
+                        }
+                    </div>
+                    <strong>@FormatearValor(item.Total)</strong>
+                </div>
+                <div class="bar-chart__track">
+                    <div class="bar-chart__fill" style="width:@percentage.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%"></div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<CategoryTotalDto> Data { get; set; } = [];
+    [Parameter] public string Titulo { get; set; } = string.Empty;
+    [Parameter] public string Subtitulo { get; set; } = string.Empty;
+    [Parameter] public string Formato { get; set; } = "moneda";
+    [Parameter] public Func<CategoryTotalDto, string?>? LinkSelector { get; set; }
+    [Parameter] public string LinkLabel { get; set; } = "Abrir";
+
+    private string FormatearValor(decimal valor)
+        => Formato switch
+        {
+            "numero" => valor.ToString("#,##0", System.Globalization.CultureInfo.GetCultureInfo("es-AR")),
+            "porcentaje" => $"{(valor * 100m).ToString("#,##0.0", System.Globalization.CultureInfo.GetCultureInfo("es-AR"))}%",
+            _ => valor.ToString("$ #,##0", System.Globalization.CultureInfo.GetCultureInfo("es-AR"))
+        };
+}

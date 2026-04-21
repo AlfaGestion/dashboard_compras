@@ -1,0 +1,370 @@
+@page "/ayuda"
+@using Markdig
+@using System.Reflection
+@using System.Text
+@inject NavigationManager Nav
+
+<PageTitle>Ayuda | Dashboard de Compras</PageTitle>
+
+<section class="page-grid">
+    <div class="page-intro">
+        <div>
+            <h2 class="page-intro__title">Ayuda</h2>
+            <p class="page-intro__text">Manual operativo, atajos de navegación y respuestas rápidas para cada pantalla del Dashboard de Compras.</p>
+        </div>
+        <div class="help-toc-toggle">
+            <button class="btn btn--ghost" @onclick="() => _tocVisible = !_tocVisible">
+                <i class="bi bi-list-ul"></i> @(_tocVisible ? "Ocultar índice" : "Mostrar índice")
+            </button>
+        </div>
+    </div>
+
+    <section class="help-hero panel-card">
+        <div>
+            <span class="help-hero__eyebrow">Centro de ayuda</span>
+            <h3 class="help-hero__title">Encontrá rápido qué hace cada vista y cómo leer sus métricas</h3>
+            <p class="help-hero__text">Buscá por pantalla, KPI o concepto. El manual completo sigue disponible, pero ahora podés saltar directo al punto exacto.</p>
+        </div>
+
+        <div class="help-search">
+            <label class="help-search__label" for="help-search-box">Buscar en el manual</label>
+            <div class="help-search__row">
+                <input id="help-search-box"
+                       class="help-search__input"
+                       type="search"
+                       placeholder="Ej: artículos, ticket promedio, filtros..."
+                       @bind="_search"
+                       @bind:event="oninput" />
+                @if (!string.IsNullOrWhiteSpace(_search))
+                {
+                    <button class="btn btn--ghost" @onclick="ClearSearch">Limpiar</button>
+                }
+            </div>
+            <div class="help-search__meta">
+                <span>@SectionCountText</span>
+                <span>@SearchCountText</span>
+            </div>
+        </div>
+    </section>
+
+    <div class="help-layout">
+        @if (_tocVisible && _toc.Any())
+        {
+            <aside class="help-sidebar panel-card">
+                <div class="help-sidebar__header">
+                    <p class="help-toc__title">Índice de contenidos</p>
+                    <span class="help-sidebar__count">@VisibleToc.Count()</span>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(_search) && !VisibleToc.Any())
+                {
+                    <p class="help-sidebar__empty">No hay secciones que coincidan con la búsqueda.</p>
+                }
+                else
+                {
+                    <ul class="help-toc__list help-toc__list--stacked">
+                        @foreach (var item in VisibleToc)
+                        {
+                            <li class="help-toc__item @(item.Level == 3 ? "help-toc__item--sub" : string.Empty)">
+                                <a class="help-toc__link" href="@($"/ayuda#{item.Anchor}")" @onclick="() => ScrollTo(item.Anchor)" @onclick:preventDefault>
+                                    <span class="help-toc__bullet"></span>
+                                    <span>@item.Text</span>
+                                </a>
+                            </li>
+                        }
+                    </ul>
+                }
+            </aside>
+        }
+
+        <div class="help-main">
+            @if (_html is null)
+            {
+                <div class="loading">Cargando manual...</div>
+            }
+            else
+            {
+                @if (SearchResults.Any())
+                {
+                    <section class="help-results panel-card">
+                        <div class="panel-card__header">
+                            <div>
+                                <h3 class="panel-card__title">Resultados de búsqueda</h3>
+                                <p class="panel-card__subtitle">Saltos directos a las secciones más relevantes del manual</p>
+                            </div>
+                        </div>
+
+                        <div class="help-results__grid">
+                            @foreach (var result in SearchResults)
+                            {
+                                <button class="help-result-card" @onclick="() => ScrollTo(result.Anchor)">
+                                    <span class="help-result-card__tag">@(result.Level == 2 ? "Sección" : "Subsección")</span>
+                                    <strong class="help-result-card__title">@result.Text</strong>
+                                    <span class="help-result-card__snippet">@result.Snippet</span>
+                                </button>
+                            }
+                        </div>
+                    </section>
+                }
+                else if (!string.IsNullOrWhiteSpace(_search))
+                {
+                    <section class="help-results help-results--empty panel-card">
+                        <div>
+                            <h3 class="panel-card__title">Sin resultados</h3>
+                            <p class="panel-card__subtitle">Probá con otro término como "proveedores", "filtros", "ticket" o "actividad".</p>
+                        </div>
+                    </section>
+                }
+
+                <article class="help-content panel-card">
+                    @((MarkupString)_html)
+                </article>
+            }
+        </div>
+    </div>
+</section>
+
+@code {
+    private string? _html;
+    private bool _tocVisible = true;
+    private string _search = string.Empty;
+    private List<TocItem> _toc = [];
+    private List<HelpSection> _sections = [];
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private IEnumerable<TocItem> VisibleToc =>
+        string.IsNullOrWhiteSpace(_search)
+            ? _toc
+            : _toc.Where(item => SectionMatches(item.Anchor, _search));
+
+    private IEnumerable<SearchResultItem> SearchResults =>
+        string.IsNullOrWhiteSpace(_search)
+            ? []
+            : _sections
+                .Where(section => SectionMatches(section, _search))
+                .Take(8)
+                .Select(section => new SearchResultItem(
+                    section.Text,
+                    section.Anchor,
+                    section.Level,
+                    BuildSnippet(section.Body, _search)));
+
+    private string SectionCountText => $"{_sections.Count} secciones indexadas";
+    private string SearchCountText => string.IsNullOrWhiteSpace(_search)
+        ? "Buscador listo para usar"
+        : $"{SearchResults.Count()} resultado(s) para \"{_search.Trim()}\"";
+
+    protected override Task OnInitializedAsync()
+    {
+        var assembly = Assembly.GetExecutingAssembly();
+        using var stream = assembly.GetManifestResourceStream("DashboardCompras.Docs.manual_usuario.md");
+        if (stream is null)
+        {
+            _html = "<p>Manual no disponible.</p>";
+            return Task.CompletedTask;
+        }
+
+        using var reader = new StreamReader(stream);
+        var markdown = reader.ReadToEnd();
+
+        _sections = ExtractSections(markdown);
+        _toc = _sections.Select(section => new TocItem(section.Text, section.Anchor, section.Level)).ToList();
+
+        var pipeline = new MarkdownPipelineBuilder()
+            .UseAdvancedExtensions()
+            .Build();
+
+        _html = Markdown.ToHtml(markdown, pipeline);
+        return Task.CompletedTask;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        var uri = new Uri(Nav.Uri);
+        if (!string.IsNullOrEmpty(uri.Fragment))
+        {
+            var anchor = uri.Fragment.TrimStart('#');
+            await ScrollTo(anchor);
+        }
+    }
+
+    private void ClearSearch() => _search = string.Empty;
+
+    private async Task ScrollTo(string anchor)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("eval",
+                $"document.getElementById('{anchor}')?.scrollIntoView({{behavior:'smooth', block:'start'}})");
+        }
+        catch
+        {
+        }
+    }
+
+    private bool SectionMatches(string anchor, string query)
+        => _sections.Any(section => section.Anchor == anchor && SectionMatches(section, query));
+
+    private static bool SectionMatches(HelpSection section, string query)
+    {
+        var term = query.Trim();
+        if (string.IsNullOrWhiteSpace(term))
+        {
+            return true;
+        }
+
+        return section.Text.Contains(term, StringComparison.OrdinalIgnoreCase)
+            || section.Body.Contains(term, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static List<HelpSection> ExtractSections(string markdown)
+    {
+        var items = new List<HelpSection>();
+        HelpSectionBuilder? current = null;
+
+        foreach (var rawLine in markdown.Split('\n'))
+        {
+            var line = rawLine.TrimEnd('\r');
+
+            if (line.StartsWith("## "))
+            {
+                current = CommitCurrent(items, current);
+                current = new HelpSectionBuilder(line[3..].Trim(), BuildAnchor(line[3..].Trim()), 2);
+                continue;
+            }
+
+            if (line.StartsWith("### "))
+            {
+                current = CommitCurrent(items, current);
+                current = new HelpSectionBuilder(line[4..].Trim(), BuildAnchor(line[4..].Trim()), 3);
+                continue;
+            }
+
+            current?.Lines.Add(line);
+        }
+
+        CommitCurrent(items, current);
+        return items;
+    }
+
+    private static HelpSectionBuilder? CommitCurrent(List<HelpSection> items, HelpSectionBuilder? current)
+    {
+        if (current is null)
+        {
+            return null;
+        }
+
+        items.Add(new HelpSection(
+            current.Text,
+            current.Anchor,
+            current.Level,
+            CleanupMarkdown(string.Join(' ', current.Lines.Where(line => !string.IsNullOrWhiteSpace(line))))));
+
+        return null;
+    }
+
+    private static string CleanupMarkdown(string markdown)
+    {
+        if (string.IsNullOrWhiteSpace(markdown))
+        {
+            return string.Empty;
+        }
+
+        var cleaned = markdown
+            .Replace("**", string.Empty)
+            .Replace("__", string.Empty)
+            .Replace("`", string.Empty)
+            .Replace("|", " ")
+            .Replace("#", string.Empty)
+            .Replace(">", string.Empty);
+
+        var builder = new StringBuilder(cleaned.Length);
+        var previousWasSpace = false;
+
+        foreach (var character in cleaned)
+        {
+            if (char.IsWhiteSpace(character))
+            {
+                if (!previousWasSpace)
+                {
+                    builder.Append(' ');
+                    previousWasSpace = true;
+                }
+            }
+            else
+            {
+                builder.Append(character);
+                previousWasSpace = false;
+            }
+        }
+
+        return builder.ToString().Trim();
+    }
+
+    private static string BuildSnippet(string body, string query)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return "Abrí esta sección para ver el detalle completo.";
+        }
+
+        var term = query.Trim();
+        var index = body.IndexOf(term, StringComparison.OrdinalIgnoreCase);
+        if (index < 0)
+        {
+            return body.Length <= 150 ? body : $"{body[..150].Trim()}...";
+        }
+
+        var start = Math.Max(0, index - 55);
+        var length = Math.Min(170, body.Length - start);
+        var snippet = body.Substring(start, length).Trim();
+        return start > 0 ? $"...{snippet}..." : $"{snippet}...";
+    }
+
+    private static string BuildAnchor(string heading)
+    {
+        var sb = new StringBuilder();
+        var previousIsSpace = false;
+
+        foreach (var c in heading)
+        {
+            if (char.IsLetter(c) || char.IsDigit(c) || c == '_' || c == '-')
+            {
+                sb.Append(char.ToLowerInvariant(c));
+                previousIsSpace = false;
+            }
+            else if (c == ' ' || c == '\t')
+            {
+                if (!previousIsSpace)
+                {
+                    sb.Append('-');
+                    previousIsSpace = true;
+                }
+            }
+            else
+            {
+                previousIsSpace = false;
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    private sealed record TocItem(string Text, string Anchor, int Level);
+    private sealed record HelpSection(string Text, string Anchor, int Level, string Body);
+    private sealed record SearchResultItem(string Text, string Anchor, int Level, string Snippet);
+
+    private sealed class HelpSectionBuilder(string text, string anchor, int level)
+    {
+        public string Text { get; } = text;
+        public string Anchor { get; } = anchor;
+        public int Level { get; } = level;
+        public List<string> Lines { get; } = [];
+    }
+}

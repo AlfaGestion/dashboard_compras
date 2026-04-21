@@ -1,0 +1,266 @@
+{
+  "executionId": "5381d6d3-b1a5-4166-8df0-460f79acd714",
+  "exitoso": true,
+  "consultaOriginal": "Compar\u00E1 rubros contra el per\u00EDodo anterior",
+  "titulo": "Rubros comparados contra el per\u00EDodo anterior",
+  "subtitulo": "Diferencia absoluta y relativa por rubro",
+  "resumen": "El rubro con mejor variaci\u00F3n es DIETETICA con 1.949,3% frente al per\u00EDodo anterior.",
+  "mensaje": "",
+  "notaSeguridad": "InformesIA trabaja en modo solo lectura y solo consulta las vistas autorizadas del dashboard.",
+  "tipoResultado": "comparacion",
+  "generadoEn": "2026-04-17T10:18:18.7728131-03:00",
+  "filtrosAplicados": {
+    "fechaDesde": "2026-04-01T00:00:00",
+    "fechaHasta": "2026-04-17T00:00:00-03:00",
+    "proveedor": null,
+    "articulo": null,
+    "articuloCodigo": null,
+    "articuloDescripcion": null,
+    "rubro": null,
+    "familia": null,
+    "usuario": null,
+    "sucursal": null,
+    "deposito": null,
+    "estado": null,
+    "tipoComprobante": null
+  },
+  "fuentesAutorizadas": [
+    "vw_compras_detalle_dashboard"
+  ],
+  "columnas": [
+    {
+      "key": "Rubro",
+      "label": "Rubro",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "TotalActual",
+      "label": "Total actual",
+      "format": "moneda",
+      "align": "right"
+    },
+    {
+      "key": "TotalAnterior",
+      "label": "Total anterior",
+      "format": "moneda",
+      "align": "right"
+    },
+    {
+      "key": "Diferencia",
+      "label": "Diferencia",
+      "format": "moneda",
+      "align": "right"
+    },
+    {
+      "key": "Variacion",
+      "label": "Variaci\u00F3n",
+      "format": "porcentaje",
+      "align": "right"
+    }
+  ],
+  "filas": [
+    {
+      "values": [
+        "DIETETICA",
+        "$ 1.147.812,66",
+        "$ 56.008,92",
+        "$ 1.091.803,74",
+        "1.949,3%"
+      ]
+    },
+    {
+      "values": [
+        "CARNICERIA",
+        "$ 44.286.770,80",
+        "$ 55.788.508,93",
+        "-$ 11.501.738,13",
+        "-20,6%"
+      ]
+    },
+    {
+      "values": [
+        "PESABLES DIETETICA",
+        "$ 1.486.976,76",
+        "$ 1.975.244,86",
+        "-$ 488.268,10",
+        "-24,7%"
+      ]
+    },
+    {
+      "values": [
+        "PANADERIA X KG",
+        "$ 216.910,00",
+        "$ 300.000,00",
+        "-$ 83.090,00",
+        "-27,7%"
+      ]
+    },
+    {
+      "values": [
+        "BEBIDAS",
+        "$ 829.904,20",
+        "$ 1.161.175,30",
+        "-$ 331.271,10",
+        "-28,5%"
+      ]
+    },
+    {
+      "values": [
+        "ALMACEN",
+        "$ 3.195.864,58",
+        "$ 4.759.245,29",
+        "-$ 1.563.380,71",
+        "-32,8%"
+      ]
+    },
+    {
+      "values": [
+        "FIAMBRES X PIEZA ENTERA",
+        "$ 2.259.230,51",
+        "$ 3.838.176,19",
+        "-$ 1.578.945,68",
+        "-41,1%"
+      ]
+    },
+    {
+      "values": [
+        "INSUMOS",
+        "$ 343.805,05",
+        "$ 613.926,07",
+        "-$ 270.121,02",
+        "-44,0%"
+      ]
+    },
+    {
+      "values": [
+        "QUESOS DE FIAMBRERIA",
+        "$ 164.240,17",
+        "$ 2.032.363,68",
+        "-$ 1.868.123,51",
+        "-91,9%"
+      ]
+    },
+    {
+      "values": [
+        "LACTEOS",
+        "$ 1.260.235,72",
+        "$ 24.153.751,72",
+        "-$ 22.893.516,00",
+        "-94,8%"
+      ]
+    },
+    {
+      "values": [
+        "GALLETITAS Y CEREALES",
+        "$ 22.038,60",
+        "$ 0,00",
+        "$ 22.038,60",
+        "Sin dato"
+      ]
+    },
+    {
+      "values": [
+        "Sin rubro",
+        "$ 8.723,76",
+        "$ 0,00",
+        "$ 8.723,76",
+        "Sin dato"
+      ]
+    }
+  ],
+  "grafico": {
+    "tipo": "bar",
+    "titulo": "Rubros comparados contra el per\u00EDodo anterior",
+    "subtitulo": "Representaci\u00F3n gr\u00E1fica del informe",
+    "formato": "porcentaje",
+    "barras": [
+      {
+        "categoria": "DIETETICA",
+        "codigo": null,
+        "total": 19.4933,
+        "participacion": 0
+      },
+      {
+        "categoria": "CARNICERIA",
+        "codigo": null,
+        "total": -0.2061,
+        "participacion": 0
+      },
+      {
+        "categoria": "PESABLES DIETETICA",
+        "codigo": null,
+        "total": -0.2471,
+        "participacion": 0
+      },
+      {
+        "categoria": "PANADERIA X KG",
+        "codigo": null,
+        "total": -0.2769,
+        "participacion": 0
+      },
+      {
+        "categoria": "BEBIDAS",
+        "codigo": null,
+        "total": -0.2852,
+        "participacion": 0
+      },
+      {
+        "categoria": "ALMACEN",
+        "codigo": null,
+        "total": -0.3284,
+        "participacion": 0
+      },
+      {
+        "categoria": "FIAMBRES X PIEZA ENTERA",
+        "codigo": null,
+        "total": -0.4113,
+        "participacion": 0
+      },
+      {
+        "categoria": "INSUMOS",
+        "codigo": null,
+        "total": -0.4399,
+        "participacion": 0
+      },
+      {
+        "categoria": "QUESOS DE FIAMBRERIA",
+        "codigo": null,
+        "total": -0.9191,
+        "participacion": 0
+      },
+      {
+        "categoria": "LACTEOS",
+        "codigo": null,
+        "total": -0.9478,
+        "participacion": 0
+      },
+      {
+        "categoria": "GALLETITAS Y CEREALES",
+        "codigo": null,
+        "total": 0,
+        "participacion": 0
+      },
+      {
+        "categoria": "Sin rubro",
+        "codigo": null,
+        "total": 0,
+        "participacion": 0
+      }
+    ],
+    "linea": []
+  },
+  "sugerenciasRelacionadas": [
+    {
+      "texto": "Familias que m\u00E1s crecieron",
+      "descripcion": "Compara ramas familiares contra el per\u00EDodo anterior.",
+      "categoria": "Comparaci\u00F3n"
+    },
+    {
+      "texto": "Compar\u00E1 rubros contra el per\u00EDodo anterior",
+      "descripcion": "Diferencia y variaci\u00F3n de rubros vs per\u00EDodo previo.",
+      "categoria": "Comparaci\u00F3n"
+    }
+  ],
+  "sqlGenerado": "SELECT TOP (40)\n    currentData.Rubro,\n    currentData.TotalActual,\n    ISNULL(priorData.TotalAnterior, 0) AS TotalAnterior,\n    currentData.TotalActual - ISNULL(priorData.TotalAnterior, 0) AS Diferencia,\n    CASE\n        WHEN ISNULL(priorData.TotalAnterior, 0) \u003E 0\n            THEN (currentData.TotalActual - priorData.TotalAnterior) / priorData.TotalAnterior\n        ELSE NULL\n    END AS Variacion\nFROM (\n    SELECT\n        COALESCE(NULLIF(d.RUBRO, \u0027\u0027), \u0027Sin rubro\u0027) AS Rubro,\n        SUM(d.TotalDashboard) AS TotalActual\n    FROM vw_compras_detalle_dashboard d\n    WHERE (@CurFechaDesde IS NULL OR d.FECHA \u003E= @CurFechaDesde)\nAND (@CurFechaHasta IS NULL OR d.FECHA \u003C DATEADD(day, 1, @CurFechaHasta))\nAND (@CurProveedor IS NULL OR d.CUENTA = @CurProveedor)\nAND (@CurArticulo IS NULL OR LTRIM(RTRIM(d.IDARTICULO)) = LTRIM(RTRIM(@CurArticulo)))\nAND (@CurArticuloCodigo IS NULL OR LTRIM(RTRIM(d.IDARTICULO)) = LTRIM(RTRIM(@CurArticuloCodigo)))\nAND (@CurArticuloDescripcion IS NULL OR d.DESCRIPCION_ARTICULO LIKE \u0027%\u0027 \u002B @CurArticuloDescripcion \u002B \u0027%\u0027)\nAND (@CurRubro IS NULL OR d.RUBRO = @CurRubro)\nAND (@CurFamilia IS NULL OR d.FAMILIA = @CurFamilia)\nAND (@CurUsuario IS NULL OR d.USUARIO = @CurUsuario)\nAND (@CurSucursal IS NULL OR d.SUCURSAL = @CurSucursal)\nAND (@CurDeposito IS NULL OR CONVERT(varchar(20), d.IdDeposito) = @CurDeposito)\nAND (@CurTipoComprobante IS NULL OR d.TC = @CurTipoComprobante)\n    GROUP BY COALESCE(NULLIF(d.RUBRO, \u0027\u0027), \u0027Sin rubro\u0027)\n) currentData\nLEFT JOIN (\n    SELECT\n        COALESCE(NULLIF(d.RUBRO, \u0027\u0027), \u0027Sin rubro\u0027) AS Rubro,\n        SUM(d.TotalDashboard) AS TotalAnterior\n    FROM vw_compras_detalle_dashboard d\n    WHERE (@PrFechaDesde IS NULL OR d.FECHA \u003E= @PrFechaDesde)\nAND (@PrFechaHasta IS NULL OR d.FECHA \u003C DATEADD(day, 1, @PrFechaHasta))\nAND (@PrProveedor IS NULL OR d.CUENTA = @PrProveedor)\nAND (@PrArticulo IS NULL OR LTRIM(RTRIM(d.IDARTICULO)) = LTRIM(RTRIM(@PrArticulo)))\nAND (@PrArticuloCodigo IS NULL OR LTRIM(RTRIM(d.IDARTICULO)) = LTRIM(RTRIM(@PrArticuloCodigo)))\nAND (@PrArticuloDescripcion IS NULL OR d.DESCRIPCION_ARTICULO LIKE \u0027%\u0027 \u002B @PrArticuloDescripcion \u002B \u0027%\u0027)\nAND (@PrRubro IS NULL OR d.RUBRO = @PrRubro)\nAND (@PrFamilia IS NULL OR d.FAMILIA = @PrFamilia)\nAND (@PrUsuario IS NULL OR d.USUARIO = @PrUsuario)\nAND (@PrSucursal IS NULL OR d.SUCURSAL = @PrSucursal)\nAND (@PrDeposito IS NULL OR CONVERT(varchar(20), d.IdDeposito) = @PrDeposito)\nAND (@PrTipoComprobante IS NULL OR d.TC = @PrTipoComprobante)\n    GROUP BY COALESCE(NULLIF(d.RUBRO, \u0027\u0027), \u0027Sin rubro\u0027)\n) priorData ON priorData.Rubro = currentData.Rubro\nORDER BY\n    CASE\n        WHEN ISNULL(priorData.TotalAnterior, 0) \u003E 0\n            THEN (currentData.TotalActual - priorData.TotalAnterior) / priorData.TotalAnterior\n        ELSE -1\n    END DESC,\n    currentData.TotalActual DESC"
+}

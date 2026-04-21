@@ -1,0 +1,586 @@
+{
+  "executionId": "76aede91-fbfe-4efa-a0a2-999456be3850",
+  "exitoso": true,
+  "consultaOriginal": "listado de compras del mes actual, \nmostrame las columnas \nfecha factura, cuenta, nombre, importe sin iva, iva, total, usuario que cargo el comprobante y la fecha y hora, \nno generes grafico, solo los campos del libro de iva compras",
+  "titulo": "Listado de compras",
+  "subtitulo": "Vista tabular de comprobantes para an\u00E1lisis operativo",
+  "resumen": "Se obtuvieron 40 filas para el informe.",
+  "mensaje": "",
+  "notaSeguridad": "InformesIA trabaja en modo solo lectura y solo consulta las vistas autorizadas del dashboard.",
+  "tipoResultado": "listado",
+  "generadoEn": "2026-04-17T09:07:31.4335889-03:00",
+  "filtrosAplicados": {
+    "fechaDesde": "2026-04-01T00:00:00",
+    "fechaHasta": "2026-04-17T00:00:00-03:00",
+    "proveedor": null,
+    "articulo": null,
+    "articuloCodigo": null,
+    "articuloDescripcion": null,
+    "rubro": null,
+    "familia": null,
+    "usuario": null,
+    "sucursal": null,
+    "deposito": null,
+    "estado": null,
+    "tipoComprobante": null
+  },
+  "fuentesAutorizadas": [
+    "vw_compras_cabecera_dashboard"
+  ],
+  "columnas": [
+    {
+      "key": "FechaFactura",
+      "label": "Fecha factura",
+      "format": "fecha",
+      "align": "left"
+    },
+    {
+      "key": "Cuenta",
+      "label": "Cuenta",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "Nombre",
+      "label": "Nombre",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "ImporteSinIva",
+      "label": "Importe sin IVA",
+      "format": "moneda",
+      "align": "right"
+    },
+    {
+      "key": "Iva",
+      "label": "IVA",
+      "format": "moneda",
+      "align": "right"
+    },
+    {
+      "key": "Total",
+      "label": "Total",
+      "format": "moneda",
+      "align": "right"
+    },
+    {
+      "key": "Usuario",
+      "label": "Usuario",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "FechaHora",
+      "label": "Fecha y hora",
+      "format": "fechahora",
+      "align": "left"
+    }
+  ],
+  "filas": [
+    {
+      "values": [
+        "16/04/2026",
+        "211014012",
+        "SUCESION DE SANCHEZ HORACIO ARTURO",
+        "$ 5.952.000,00",
+        "$ 624.960,00",
+        "$ 6.576.960,00",
+        "Alberto",
+        "16/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "15/04/2026",
+        "211014000",
+        "VARIOS",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 50.000,00",
+        "ROCIO",
+        "15/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "15/04/2026",
+        "211014000",
+        "VARIOS",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 62.500,00",
+        "ROCIO",
+        "15/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "15/04/2026",
+        "211010049",
+        "EL CEIBO MAYORISTA SRL",
+        "$ 484.453,28",
+        "$ 101.735,18",
+        "$ 600.722,06",
+        "Sistemas",
+        "15/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "15/04/2026",
+        "211010049",
+        "EL CEIBO MAYORISTA SRL",
+        "$ 952.092,14",
+        "$ 172.477,16",
+        "$ 1.180.594,25",
+        "Sistemas",
+        "15/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "15/04/2026",
+        "211010059",
+        "SAADE GABRIEL OMAR",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 333.350,26",
+        "ROCIO",
+        "15/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "14/04/2026",
+        "211014000",
+        "VARIOS",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 129.100,00",
+        "ROCIO",
+        "14/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "14/04/2026",
+        "211010108",
+        "ADRION SRL",
+        "$ 158.024,59",
+        "$ 33.185,16",
+        "$ 191.209,75",
+        "Sistemas",
+        "14/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "14/04/2026",
+        "211010145",
+        "SUAREZ LAURA INES",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 140.000,00",
+        "ROCIO",
+        "14/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "13/04/2026",
+        "211010008",
+        "GILIO DISTRIBUCION Y LOGISTICA DE ALIMENTOS",
+        "-$ 22.336,80",
+        "-$ 4.690,73",
+        "-$ 27.027,53",
+        "Sistemas",
+        "13/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "13/04/2026",
+        "211014031",
+        "JONES JUAN EDGAR",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 11.000.000,00",
+        "Alberto",
+        "13/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "12/04/2026",
+        "211010073",
+        "SALVATI MARIA FERNANDA",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 227.500,00",
+        "ROCIO",
+        "12/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "11/04/2026",
+        "211014000",
+        "VARIOS",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 36.000,00",
+        "ROCIO",
+        "11/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "10/04/2026",
+        "211010030",
+        "BEBIDAS DEL LAGO SA",
+        "$ 372.536,55",
+        "$ 78.232,68",
+        "$ 499.162,04",
+        "Sistemas",
+        "10/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "10/04/2026",
+        "211014000",
+        "VARIOS",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 50.000,00",
+        "ROCIO",
+        "10/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "10/04/2026",
+        "211010030",
+        "BEBIDAS DEL LAGO SA",
+        "$ 75.565,12",
+        "$ 15.868,68",
+        "$ 102.697,41",
+        "Sistemas",
+        "10/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "10/04/2026",
+        "211010003",
+        "CAGNOLI S.A",
+        "$ 1.238.483,06",
+        "$ 260.081,44",
+        "$ 1.548.103,83",
+        "Sistemas",
+        "10/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "10/04/2026",
+        "211014000",
+        "VARIOS",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 160.950,00",
+        "ROCIO",
+        "10/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "10/04/2026",
+        "211010028",
+        "CASPANI HNOS SA",
+        "$ 213.456,69",
+        "$ 44.825,90",
+        "$ 266.820,86",
+        "Sistemas",
+        "10/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "10/04/2026",
+        "211010028",
+        "CASPANI HNOS SA",
+        "$ 174.538,60",
+        "$ 36.653,10",
+        "$ 218.173,25",
+        "Sistemas",
+        "10/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "10/04/2026",
+        "211010067",
+        "JOHN DARIO",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 910.300,00",
+        "ROCIO",
+        "10/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "09/04/2026",
+        "211010078",
+        "CAMUZZI",
+        "$ 122.606,77",
+        "$ 33.103,83",
+        "$ 167.829,21",
+        "ROCIO",
+        "09/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "09/04/2026",
+        "211010008",
+        "GILIO DISTRIBUCION Y LOGISTICA DE ALIMENTOS",
+        "$ 183.975,60",
+        "$ 38.634,88",
+        "$ 226.817,55",
+        "Sistemas",
+        "09/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "09/04/2026",
+        "211010006",
+        "DISTRIBUIDORA ELPAR SRL",
+        "$ 221.054,78",
+        "$ 46.421,50",
+        "$ 269.686,83",
+        "Sistemas",
+        "09/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "09/04/2026",
+        "211010044",
+        "ALIMENTOS DEL LAGO SRL",
+        "$ 446.517,16",
+        "$ 93.768,60",
+        "$ 553.681,27",
+        "Sistemas",
+        "09/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "09/04/2026",
+        "211010055",
+        "TRANSPORTES IMAZ SRL",
+        "$ 65.948,27",
+        "$ 13.849,14",
+        "$ 79.797,41",
+        "ROCIO",
+        "09/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "09/04/2026",
+        "211010006",
+        "DISTRIBUIDORA ELPAR SRL",
+        "-$ 22.087,61",
+        "-$ 4.638,40",
+        "-$ 26.946,89",
+        "Sistemas",
+        "09/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "09/04/2026",
+        "211010054",
+        "SAEZ MARTA ESTER",
+        "$ 608.859,51",
+        "$ 127.860,50",
+        "$ 736.720,00",
+        "ROCIO",
+        "09/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "08/04/2026",
+        "211014000",
+        "VARIOS",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 55.000,00",
+        "ROCIO",
+        "08/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "08/04/2026",
+        "211014003",
+        "REDONA SA",
+        "$ 699.003,30",
+        "$ 73.395,35",
+        "$ 772.398,65",
+        "Alberto",
+        "08/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "08/04/2026",
+        "211010121",
+        "TRATENFU SA",
+        "$ 484.200,00",
+        "$ 101.682,00",
+        "$ 585.882,00",
+        "Sistemas",
+        "08/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "08/04/2026",
+        "211010129",
+        "GALLE PABLO ALBERTO",
+        "$ 42.613,11",
+        "$ 3.845,32",
+        "$ 49.010,14",
+        "ROCIO",
+        "08/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "08/04/2026",
+        "211010131",
+        "FCQ SRL",
+        "$ 291.855,15",
+        "$ 30.644,79",
+        "$ 325.418,56",
+        "ROCIO",
+        "08/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "08/04/2026",
+        "211010066",
+        "PROVEEDORES VARIOS",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 80.000,00",
+        "ROCIO",
+        "08/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "07/04/2026",
+        "211014000",
+        "VARIOS",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 107.325,00",
+        "ROCIO",
+        "07/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "07/04/2026",
+        "211010018",
+        "NEVADA SRL",
+        "$ 310.889,54",
+        "$ 65.286,80",
+        "$ 385.503,03",
+        "Sistemas",
+        "07/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "07/04/2026",
+        "211010018",
+        "NEVADA SRL",
+        "$ 442.391,16",
+        "$ 92.902,14",
+        "$ 548.565,07",
+        "Sistemas",
+        "07/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "07/04/2026",
+        "211010018",
+        "NEVADA SRL",
+        "$ 413.253,94",
+        "$ 86.783,33",
+        "$ 512.434,89",
+        "Sistemas",
+        "07/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "07/04/2026",
+        "211014012",
+        "SUCESION DE SANCHEZ HORACIO ARTURO",
+        "$ 0,00",
+        "$ 0,00",
+        "$ 4.400.000,00",
+        "Alberto",
+        "07/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "06/04/2026",
+        "111030017",
+        "111030017",
+        "$ 9.043,08",
+        "$ 1.899,05",
+        "$ 15.045,24",
+        "ROCIO",
+        "06/04/2026 00:00"
+      ]
+    }
+  ],
+  "grafico": null,
+  "sugerenciasRelacionadas": [
+    {
+      "texto": "Familias que m\u00E1s crecieron",
+      "descripcion": "Compara ramas familiares contra el per\u00EDodo anterior.",
+      "categoria": "Comparaci\u00F3n"
+    },
+    {
+      "texto": "Comprobantes con mayor importe",
+      "descripcion": "Lista los comprobantes m\u00E1s altos del per\u00EDodo.",
+      "categoria": "Top"
+    },
+    {
+      "texto": "Usuarios con m\u00E1s actividad",
+      "descripcion": "Resume qui\u00E9nes cargaron m\u00E1s comprobantes y monto.",
+      "categoria": "Actividad"
+    },
+    {
+      "texto": "Compar\u00E1 rubros contra el per\u00EDodo anterior",
+      "descripcion": "Diferencia y variaci\u00F3n de rubros vs per\u00EDodo previo.",
+      "categoria": "Comparaci\u00F3n"
+    }
+  ],
+  "sqlGenerado": "SELECT TOP (40)\n    c.FECHA AS FechaFactura,\n    c.CUENTA AS Cuenta,\n    COALESCE(NULLIF(c.RAZON_SOCIAL, \u0027\u0027), c.CUENTA) AS Nombre,\n    c.NetoDashboard AS ImporteSinIva,\n    c.IvaDashboard AS Iva,\n    c.ImporteDashboard AS Total,\n    c.USUARIO AS Usuario,\n    c.FECHA AS FechaHora,\n    c.TC AS Tc,\n    c.NUMERO AS Numero,\n    c.EstadoComprobante AS Estado\nFROM vw_compras_cabecera_dashboard c\nWHERE (@CurFechaDesde IS NULL OR c.FECHA \u003E= @CurFechaDesde)\nAND (@CurFechaHasta IS NULL OR c.FECHA \u003C DATEADD(day, 1, @CurFechaHasta))\nAND (@CurProveedor IS NULL OR c.CUENTA LIKE \u0027%\u0027 \u002B @CurProveedor \u002B \u0027%\u0027 OR c.RAZON_SOCIAL LIKE \u0027%\u0027 \u002B @CurProveedor \u002B \u0027%\u0027)\nAND (@CurUsuario IS NULL OR c.USUARIO = @CurUsuario)\nAND (@CurSucursal IS NULL OR c.SUCURSAL = @CurSucursal)\nAND (@CurDeposito IS NULL OR CONVERT(varchar(20), c.IdDeposito) = @CurDeposito)\nAND (@CurEstado IS NULL OR c.EstadoComprobante = @CurEstado)\nAND (@CurTipoComprobante IS NULL OR c.TC = @CurTipoComprobante)\nAND (\n    (@CurArticulo IS NULL AND @CurArticuloCodigo IS NULL AND @CurArticuloDescripcion IS NULL AND @CurRubro IS NULL AND @CurFamilia IS NULL)\n    OR EXISTS (\n        SELECT 1\n        FROM vw_compras_detalle_dashboard detailFilter\n        WHERE detailFilter.TC = c.TC\n          AND detailFilter.IDCOMPROBANTE = c.IDCOMPROBANTE\n          AND detailFilter.CUENTA = c.CUENTA\n          AND (@CurArticulo IS NULL OR LTRIM(RTRIM(detailFilter.IDARTICULO)) = LTRIM(RTRIM(@CurArticulo)))\n          AND (@CurArticuloCodigo IS NULL OR LTRIM(RTRIM(detailFilter.IDARTICULO)) = LTRIM(RTRIM(@CurArticuloCodigo)))\n          AND (@CurArticuloDescripcion IS NULL OR detailFilter.DESCRIPCION_ARTICULO LIKE \u0027%\u0027 \u002B @CurArticuloDescripcion \u002B \u0027%\u0027)\n          AND (@CurRubro IS NULL OR detailFilter.RUBRO = @CurRubro)\n          AND (@CurFamilia IS NULL OR detailFilter.FAMILIA = @CurFamilia)\n    )\n)\nORDER BY c.FECHA DESC, c.NUMERO DESC"
+}

@@ -1,0 +1,737 @@
+{
+  "executionId": "ac91e016-9560-4468-a787-f2f42a7e6aed",
+  "exitoso": true,
+  "consultaOriginal": "Art\u00EDculos con mayor aumento",
+  "titulo": "Art\u00EDculos con mayor aumento",
+  "subtitulo": "Variaci\u00F3n de costo promedio respecto del per\u00EDodo anterior",
+  "resumen": "El mayor aumento detectado corresponde a QUESO RALLADO LA SERENISIMA 70 GR, con una variaci\u00F3n de 29,0%.",
+  "mensaje": "",
+  "notaSeguridad": "InformesIA trabaja en modo solo lectura y solo consulta las vistas autorizadas del dashboard.",
+  "tipoResultado": "variacion",
+  "generadoEn": "2026-04-17T10:44:43.8057294-03:00",
+  "filtrosAplicados": {
+    "fechaDesde": "2026-04-01T00:00:00",
+    "fechaHasta": "2026-04-17T00:00:00-03:00",
+    "proveedor": null,
+    "articulo": null,
+    "articuloCodigo": null,
+    "articuloDescripcion": null,
+    "rubro": null,
+    "familia": null,
+    "usuario": null,
+    "sucursal": null,
+    "deposito": null,
+    "estado": null,
+    "tipoComprobante": null
+  },
+  "fuentesAutorizadas": [
+    "vw_compras_detalle_dashboard"
+  ],
+  "columnas": [
+    {
+      "key": "IdArticulo",
+      "label": "C\u00F3digo",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "Articulo",
+      "label": "Art\u00EDculo",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "PrecioActual",
+      "label": "Precio actual",
+      "format": "moneda",
+      "align": "right"
+    },
+    {
+      "key": "PrecioAnterior",
+      "label": "Precio anterior",
+      "format": "moneda",
+      "align": "right"
+    },
+    {
+      "key": "Variacion",
+      "label": "Variaci\u00F3n",
+      "format": "porcentaje",
+      "align": "right"
+    },
+    {
+      "key": "TotalComprado",
+      "label": "Total comprado",
+      "format": "moneda",
+      "align": "right"
+    }
+  ],
+  "filas": [
+    {
+      "values": [
+        "1454",
+        "QUESO RALLADO LA SERENISIMA 70 GR",
+        "$ 2.252,97",
+        "$ 1.746,05",
+        "29,0%",
+        "$ 22.529,70"
+      ]
+    },
+    {
+      "values": [
+        "30002",
+        "VAQUILLONA FAENA",
+        "$ 4.000,00",
+        "$ 3.300,00",
+        "21,2%",
+        "$ 11.000.000,00"
+      ]
+    },
+    {
+      "values": [
+        "60049",
+        "CEBOLLA X KG",
+        "$ 990,09",
+        "$ 871,51",
+        "13,6%",
+        "$ 15.989,95"
+      ]
+    },
+    {
+      "values": [
+        "60032",
+        "CEBOLLA VERDEO KG",
+        "$ 5.836,27",
+        "$ 5.237,59",
+        "11,4%",
+        "$ 9.980,02"
+      ]
+    },
+    {
+      "values": [
+        "30005",
+        "VACA CONSERVA FAENA",
+        "$ 2.050,00",
+        "$ 1.875,00",
+        "9,3%",
+        "$ 8.157.200,00"
+      ]
+    },
+    {
+      "values": [
+        "4837",
+        "MAICITOS PEHUAMAR 265 GRS",
+        "$ 3.541,91",
+        "$ 3.246,75",
+        "9,1%",
+        "$ 70.838,20"
+      ]
+    },
+    {
+      "values": [
+        "29308",
+        "TAPAS EMPANADAS FREIR LA ITALIANA 330GRS",
+        "$ 895,40",
+        "$ 822,80",
+        "8,8%",
+        "$ 19.553,60"
+      ]
+    },
+    {
+      "values": [
+        "7035",
+        "PALIQUESO PEHUAMAR 90GRS",
+        "$ 1.534,83",
+        "$ 1.416,77",
+        "8,3%",
+        "$ 7.674,15"
+      ]
+    },
+    {
+      "values": [
+        "7011",
+        "PAPAS LAYS CLASICAS 134 GRS",
+        "$ 3.128,69",
+        "$ 2.892,56",
+        "8,2%",
+        "$ 12.514,76"
+      ]
+    },
+    {
+      "values": [
+        "7008",
+        "DORITOS QUESO 129 GRS",
+        "$ 3.128,69",
+        "$ 2.892,56",
+        "8,2%",
+        "$ 9.386,07"
+      ]
+    },
+    {
+      "values": [
+        "7010",
+        "CONITOS 3D QUESO 143GRS",
+        "$ 3.128,69",
+        "$ 2.892,56",
+        "8,2%",
+        "$ 9.386,07"
+      ]
+    },
+    {
+      "values": [
+        "7204",
+        "PAPAS LAYS JAMON SERRANO 122GRS",
+        "$ 3.128,69",
+        "$ 2.892,56",
+        "8,2%",
+        "$ 6.257,38"
+      ]
+    },
+    {
+      "values": [
+        "5115",
+        "MARGARINA MASA MTK KG",
+        "$ 5.437,20",
+        "$ 5.053,72",
+        "7,6%",
+        "$ 108.744,00"
+      ]
+    },
+    {
+      "values": [
+        "762",
+        "SALCHICHAS PATYVIENA 6 U",
+        "$ 1.198,80",
+        "$ 1.116,00",
+        "7,4%",
+        "$ 23.976,00"
+      ]
+    },
+    {
+      "values": [
+        "29309",
+        "TAPAS EMPANADAS HORNO LA ITALIANA 330 GRS",
+        "$ 881,68",
+        "$ 822,80",
+        "7,2%",
+        "$ 28.096,10"
+      ]
+    },
+    {
+      "values": [
+        "29379",
+        "TAPAS EMPANADA CRIOLLA ITALIANA 330 GRS",
+        "$ 881,68",
+        "$ 822,80",
+        "7,2%",
+        "$ 28.096,10"
+      ]
+    },
+    {
+      "values": [
+        "1340",
+        "3D ORIGINAL SABOR QUESO 85 GR",
+        "$ 2.066,12",
+        "$ 1.948,05",
+        "6,1%",
+        "$ 6.198,36"
+      ]
+    },
+    {
+      "values": [
+        "1909",
+        "CHEETOS QUESO CREMA 85 GS",
+        "$ 2.066,12",
+        "$ 1.948,05",
+        "6,1%",
+        "$ 6.198,36"
+      ]
+    },
+    {
+      "values": [
+        "7012",
+        "PAPAS CLASICAS LAYS 85 GRS",
+        "$ 2.066,12",
+        "$ 1.948,05",
+        "6,1%",
+        "$ 6.198,36"
+      ]
+    },
+    {
+      "values": [
+        "7015",
+        "PAPAS KETCHUP LAYS 77 GRS",
+        "$ 2.066,12",
+        "$ 1.948,05",
+        "6,1%",
+        "$ 6.198,36"
+      ]
+    },
+    {
+      "values": [
+        "7017",
+        "PAPAS JAMON SERRANO LAYS  77GS",
+        "$ 2.066,12",
+        "$ 1.948,05",
+        "6,1%",
+        "$ 6.198,36"
+      ]
+    },
+    {
+      "values": [
+        "7019",
+        "CHEETOS QUESO 85 GRS",
+        "$ 2.066,12",
+        "$ 1.948,05",
+        "6,1%",
+        "$ 6.198,36"
+      ]
+    },
+    {
+      "values": [
+        "7521",
+        "DORITOS QUESO 77GRS",
+        "$ 2.066,12",
+        "$ 1.948,05",
+        "6,1%",
+        "$ 6.198,36"
+      ]
+    },
+    {
+      "values": [
+        "1549",
+        "PAPAS PANCETA LAYS 77GS",
+        "$ 2.066,12",
+        "$ 1.948,05",
+        "6,1%",
+        "$ 4.132,24"
+      ]
+    },
+    {
+      "values": [
+        "20820",
+        "YOGUR FRUTILLA ILOLAY SACHET 900CC",
+        "$ 1.797,52",
+        "$ 1.695,87",
+        "6,0%",
+        "$ 40.767,75"
+      ]
+    },
+    {
+      "values": [
+        "20822",
+        "YOGUR VAINILLA ILOLAY SACHET 900CC",
+        "$ 1.797,52",
+        "$ 1.695,87",
+        "6,0%",
+        "$ 20.707,43"
+      ]
+    },
+    {
+      "values": [
+        "13",
+        "PALITOS SALADOS PEHUAMAR  620 GRS PALISAL",
+        "$ 5.312,87",
+        "$ 5.017,71",
+        "5,9%",
+        "$ 63.754,44"
+      ]
+    },
+    {
+      "values": [
+        "605",
+        "PALITOS QUESO PEHUAMAR  620 GRS",
+        "$ 5.312,87",
+        "$ 5.017,71",
+        "5,9%",
+        "$ 63.754,44"
+      ]
+    },
+    {
+      "values": [
+        "1617",
+        "TAPAS DE EMPANADAS ROTISERAS HORNO DON YEYO 12 U",
+        "$ 1.511,28",
+        "$ 1.429,20",
+        "5,7%",
+        "$ 17.228,59"
+      ]
+    },
+    {
+      "values": [
+        "1674",
+        "DINAMITA EXTRA FLAMN HOT 82GS",
+        "$ 1.770,96",
+        "$ 1.682,41",
+        "5,3%",
+        "$ 7.083,84"
+      ]
+    },
+    {
+      "values": [
+        "29138",
+        "YOGUR CREMOSO FRUTILLA ILOLAY POTE 120 GR",
+        "$ 632,23",
+        "$ 601,65",
+        "5,1%",
+        "$ 7.207,42"
+      ]
+    },
+    {
+      "values": [
+        "20769",
+        "YOGUR COPOS AZUCARADOS ENTERO ILOLAY POTE 165GRS",
+        "$ 1.282,64",
+        "$ 1.221,49",
+        "5,0%",
+        "$ 19.496,13"
+      ]
+    },
+    {
+      "values": [
+        "20775",
+        "YOGUR ENTERO FIRME FRUTILLA ILOLAY 190 GR",
+        "$ 954,55",
+        "$ 909,09",
+        "5,0%",
+        "$ 9.068,23"
+      ]
+    },
+    {
+      "values": [
+        "3809",
+        "SALCHICHAS PATYVIENA  12 UNID",
+        "$ 2.693,25",
+        "$ 2.565,00",
+        "5,0%",
+        "$ 26.932,50"
+      ]
+    },
+    {
+      "values": [
+        "3120",
+        "QUESO POR SALUT LIGHT SIN LACTOSA LA SERENISIMA KG",
+        "$ 7.472,25",
+        "$ 7.116,43",
+        "5,0%",
+        "$ 29.888,98"
+      ]
+    },
+    {
+      "values": [
+        "5909",
+        "YOGUR FRUTILLA BEBIBLE TETRA ILOLAY 950 ML",
+        "$ 2.136,36",
+        "$ 2.034,71",
+        "5,0%",
+        "$ 32.130,85"
+      ]
+    },
+    {
+      "values": [
+        "5951",
+        "YOGUR VAINILLA BEBIBLE TETRA ILOLAY 950 ML",
+        "$ 2.136,36",
+        "$ 2.034,71",
+        "5,0%",
+        "$ 11.920,89"
+      ]
+    },
+    {
+      "values": [
+        "853",
+        "SALCHICHAS VIENISSIMA  12 U",
+        "$ 3.166,00",
+        "$ 3.020,00",
+        "4,8%",
+        "$ 18.996,00"
+      ]
+    },
+    {
+      "values": [
+        "381",
+        "CREMA DE LECHE TONADITA 350 CC",
+        "$ 2.285,00",
+        "$ 2.180,00",
+        "4,8%",
+        "$ 82.260,00"
+      ]
+    },
+    {
+      "values": [
+        "7013",
+        "PAPAS CLASICAS LAYS 40GRS",
+        "$ 1.298,70",
+        "$ 1.239,67",
+        "4,8%",
+        "$ 6.493,50"
+      ]
+    }
+  ],
+  "grafico": {
+    "tipo": "bar",
+    "titulo": "Art\u00EDculos con mayor aumento",
+    "subtitulo": "Representaci\u00F3n gr\u00E1fica del informe",
+    "formato": "porcentaje",
+    "barras": [
+      {
+        "categoria": "QUESO RALLADO LA SERENISIMA 70 GR",
+        "codigo": null,
+        "total": 0.290322,
+        "participacion": 0
+      },
+      {
+        "categoria": "VAQUILLONA FAENA",
+        "codigo": null,
+        "total": 0.212121,
+        "participacion": 0
+      },
+      {
+        "categoria": "CEBOLLA X KG",
+        "codigo": null,
+        "total": 0.136062,
+        "participacion": 0
+      },
+      {
+        "categoria": "CEBOLLA VERDEO KG",
+        "codigo": null,
+        "total": 0.114304,
+        "participacion": 0
+      },
+      {
+        "categoria": "VACA CONSERVA FAENA",
+        "codigo": null,
+        "total": 0.093333,
+        "participacion": 0
+      },
+      {
+        "categoria": "MAICITOS PEHUAMAR 265 GRS",
+        "codigo": null,
+        "total": 0.090909,
+        "participacion": 0
+      },
+      {
+        "categoria": "TAPAS EMPANADAS FREIR LA ITALIANA 330GRS",
+        "codigo": null,
+        "total": 0.088235,
+        "participacion": 0
+      },
+      {
+        "categoria": "PALIQUESO PEHUAMAR 90GRS",
+        "codigo": null,
+        "total": 0.083330,
+        "participacion": 0
+      },
+      {
+        "categoria": "PAPAS LAYS CLASICAS 134 GRS",
+        "codigo": null,
+        "total": 0.081633,
+        "participacion": 0
+      },
+      {
+        "categoria": "DORITOS QUESO 129 GRS",
+        "codigo": null,
+        "total": 0.081633,
+        "participacion": 0
+      },
+      {
+        "categoria": "CONITOS 3D QUESO 143GRS",
+        "codigo": null,
+        "total": 0.081633,
+        "participacion": 0
+      },
+      {
+        "categoria": "PAPAS LAYS JAMON SERRANO 122GRS",
+        "codigo": null,
+        "total": 0.081633,
+        "participacion": 0
+      },
+      {
+        "categoria": "MARGARINA MASA MTK KG",
+        "codigo": null,
+        "total": 0.075880,
+        "participacion": 0
+      },
+      {
+        "categoria": "SALCHICHAS PATYVIENA 6 U",
+        "codigo": null,
+        "total": 0.074193,
+        "participacion": 0
+      },
+      {
+        "categoria": "TAPAS EMPANADAS HORNO LA ITALIANA 330 GRS",
+        "codigo": null,
+        "total": 0.071564,
+        "participacion": 0
+      },
+      {
+        "categoria": "TAPAS EMPANADA CRIOLLA ITALIANA 330 GRS",
+        "codigo": null,
+        "total": 0.071564,
+        "participacion": 0
+      },
+      {
+        "categoria": "3D ORIGINAL SABOR QUESO 85 GR",
+        "codigo": null,
+        "total": 0.060609,
+        "participacion": 0
+      },
+      {
+        "categoria": "CHEETOS QUESO CREMA 85 GS",
+        "codigo": null,
+        "total": 0.060609,
+        "participacion": 0
+      },
+      {
+        "categoria": "PAPAS CLASICAS LAYS 85 GRS",
+        "codigo": null,
+        "total": 0.060609,
+        "participacion": 0
+      },
+      {
+        "categoria": "PAPAS KETCHUP LAYS 77 GRS",
+        "codigo": null,
+        "total": 0.060609,
+        "participacion": 0
+      },
+      {
+        "categoria": "PAPAS JAMON SERRANO LAYS  77GS",
+        "codigo": null,
+        "total": 0.060609,
+        "participacion": 0
+      },
+      {
+        "categoria": "CHEETOS QUESO 85 GRS",
+        "codigo": null,
+        "total": 0.060609,
+        "participacion": 0
+      },
+      {
+        "categoria": "DORITOS QUESO 77GRS",
+        "codigo": null,
+        "total": 0.060609,
+        "participacion": 0
+      },
+      {
+        "categoria": "PAPAS PANCETA LAYS 77GS",
+        "codigo": null,
+        "total": 0.060609,
+        "participacion": 0
+      },
+      {
+        "categoria": "YOGUR FRUTILLA ILOLAY SACHET 900CC",
+        "codigo": null,
+        "total": 0.059939,
+        "participacion": 0
+      },
+      {
+        "categoria": "YOGUR VAINILLA ILOLAY SACHET 900CC",
+        "codigo": null,
+        "total": 0.059939,
+        "participacion": 0
+      },
+      {
+        "categoria": "PALITOS SALADOS PEHUAMAR  620 GRS PALISAL",
+        "codigo": null,
+        "total": 0.058823,
+        "participacion": 0
+      },
+      {
+        "categoria": "PALITOS QUESO PEHUAMAR  620 GRS",
+        "codigo": null,
+        "total": 0.058823,
+        "participacion": 0
+      },
+      {
+        "categoria": "TAPAS DE EMPANADAS ROTISERAS HORNO DON YEYO 12 U",
+        "codigo": null,
+        "total": 0.057430,
+        "participacion": 0
+      },
+      {
+        "categoria": "DINAMITA EXTRA FLAMN HOT 82GS",
+        "codigo": null,
+        "total": 0.052632,
+        "participacion": 0
+      },
+      {
+        "categoria": "YOGUR CREMOSO FRUTILLA ILOLAY POTE 120 GR",
+        "codigo": null,
+        "total": 0.050826,
+        "participacion": 0
+      },
+      {
+        "categoria": "YOGUR COPOS AZUCARADOS ENTERO ILOLAY POTE 165GRS",
+        "codigo": null,
+        "total": 0.050061,
+        "participacion": 0
+      },
+      {
+        "categoria": "YOGUR ENTERO FIRME FRUTILLA ILOLAY 190 GR",
+        "codigo": null,
+        "total": 0.050006,
+        "participacion": 0
+      },
+      {
+        "categoria": "SALCHICHAS PATYVIENA  12 UNID",
+        "codigo": null,
+        "total": 0.050000,
+        "participacion": 0
+      },
+      {
+        "categoria": "QUESO POR SALUT LIGHT SIN LACTOSA LA SERENISIMA KG",
+        "codigo": null,
+        "total": 0.049999,
+        "participacion": 0
+      },
+      {
+        "categoria": "YOGUR FRUTILLA BEBIBLE TETRA ILOLAY 950 ML",
+        "codigo": null,
+        "total": 0.049957,
+        "participacion": 0
+      },
+      {
+        "categoria": "YOGUR VAINILLA BEBIBLE TETRA ILOLAY 950 ML",
+        "codigo": null,
+        "total": 0.049957,
+        "participacion": 0
+      },
+      {
+        "categoria": "SALCHICHAS VIENISSIMA  12 U",
+        "codigo": null,
+        "total": 0.048344,
+        "participacion": 0
+      },
+      {
+        "categoria": "CREMA DE LECHE TONADITA 350 CC",
+        "codigo": null,
+        "total": 0.048165,
+        "participacion": 0
+      },
+      {
+        "categoria": "PAPAS CLASICAS LAYS 40GRS",
+        "codigo": null,
+        "total": 0.047617,
+        "participacion": 0
+      }
+    ],
+    "linea": []
+  },
+  "sugerenciasRelacionadas": [
+    {
+      "texto": "Art\u00EDculos con mayor aumento",
+      "descripcion": "Detecta subas de costo promedio respecto del per\u00EDodo anterior.",
+      "categoria": "Variaci\u00F3n"
+    },
+    {
+      "texto": "Familias que m\u00E1s crecieron",
+      "descripcion": "Compara ramas familiares contra el per\u00EDodo anterior.",
+      "categoria": "Comparaci\u00F3n"
+    },
+    {
+      "texto": "Compar\u00E1 rubros contra el per\u00EDodo anterior",
+      "descripcion": "Diferencia y variaci\u00F3n de rubros vs per\u00EDodo previo.",
+      "categoria": "Comparaci\u00F3n"
+    }
+  ],
+  "sqlGenerado": "SELECT TOP (40)\n    currentData.IdArticulo,\n    currentData.Articulo,\n    currentData.PrecioActual,\n    ISNULL(priorData.PrecioAnterior, 0) AS PrecioAnterior,\n    CASE\n        WHEN ISNULL(priorData.PrecioAnterior, 0) \u003E 0\n            THEN (currentData.PrecioActual - priorData.PrecioAnterior) / priorData.PrecioAnterior\n        ELSE NULL\n    END AS Variacion,\n    currentData.TotalComprado\nFROM (\n    SELECT\n        LTRIM(RTRIM(d.IDARTICULO)) AS IdArticulo,\n        COALESCE(NULLIF(MAX(d.DESCRIPCION_ARTICULO), \u0027\u0027), LTRIM(RTRIM(d.IDARTICULO))) AS Articulo,\n        AVG(CAST(d.COSTO AS decimal(18,4))) AS PrecioActual,\n        SUM(d.TotalDashboard) AS TotalComprado\n    FROM vw_compras_detalle_dashboard d\n    WHERE (@CurFechaDesde IS NULL OR d.FECHA \u003E= @CurFechaDesde)\nAND (@CurFechaHasta IS NULL OR d.FECHA \u003C DATEADD(day, 1, @CurFechaHasta))\nAND (@CurProveedor IS NULL OR d.CUENTA = @CurProveedor)\nAND (@CurArticulo IS NULL OR LTRIM(RTRIM(d.IDARTICULO)) = LTRIM(RTRIM(@CurArticulo)))\nAND (@CurArticuloCodigo IS NULL OR LTRIM(RTRIM(d.IDARTICULO)) = LTRIM(RTRIM(@CurArticuloCodigo)))\nAND (@CurArticuloDescripcion IS NULL OR d.DESCRIPCION_ARTICULO LIKE \u0027%\u0027 \u002B @CurArticuloDescripcion \u002B \u0027%\u0027)\nAND (@CurRubro IS NULL OR d.RUBRO = @CurRubro)\nAND (@CurFamilia IS NULL OR d.FAMILIA = @CurFamilia)\nAND (@CurUsuario IS NULL OR d.USUARIO = @CurUsuario)\nAND (@CurSucursal IS NULL OR d.SUCURSAL = @CurSucursal)\nAND (@CurDeposito IS NULL OR CONVERT(varchar(20), d.IdDeposito) = @CurDeposito)\nAND (@CurTipoComprobante IS NULL OR d.TC = @CurTipoComprobante)\n    GROUP BY LTRIM(RTRIM(d.IDARTICULO))\n) currentData\nLEFT JOIN (\n    SELECT\n        LTRIM(RTRIM(d.IDARTICULO)) AS IdArticulo,\n        AVG(CAST(d.COSTO AS decimal(18,4))) AS PrecioAnterior\n    FROM vw_compras_detalle_dashboard d\n    WHERE (@PrFechaDesde IS NULL OR d.FECHA \u003E= @PrFechaDesde)\nAND (@PrFechaHasta IS NULL OR d.FECHA \u003C DATEADD(day, 1, @PrFechaHasta))\nAND (@PrProveedor IS NULL OR d.CUENTA = @PrProveedor)\nAND (@PrArticulo IS NULL OR LTRIM(RTRIM(d.IDARTICULO)) = LTRIM(RTRIM(@PrArticulo)))\nAND (@PrArticuloCodigo IS NULL OR LTRIM(RTRIM(d.IDARTICULO)) = LTRIM(RTRIM(@PrArticuloCodigo)))\nAND (@PrArticuloDescripcion IS NULL OR d.DESCRIPCION_ARTICULO LIKE \u0027%\u0027 \u002B @PrArticuloDescripcion \u002B \u0027%\u0027)\nAND (@PrRubro IS NULL OR d.RUBRO = @PrRubro)\nAND (@PrFamilia IS NULL OR d.FAMILIA = @PrFamilia)\nAND (@PrUsuario IS NULL OR d.USUARIO = @PrUsuario)\nAND (@PrSucursal IS NULL OR d.SUCURSAL = @PrSucursal)\nAND (@PrDeposito IS NULL OR CONVERT(varchar(20), d.IdDeposito) = @PrDeposito)\nAND (@PrTipoComprobante IS NULL OR d.TC = @PrTipoComprobante)\n    GROUP BY LTRIM(RTRIM(d.IDARTICULO))\n) priorData ON priorData.IdArticulo = currentData.IdArticulo\nORDER BY\n    CASE\n        WHEN ISNULL(priorData.PrecioAnterior, 0) \u003E 0\n            THEN (currentData.PrecioActual - priorData.PrecioAnterior) / priorData.PrecioAnterior\n        ELSE -1\n    END DESC,\n    currentData.TotalComprado DESC"
+}

@@ -1,0 +1,87 @@
+# =========================
+# .NET / Visual Studio
+# =========================
+bin/
+obj/
+out/
+publish/
+
+# Archivos de usuario
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# =========================
+# VS Code / IDEs
+# =========================
+.vscode/
+.idea/
+
+# =========================
+# Logs
+# =========================
+*.log
+
+# =========================
+# Variables de entorno (CRÍTICO)
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Configuración sensible
+# =========================
+appsettings.Development.json
+appsettings.*.json
+!appsettings.json
+
+# =========================
+# Instaladores (TU PROBLEMA ACTUAL)
+# =========================
+installer/prereqs/
+*.exe
+*.msi
+
+# =========================
+# Archivos temporales
+# =========================
+*.tmp
+*.temp
+
+# =========================
+# Sistema operativo
+# =========================
+Thumbs.db
+.DS_Store
+
+# =========================
+# Publicaciones
+# =========================
+publish/
+scripts/publish/
+
+# =========================
+# Librerías web
+# =========================
+wwwroot/lib/
+
+# =========================
+# Node (por si agregás frontend)
+# =========================
+node_modules/
+
+# =========================
+# Base de datos / backups
+# =========================
+*.bak
+*.mdf
+*.ldf
+*.db
+
+# =========================
+# Comprimidos
+# =========================
+*.zip
+*.rar
