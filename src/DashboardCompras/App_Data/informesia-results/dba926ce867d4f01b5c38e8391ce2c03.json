@@ -1,0 +1,184 @@
+{
+  "executionId": "dba926ce-867d-4f01-b5c3-8e8391ce2c03",
+  "exitoso": true,
+  "consultaOriginal": "decime los 10 productos mas caros del a\u00F1o, y decime en que comprobante.",
+  "titulo": "Productos m\u00E1s caros del a\u00F1o",
+  "subtitulo": "Top 10 productos m\u00E1s caros entre las fechas especificadas",
+  "resumen": "Se obtuvo un resultado din\u00E1mico de 10 fila(s) usando las vistas autorizadas del dashboard.",
+  "mensaje": "",
+  "notaSeguridad": "InformesIA trabaja en modo solo lectura y solo consulta las vistas autorizadas del dashboard.",
+  "tipoResultado": "consulta",
+  "generadoEn": "2026-04-21T17:21:47.0630825-03:00",
+  "filtrosAplicados": {
+    "fechaDesde": "2026-01-21T00:00:00-03:00",
+    "fechaHasta": "2026-04-21T00:00:00-03:00",
+    "proveedor": null,
+    "articulo": null,
+    "articuloCodigo": null,
+    "articuloDescripcion": null,
+    "rubro": null,
+    "familia": null,
+    "usuario": null,
+    "sucursal": null,
+    "deposito": null,
+    "estado": null,
+    "tipoComprobante": null
+  },
+  "fuentesAutorizadas": [
+    "vw_compras_detalle_dashboard",
+    "vw_compras_cabecera_dashboard"
+  ],
+  "columnas": [
+    {
+      "key": "IDARTICULO",
+      "label": "IDARTICULO",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "DESCRIPCION_ARTICULO",
+      "label": "DESCRIPCION ARTICULO",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "COSTO",
+      "label": "COSTO",
+      "format": "numero",
+      "align": "right"
+    },
+    {
+      "key": "IDCOMPROBANTE",
+      "label": "IDCOMPROBANTE",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "FECHA",
+      "label": "FECHA",
+      "format": "fechahora",
+      "align": "left"
+    }
+  ],
+  "filas": [
+    {
+      "values": [
+        "*",
+        "ALQUILER VIVIENDA 2025",
+        "432.212",
+        "000000000000X",
+        "20/12/2013 00:00"
+      ]
+    },
+    {
+      "values": [
+        "*",
+        "ALQUILER VIVIENDA 2025",
+        "432.212",
+        "000000000000X",
+        "07/02/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "                     1946",
+        "COBERTURA AGUILA BLANCA  X KG 3316 1265",
+        "186.911",
+        "002000226808A",
+        "21/01/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "                     1945",
+        "COBERTURA AGUILA LECHE X KILO BOTONES 1238 9298",
+        "179.971",
+        "002000227226A",
+        "28/01/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "                     1946",
+        "COBERTURA AGUILA BLANCA  X KG 3316 1265",
+        "163.360",
+        "002000228805A",
+        "27/02/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "                     5627",
+        "CACEROLA GASTRONOMICA N50 49L.ALMANDOZ.152",
+        "141.400",
+        "000500023185A",
+        "11/02/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "                  4570.92",
+        "LENTEJA CHOCOLATE MINI AGUILA POP/ROCKLETS x 100 Grs. (Bx9kg) 9975 1830",
+        "121.407",
+        "002000227226A",
+        "28/01/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "                  4570.92",
+        "LENTEJA CHOCOLATE MINI AGUILA POP/ROCKLETS x 100 Grs. (Bx9kg) 9975 1830",
+        "121.407",
+        "002000228805A",
+        "27/02/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "                   646126",
+        "(9639) GOTAS CHOCOLATE S/A AGUILA X 5 KG",
+        "93.268",
+        "002000230752A",
+        "15/04/2026 00:00"
+      ]
+    },
+    {
+      "values": [
+        "                     3470",
+        "CACEROLA GASTRONOMICA N45 36L.ALMANDOZ.151",
+        "89.800",
+        "000500023185A",
+        "11/02/2026 00:00"
+      ]
+    }
+  ],
+  "grafico": null,
+  "sugerenciasRelacionadas": [
+    {
+      "texto": "Proveedores con mayor crecimiento en el per\u00EDodo",
+      "descripcion": "Compara el gasto actual contra el per\u00EDodo anterior y ordena por variaci\u00F3n.",
+      "categoria": "Ranking"
+    },
+    {
+      "texto": "Art\u00EDculos con mayor aumento",
+      "descripcion": "Detecta subas de costo promedio respecto del per\u00EDodo anterior.",
+      "categoria": "Variaci\u00F3n"
+    },
+    {
+      "texto": "Rubros con m\u00E1s participaci\u00F3n",
+      "descripcion": "Muestra concentraci\u00F3n del gasto por rubro en el per\u00EDodo filtrado.",
+      "categoria": "Concentraci\u00F3n"
+    },
+    {
+      "texto": "Familias que m\u00E1s crecieron",
+      "descripcion": "Compara ramas familiares contra el per\u00EDodo anterior.",
+      "categoria": "Comparaci\u00F3n"
+    },
+    {
+      "texto": "Comprobantes con mayor importe",
+      "descripcion": "Lista los comprobantes m\u00E1s altos del per\u00EDodo.",
+      "categoria": "Top"
+    }
+  ],
+  "sqlGenerado": "SELECT TOP (10) d.IDARTICULO, d.DESCRIPCION_ARTICULO, d.COSTO, c.IDCOMPROBANTE, c.FECHA FROM vw_compras_detalle_dashboard d JOIN vw_compras_cabecera_dashboard c ON d.TC = c.TC AND d.IDCOMPROBANTE = c.IDCOMPROBANTE WHERE (@CurFechaDesde IS NULL OR d.FECHA \u003E= @CurFechaDesde) AND (@CurFechaHasta IS NULL OR d.FECHA \u003C DATEADD(day, 1, @CurFechaHasta)) ORDER BY d.COSTO DESC"
+}

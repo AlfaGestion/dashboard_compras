@@ -1,0 +1,237 @@
+@using System.Globalization
+
+@if (ColsValores.Count == 0)
+{
+    <p class="chart-empty"><i class="bi bi-bar-chart"></i> Seleccioná al menos una columna para el eje Y.</p>
+}
+else if (_datos.Count == 0)
+{
+    <p class="chart-empty">Sin datos para graficar.</p>
+}
+else
+{
+    <div class="result-chart">
+        @if (_tooMany)
+        {
+            <div class="result-chart__warn">
+                <i class="bi bi-info-circle"></i>
+                Se grafican los primeros @MaxPuntos de @Filas.Count puntos.
+            </div>
+        }
+
+        <div class="result-chart__legend">
+            @foreach (var (colIdx, j) in ColsValores.Select((c, j) => (c, j)))
+            {
+                <span class="result-chart__legend-item">
+                    <span class="result-chart__legend-dot" style="background:@(Colores[j % Colores.Length])"></span>
+                    @(colIdx < Columnas.Count ? Columnas[colIdx] : $"Col {colIdx}")
+                </span>
+            }
+        </div>
+
+        <svg viewBox="0 0 700 300" class="result-chart__svg" role="img">
+
+            @foreach (var gl in _gridLines)
+            {
+                <line x1="@PadL" y1="@F(gl.Y)" x2="@(PadL + ChartW)" y2="@F(gl.Y)" class="line-chart__grid" />
+            }
+            @((MarkupString)_yLabels)
+
+            @if (_zeroY.HasValue)
+            {
+                <line x1="@PadL" y1="@F(_zeroY.Value)" x2="@(PadL + ChartW)" y2="@F(_zeroY.Value)" class="result-chart__zero-line" />
+            }
+
+            @if (TipoGrafico == "Barras")
+            {
+                @foreach (var b in _bars)
+                {
+                    <rect x="@F(b.X)" y="@F(b.Y)" width="@F(b.W)" height="@F(b.H)" fill="@b.Color" rx="2" opacity="0.85">
+                        <title>@b.Label: @b.OrigValue</title>
+                    </rect>
+                }
+            }
+            else
+            {
+                @foreach (var ln in _lines)
+                {
+                    <path d="@ln.Path" fill="none" stroke="@ln.Color" stroke-width="2.5"
+                          stroke-linejoin="round" stroke-linecap="round" />
+                    @if (_datos.Count <= 30)
+                    {
+                        @foreach (var pt in ln.Points)
+                        {
+                            <circle cx="@F(pt.X)" cy="@F(pt.Y)" r="4" fill="@ln.Color">
+                                <title>@pt.Label: @pt.OrigValue</title>
+                            </circle>
+                        }
+                    }
+                }
+            }
+
+            @((MarkupString)_xLabels)
+        </svg>
+    </div>
+}
+
+@code {
+    private const int MaxPuntos = 60;
+    private const double PadL = 70, PadT = 15, PadB = 48, PadR = 10;
+    private const double ViewW = 700, ViewH = 300;
+    private static readonly double ChartW = ViewW - PadL - PadR;
+    private static readonly double ChartH = ViewH - PadT - PadB;
+
+    private static readonly string[] Colores = ["#0ea5e9", "#f59e0b", "#10b981", "#f43f5e", "#8b5cf6"];
+
+    [Parameter, EditorRequired] public IReadOnlyList<string[]> Filas { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyList<string> Columnas { get; set; } = [];
+    [Parameter] public int ColEtiqueta { get; set; } = 0;
+    [Parameter] public List<int> ColsValores { get; set; } = [];
+    [Parameter] public string TipoGrafico { get; set; } = "Barras";
+
+    private List<string[]> _datos = [];
+    private bool _tooMany;
+    private List<GridLine> _gridLines = [];
+    private double? _zeroY;
+    private List<BarItem> _bars = [];
+    private List<LineItem> _lines = [];
+    private string _xLabels = string.Empty;
+    private string _yLabels = string.Empty;
+
+    protected override void OnParametersSet()
+    {
+        _datos = Filas.Take(MaxPuntos).ToList();
+        _tooMany = Filas.Count > MaxPuntos;
+
+        if (_datos.Count == 0 || ColsValores.Count == 0) return;
+
+        var allVals = _datos
+            .SelectMany(r => ColsValores.Select(c => ParseVal(c < r.Length ? r[c] : "")))
+            .ToList();
+
+        var vMax = allVals.Count > 0 ? allVals.Max() : 1m;
+        var vMin = Math.Min(0m, allVals.Count > 0 ? allVals.Min() : 0m);
+        var range = Math.Max(vMax - vMin, 1m);
+
+        // Grid lines + Y labels
+        const int gridCount = 5;
+        _gridLines = Enumerable.Range(0, gridCount)
+            .Select(i =>
+            {
+                var val = vMin + range / (gridCount - 1) * i;
+                var y = PadT + ChartH - (double)((val - vMin) / range) * ChartH;
+                return new GridLine(y, val);
+            }).ToList();
+
+        _yLabels = string.Join("", _gridLines.Select(gl =>
+            $"<text x=\"{F(PadL - 6)}\" y=\"{F(gl.Y + 4)}\" " +
+            $"class=\"line-chart__axis-svg\" text-anchor=\"end\">" +
+            $"{System.Net.WebUtility.HtmlEncode(FormatVal(gl.Value))}</text>"));
+
+        _zeroY = vMin < 0
+            ? PadT + ChartH - (double)((0m - vMin) / range) * ChartH
+            : (double?)null;
+
+        // X axis labels
+        int step = Math.Max(1, (int)Math.Ceiling(_datos.Count / 8.0));
+        _xLabels = string.Join("", _datos.Select((r, i) => (r, i))
+            .Where(t => t.i % step == 0 || t.i == _datos.Count - 1)
+            .Select(t =>
+            {
+                double x = TipoGrafico == "Barras"
+                    ? PadL + ChartW / _datos.Count * t.i + ChartW / _datos.Count / 2.0
+                    : PadL + ChartW / Math.Max(_datos.Count - 1, 1) * t.i;
+                var lbl = ColEtiqueta < t.r.Length ? t.r[ColEtiqueta] : $"#{t.i + 1}";
+                if (lbl.Length > 11) lbl = lbl[..9] + "…";
+                return $"<text x=\"{F(x)}\" y=\"{F(ViewH - PadB + 16)}\" " +
+                       $"class=\"line-chart__label-svg\" text-anchor=\"middle\">" +
+                       $"{System.Net.WebUtility.HtmlEncode(lbl)}</text>";
+            }));
+
+        if (TipoGrafico == "Barras")
+            BuildBars(vMin, range);
+        else
+            BuildLines(vMin, range);
+    }
+
+    private void BuildBars(decimal vMin, decimal range)
+    {
+        _bars = [];
+        int n = _datos.Count, m = ColsValores.Count;
+        double groupW = ChartW / n;
+        double barW = Math.Max(1.5, groupW * 0.78 / m);
+        double groupPad = groupW * 0.11;
+        double baselineY = PadT + ChartH - (double)((0m - vMin) / range) * ChartH;
+
+        for (int i = 0; i < n; i++)
+        {
+            for (int j = 0; j < m; j++)
+            {
+                int ci = ColsValores[j];
+                var val = ci < _datos[i].Length ? ParseVal(_datos[i][ci]) : 0m;
+                var lbl = ColEtiqueta < _datos[i].Length ? _datos[i][ColEtiqueta] : $"#{i + 1}";
+                double x = PadL + i * groupW + groupPad + j * barW;
+                double barH = Math.Max(1, Math.Abs((double)(val / range) * ChartH));
+                double y = val >= 0 ? baselineY - barH : baselineY;
+                _bars.Add(new BarItem(x, y, barW - 1, barH, Colores[j % Colores.Length], lbl, FormatVal(val)));
+            }
+        }
+        _lines = [];
+    }
+
+    private void BuildLines(decimal vMin, decimal range)
+    {
+        _lines = [];
+        int n = _datos.Count;
+
+        foreach (var (colIdx, j) in ColsValores.Select((c, j) => (c, j)))
+        {
+            var pts = _datos.Select((r, i) =>
+            {
+                var val = colIdx < r.Length ? ParseVal(r[colIdx]) : 0m;
+                var lbl = ColEtiqueta < r.Length ? r[ColEtiqueta] : $"#{i + 1}";
+                double x = PadL + ChartW / Math.Max(n - 1, 1) * i;
+                double y = PadT + ChartH - (double)((val - vMin) / range) * ChartH;
+                return new ChartPoint(x, y, lbl, FormatVal(val));
+            }).ToList();
+
+            _lines.Add(new LineItem(BuildPath(pts), Colores[j % Colores.Length], pts));
+        }
+        _bars = [];
+    }
+
+    private static string BuildPath(List<ChartPoint> pts)
+    {
+        if (pts.Count == 0) return "";
+        if (pts.Count == 1) return $"M {F(pts[0].X)},{F(pts[0].Y)}";
+        var sb = new System.Text.StringBuilder($"M {F(pts[0].X)},{F(pts[0].Y)}");
+        for (int i = 1; i < pts.Count; i++)
+        {
+            var p0 = pts[Math.Max(i - 2, 0)]; var p1 = pts[i - 1];
+            var p2 = pts[i]; var p3 = pts[Math.Min(i + 1, pts.Count - 1)];
+            double cx1 = p1.X + (p2.X - p0.X) / 6, cy1 = p1.Y + (p2.Y - p0.Y) / 6;
+            double cx2 = p2.X - (p3.X - p1.X) / 6, cy2 = p2.Y - (p3.Y - p1.Y) / 6;
+            sb.Append($" C {F(cx1)},{F(cy1)} {F(cx2)},{F(cy2)} {F(p2.X)},{F(p2.Y)}");
+        }
+        return sb.ToString();
+    }
+
+    private static string F(double v) => v.ToString("F1", CultureInfo.InvariantCulture);
+
+    private static decimal ParseVal(string s) =>
+        decimal.TryParse(s.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var v) ? v : 0m;
+
+    private static string FormatVal(decimal v)
+    {
+        if (v == 0) return "0";
+        var abs = Math.Abs(v);
+        if (abs >= 1_000_000) return (v / 1_000_000m).ToString("N1", CultureInfo.InvariantCulture) + "M";
+        if (abs >= 1_000) return (v / 1_000m).ToString("N1", CultureInfo.InvariantCulture) + "k";
+        return v.ToString("N0", CultureInfo.InvariantCulture);
+    }
+
+    private sealed record GridLine(double Y, decimal Value);
+    private sealed record BarItem(double X, double Y, double W, double H, string Color, string Label, string OrigValue);
+    private sealed record ChartPoint(double X, double Y, string Label, string OrigValue);
+    private sealed record LineItem(string Path, string Color, List<ChartPoint> Points);
+}

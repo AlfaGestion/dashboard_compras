@@ -1,0 +1,131 @@
+{
+  "executionId": "0d22bd08-8acd-4120-af45-8e1e514090b8",
+  "exitoso": true,
+  "consultaOriginal": "decime los 10 productos mas caros del a\u00F1o, y decime en que comprobante. y que usuario lo cargo",
+  "titulo": "Usuarios con m\u00E1s actividad",
+  "subtitulo": "Volumen de comprobantes y monto cargado",
+  "resumen": "El usuario con m\u00E1s actividad es LAURA con 203 comprobantes.",
+  "mensaje": "",
+  "notaSeguridad": "InformesIA trabaja en modo solo lectura y solo consulta las vistas autorizadas del dashboard.",
+  "tipoResultado": "actividad",
+  "generadoEn": "2026-04-21T17:22:14.3528468-03:00",
+  "filtrosAplicados": {
+    "fechaDesde": "2026-01-21T00:00:00-03:00",
+    "fechaHasta": "2026-04-21T00:00:00-03:00",
+    "proveedor": null,
+    "articulo": null,
+    "articuloCodigo": null,
+    "articuloDescripcion": null,
+    "rubro": null,
+    "familia": null,
+    "usuario": null,
+    "sucursal": null,
+    "deposito": null,
+    "estado": null,
+    "tipoComprobante": null
+  },
+  "fuentesAutorizadas": [
+    "vw_compras_cabecera_dashboard"
+  ],
+  "columnas": [
+    {
+      "key": "Usuario",
+      "label": "Usuario",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "Comprobantes",
+      "label": "Comprobantes",
+      "format": "numero",
+      "align": "right"
+    },
+    {
+      "key": "ImporteTotal",
+      "label": "Importe total",
+      "format": "moneda",
+      "align": "right"
+    },
+    {
+      "key": "TicketPromedio",
+      "label": "Ticket promedio",
+      "format": "moneda",
+      "align": "right"
+    },
+    {
+      "key": "UltimaActividad",
+      "label": "\u00DAltima actividad",
+      "format": "fecha",
+      "align": "left"
+    }
+  ],
+  "filas": [
+    {
+      "values": [
+        "LAURA",
+        "203",
+        "$ 276.904.264,32",
+        "$ 1.364.060,42",
+        "12/03/2026"
+      ]
+    },
+    {
+      "values": [
+        "Sistemas",
+        "164",
+        "$ 249.960.242,72",
+        "$ 1.524.147,82",
+        "20/04/2026"
+      ]
+    },
+    {
+      "values": [
+        "FERNANDO",
+        "1",
+        "$ 432.212,43",
+        "$ 432.212,43",
+        "07/02/2026"
+      ]
+    }
+  ],
+  "grafico": {
+    "tipo": "bar",
+    "titulo": "Usuarios con m\u00E1s actividad",
+    "subtitulo": "Representaci\u00F3n gr\u00E1fica del informe",
+    "formato": "numero",
+    "barras": [
+      {
+        "categoria": "LAURA",
+        "codigo": null,
+        "total": 203,
+        "participacion": 0
+      },
+      {
+        "categoria": "Sistemas",
+        "codigo": null,
+        "total": 164,
+        "participacion": 0
+      },
+      {
+        "categoria": "FERNANDO",
+        "codigo": null,
+        "total": 1,
+        "participacion": 0
+      }
+    ],
+    "linea": []
+  },
+  "sugerenciasRelacionadas": [
+    {
+      "texto": "Proveedores con mayor crecimiento en el per\u00EDodo",
+      "descripcion": "Compara el gasto actual contra el per\u00EDodo anterior y ordena por variaci\u00F3n.",
+      "categoria": "Ranking"
+    },
+    {
+      "texto": "Usuarios con m\u00E1s actividad",
+      "descripcion": "Resume qui\u00E9nes cargaron m\u00E1s comprobantes y monto.",
+      "categoria": "Actividad"
+    }
+  ],
+  "sqlGenerado": "SELECT TOP (40)\n    COALESCE(NULLIF(c.USUARIO, \u0027\u0027), \u0027Sin usuario\u0027) AS Usuario,\n    COUNT(*) AS Comprobantes,\n    SUM(c.ImporteDashboard) AS ImporteTotal,\n    AVG(CAST(c.ImporteDashboard AS decimal(18,2))) AS TicketPromedio,\n    MAX(c.FECHA) AS UltimaActividad\nFROM vw_compras_cabecera_dashboard c\nWHERE (@CurFechaDesde IS NULL OR c.FECHA \u003E= @CurFechaDesde)\nAND (@CurFechaHasta IS NULL OR c.FECHA \u003C DATEADD(day, 1, @CurFechaHasta))\nAND (@CurProveedor IS NULL OR c.CUENTA LIKE \u0027%\u0027 \u002B @CurProveedor \u002B \u0027%\u0027 OR c.RAZON_SOCIAL LIKE \u0027%\u0027 \u002B @CurProveedor \u002B \u0027%\u0027)\nAND (@CurUsuario IS NULL OR c.USUARIO = @CurUsuario)\nAND (@CurSucursal IS NULL OR c.SUCURSAL = @CurSucursal)\nAND (@CurDeposito IS NULL OR CONVERT(varchar(20), c.IdDeposito) = @CurDeposito)\nAND (@CurEstado IS NULL OR c.EstadoComprobante = @CurEstado)\nAND (@CurTipoComprobante IS NULL OR c.TC = @CurTipoComprobante)\nAND (\n    (@CurArticulo IS NULL AND @CurArticuloCodigo IS NULL AND @CurArticuloDescripcion IS NULL AND @CurRubro IS NULL AND @CurFamilia IS NULL)\n    OR EXISTS (\n        SELECT 1\n        FROM vw_compras_detalle_dashboard detailFilter\n        WHERE detailFilter.TC = c.TC\n          AND detailFilter.IDCOMPROBANTE = c.IDCOMPROBANTE\n          AND detailFilter.CUENTA = c.CUENTA\n          AND (@CurArticulo IS NULL OR LTRIM(RTRIM(detailFilter.IDARTICULO)) = LTRIM(RTRIM(@CurArticulo)))\n          AND (@CurArticuloCodigo IS NULL OR LTRIM(RTRIM(detailFilter.IDARTICULO)) = LTRIM(RTRIM(@CurArticuloCodigo)))\n          AND (@CurArticuloDescripcion IS NULL OR detailFilter.DESCRIPCION_ARTICULO LIKE \u0027%\u0027 \u002B @CurArticuloDescripcion \u002B \u0027%\u0027)\n          AND (@CurRubro IS NULL OR detailFilter.RUBRO = @CurRubro)\n          AND (@CurFamilia IS NULL OR detailFilter.FAMILIA = @CurFamilia)\n    )\n)\nGROUP BY COALESCE(NULLIF(c.USUARIO, \u0027\u0027), \u0027Sin usuario\u0027)\nORDER BY COUNT(*) DESC, SUM(c.ImporteDashboard) DESC"
+}

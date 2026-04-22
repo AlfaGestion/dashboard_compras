@@ -1,4 +1,4 @@
-@page "/familias"
+@page "/compras/familias"
 @inject DashboardCompras.Services.IComprasDashboardService DashboardService
 @inject DashboardCompras.Services.FilterStateService FilterState
 
@@ -105,9 +105,9 @@
                     <div class="detail-row"><span class="detail-row__label">Última compra</span><strong>@Fecha(_detalle.Resumen.UltimaCompra)</strong></div>
                     @if (_detalle.Resumen.TieneHijos)
                     {
-                        <div class="detail-row"><span class="detail-row__label">Drill down</span><a class="action-link" href="/familias?familia=@Uri.EscapeDataString(_detalle.Resumen.Familia)">Ver rama</a></div>
+                        <div class="detail-row"><span class="detail-row__label">Drill down</span><a class="action-link" href="/compras/familias?familia=@Uri.EscapeDataString(_detalle.Resumen.Familia)">Ver rama</a></div>
                     }
-                    <div class="detail-row"><span class="detail-row__label">Artículos</span><a class="action-link" href="/articulos?familia=@Uri.EscapeDataString(_detalle.Resumen.Familia)">Ver artículos</a></div>
+                    <div class="detail-row"><span class="detail-row__label">Artículos</span><a class="action-link" href="/compras/articulos?familia=@Uri.EscapeDataString(_detalle.Resumen.Familia)">Ver artículos</a></div>
                 </DetailCard>
             }
         </div>
@@ -147,7 +147,7 @@
                                 <td>@item.IdComprobante</td>
                                 <td>@item.RazonSocial</td>
                                 <td style="text-align:right;">@Moneda(item.ImporteDashboard)</td>
-                                <td><a class="action-link" href="/comprobantes?tc=@item.Tc&id=@item.IdComprobante&cuenta=@Uri.EscapeDataString(item.Cuenta)">Abrir</a></td>
+                                <td><a class="action-link" href="/compras/comprobantes?tc=@item.Tc&id=@item.IdComprobante&cuenta=@Uri.EscapeDataString(item.Cuenta)">Abrir</a></td>
                             </tr>
                         }
                     </tbody>

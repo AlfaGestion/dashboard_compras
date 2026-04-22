@@ -45,15 +45,8 @@ else
                 }
             }
 
-            @foreach (var point in _labelPoints)
-            {
-                <text x="@point.X.ToString("F2")" y="278" class="line-chart__label-svg" text-anchor="middle">@point.Label</text>
-            }
-
-            @foreach (var gridLine in _gridLines)
-            {
-                <text x="52" y="@(gridLine.Y + 4).ToString("F2")" class="line-chart__axis-svg" text-anchor="end">@FormatearValor(gridLine.Value)</text>
-            }
+            @((MarkupString)_xLabels)
+            @((MarkupString)_yLabels)
         </svg>
     </div>
 }
@@ -64,6 +57,8 @@ else
 
     private string _linePath = string.Empty;
     private string _areaPath = string.Empty;
+    private string _xLabels = string.Empty;
+    private string _yLabels = string.Empty;
     private List<ChartPoint> _points = [];
     private List<ChartPoint> _labelPoints = [];
     private List<GridLine> _gridLines = [];
@@ -109,6 +104,9 @@ else
         _linePath = BuildSmoothPath(_points);
         _areaPath = $"{_linePath} L {_points[^1].X:F2},{202} L {_points[0].X:F2},{202} Z";
 
+        _xLabels = string.Join("", _labelPoints.Select(p =>
+            $"<text x=\"{p.X:F2}\" y=\"278\" class=\"line-chart__label-svg\" text-anchor=\"middle\">{System.Net.WebUtility.HtmlEncode(p.Label)}</text>"));
+
         _gridLines = Enumerable.Range(0, 4)
             .Select(i =>
             {
@@ -118,6 +116,9 @@ else
             })
             .Reverse()
             .ToList();
+
+        _yLabels = string.Join("", _gridLines.Select(g =>
+            $"<text x=\"52\" y=\"{g.Y + 4:F2}\" class=\"line-chart__axis-svg\" text-anchor=\"end\">{System.Net.WebUtility.HtmlEncode(FormatearValor(g.Value))}</text>"));
     }
 
     private static string BuildSmoothPath(List<ChartPoint> points)

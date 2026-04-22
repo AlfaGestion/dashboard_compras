@@ -1,0 +1,177 @@
+@page "/consultas"
+@inject DashboardCompras.Services.IConsultasService ConsultasSvc
+@inject DashboardCompras.Services.ISessionService SessionSvc
+@implements IDisposable
+
+<PageTitle>Consultas | Alfa Gestión</PageTitle>
+
+<div class="page-intro">
+    <div>
+        <h2 class="page-intro__title">Consultas</h2>
+        <p class="page-intro__text">Ejecutá y exportá las consultas guardadas del sistema.</p>
+    </div>
+    <a class="btn btn--primary" href="/consultas/nueva">
+        <i class="bi bi-plus-lg"></i> Nueva consulta
+    </a>
+</div>
+
+@if (_cargando)
+{
+    <div class="consultas-loading">
+        <i class="bi bi-hourglass-split"></i> Cargando consultas…
+    </div>
+}
+else if (_error is not null)
+{
+    <div class="consultas-error">
+        <i class="bi bi-exclamation-triangle"></i> @_error
+    </div>
+}
+else if (_raiz.Count == 0)
+{
+    <div class="consultas-empty">
+        No se encontraron consultas guardadas en la base de datos.
+    </div>
+}
+else
+{
+    <div class="ctree-layout">
+
+        <!-- Panel izquierdo: árbol jerárquico -->
+        <div class="ctree-panel">
+
+            <div class="ctree-search">
+                <i class="bi bi-search ctree-search__icon"></i>
+                <input class="ctree-search__input"
+                       type="search"
+                       placeholder="Buscar por nombre o código…"
+                       @bind="_busqueda"
+                       @bind:event="oninput" />
+            </div>
+
+            <div class="ctree">
+                @foreach (var (nodo, nivel) in GetNodosVisibles())
+                {
+                    <div class="ctree__node">
+                        <div class="ctree__indent" style="width: @(nivel * 18)px;"></div>
+
+                        @if (nodo.Hijos.Count > 0)
+                        {
+                            var expandido = _expandidos.Contains(nodo.Clave);
+                            <button class="ctree__toggle" @onclick="() => ToggleNodo(nodo.Clave)">
+                                <i class="bi @(expandido ? "bi-chevron-down" : "bi-chevron-right") ctree__chevron"></i>
+                                <span class="ctree__node-label">@nodo.Nombre</span>
+                                <span class="ctree__group-count">@nodo.Hijos.Count</span>
+                            </button>
+                        }
+                        else
+                        {
+                            <a class="ctree__leaf" href="/consultas/@nodo.Id">
+                                <span class="ctree__item-clave">@nodo.Clave</span>
+                                <span class="ctree__node-label">@nodo.Nombre</span>
+                                @if (nodo.TieneParametros)
+                                {
+                                    <i class="bi bi-sliders2 ctree__item-badge" title="Requiere parámetros"></i>
+                                }
+                            </a>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Panel derecho: placeholder -->
+        <div class="ctree-content">
+            <div class="ctree-welcome">
+                <i class="bi bi-table ctree-welcome__icon"></i>
+                <p class="ctree-welcome__text">Seleccioná una consulta del árbol para abrirla.</p>
+                <a class="btn btn--ghost" href="/consultas/nueva">
+                    <i class="bi bi-plus-lg"></i> Crear nueva consulta
+                </a>
+            </div>
+        </div>
+
+    </div>
+}
+
+@code {
+    private List<DashboardCompras.Models.NodoArbolDto> _raiz = [];
+    private HashSet<string> _expandidos = [];
+    private string _busqueda = string.Empty;
+    private bool _cargando = true;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        SessionSvc.SessionChanged += OnSessionChanged;
+        await CargarArbolAsync();
+    }
+
+    private async Task CargarArbolAsync()
+    {
+        _cargando = true;
+        _error = null;
+        try
+        {
+            _raiz = (await ConsultasSvc.GetArbolAsync()).ToList();
+            foreach (var r in _raiz)
+                _expandidos.Add(r.Clave);
+        }
+        catch (Exception ex)
+        {
+            _error = $"No se pudieron cargar las consultas: {ex.Message}";
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private void OnSessionChanged()
+    {
+        _expandidos.Clear();
+        InvokeAsync(async () => { await CargarArbolAsync(); StateHasChanged(); });
+    }
+
+    public void Dispose() => SessionSvc.SessionChanged -= OnSessionChanged;
+
+    private void ToggleNodo(string clave)
+    {
+        if (!_expandidos.Remove(clave))
+            _expandidos.Add(clave);
+    }
+
+    private IEnumerable<(DashboardCompras.Models.NodoArbolDto nodo, int nivel)> GetNodosVisibles()
+    {
+        if (string.IsNullOrWhiteSpace(_busqueda))
+            return GetVisiblesRec(_raiz, 0);
+
+        return GetTodosRec(_raiz)
+            .Where(n => n.Nombre.Contains(_busqueda, StringComparison.CurrentCultureIgnoreCase)
+                     || n.Clave.Contains(_busqueda, StringComparison.CurrentCultureIgnoreCase))
+            .Select(n => (n, 0));
+    }
+
+    private IEnumerable<(DashboardCompras.Models.NodoArbolDto, int)> GetVisiblesRec(
+        IEnumerable<DashboardCompras.Models.NodoArbolDto> nodos, int nivel)
+    {
+        foreach (var nodo in nodos)
+        {
+            yield return (nodo, nivel);
+            if (nodo.Hijos.Count > 0 && _expandidos.Contains(nodo.Clave))
+                foreach (var hijo in GetVisiblesRec(nodo.Hijos, nivel + 1))
+                    yield return hijo;
+        }
+    }
+
+    private IEnumerable<DashboardCompras.Models.NodoArbolDto> GetTodosRec(
+        IEnumerable<DashboardCompras.Models.NodoArbolDto> nodos)
+    {
+        foreach (var nodo in nodos)
+        {
+            yield return nodo;
+            foreach (var hijo in GetTodosRec(nodo.Hijos))
+                yield return hijo;
+        }
+    }
+}

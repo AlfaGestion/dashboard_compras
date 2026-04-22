@@ -15,7 +15,8 @@ public sealed partial class InformesIaService(
     IHttpClientFactory httpClientFactory,
     IHttpContextAccessor httpContextAccessor,
     InformesIaHistoryStore historyStore,
-    InformesIaResultStore resultStore) : IInformesIaService
+    InformesIaResultStore resultStore,
+    ISessionService sessionService) : IInformesIaService
 {
     private const int MaxRows = 40;
 
@@ -32,8 +33,11 @@ public sealed partial class InformesIaService(
         new() { Texto = "Compará rubros contra el período anterior", Descripcion = "Diferencia y variación de rubros vs período previo.", Categoria = "Comparación" }
     ];
 
-    private readonly string _connectionString = configuration.GetConnectionString("AlfaGestion")
-        ?? throw new InvalidOperationException("No se configuró la cadena de conexión 'ConnectionStrings:AlfaGestion'.");
+    private readonly ISessionService _sessionService = sessionService;
+    private string _connectionString => _sessionService.GetConnectionString().Length > 0
+        ? _sessionService.GetConnectionString()
+        : configuration.GetConnectionString("AlfaGestion")
+          ?? throw new InvalidOperationException("No se configuró la cadena de conexión 'ConnectionStrings:AlfaGestion'.");
     private readonly ILogger<InformesIaService> _logger = logger;
     private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
     private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
@@ -63,7 +67,7 @@ public sealed partial class InformesIaService(
         {
             var fail = Failure("Escribí una consulta para generar el informe.", query, filters, executionId: executionId);
             await _resultStore.SaveAsync(fail, cancellationToken);
-            return new InformeIaExecutionDto { ExecutionId = executionId, UrlResultado = $"/informesia/resultado/{executionId}", Resultado = fail };
+            return new InformeIaExecutionDto { ExecutionId = executionId, UrlResultado = $"/compras/informesia/resultado/{executionId}", Resultado = fail };
         }
 
         var definition = await ResolveDefinitionAsync(query, filters, preferencias, cancellationToken);
@@ -77,7 +81,7 @@ public sealed partial class InformesIaService(
                 executionId);
             await _resultStore.SaveAsync(fail, cancellationToken);
             await SaveHistoryAsync(query, false, "sin-resolver", "Consulta no resuelta", executionId, cancellationToken);
-            return new InformeIaExecutionDto { ExecutionId = executionId, UrlResultado = $"/informesia/resultado/{executionId}", Resultado = fail };
+            return new InformeIaExecutionDto { ExecutionId = executionId, UrlResultado = $"/compras/informesia/resultado/{executionId}", Resultado = fail };
         }
 
         if (!InformesIaSqlValidator.TryValidate(definition.Sql, out var validationMessage))
@@ -86,7 +90,7 @@ public sealed partial class InformesIaService(
             var fail = Failure(validationMessage, query, filters, definition.RelatedSuggestions, executionId);
             await _resultStore.SaveAsync(fail, cancellationToken);
             await SaveHistoryAsync(query, false, "rechazado", definition.Title, executionId, cancellationToken);
-            return new InformeIaExecutionDto { ExecutionId = executionId, UrlResultado = $"/informesia/resultado/{executionId}", Resultado = fail };
+            return new InformeIaExecutionDto { ExecutionId = executionId, UrlResultado = $"/compras/informesia/resultado/{executionId}", Resultado = fail };
         }
 
         try
@@ -121,7 +125,7 @@ public sealed partial class InformesIaService(
 
             await _resultStore.SaveAsync(result, cancellationToken);
             await SaveHistoryAsync(query, true, definition.ResultType, definition.Title, executionId, cancellationToken);
-            return new InformeIaExecutionDto { ExecutionId = executionId, UrlResultado = $"/informesia/resultado/{executionId}", Resultado = result };
+            return new InformeIaExecutionDto { ExecutionId = executionId, UrlResultado = $"/compras/informesia/resultado/{executionId}", Resultado = result };
         }
         catch (Exception ex)
         {
@@ -129,7 +133,7 @@ public sealed partial class InformesIaService(
             var fail = Failure("No fue posible generar el informe en este momento. Revisá la consulta o ajustá los filtros.", query, filters, definition.RelatedSuggestions, executionId);
             await _resultStore.SaveAsync(fail, cancellationToken);
             await SaveHistoryAsync(query, false, definition.ResultType, definition.Title, executionId, cancellationToken);
-            return new InformeIaExecutionDto { ExecutionId = executionId, UrlResultado = $"/informesia/resultado/{executionId}", Resultado = fail };
+            return new InformeIaExecutionDto { ExecutionId = executionId, UrlResultado = $"/compras/informesia/resultado/{executionId}", Resultado = fail };
         }
     }
 

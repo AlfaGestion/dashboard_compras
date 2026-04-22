@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.104.2" />
     <PackageReference Include="Markdig" Version="1.1.2" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.2" />
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.1" />
@@ -15,6 +16,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Docs\manual_usuario.md" />
+    <EmbeddedResource Include="Docs\manual_consultas.md" />
   </ItemGroup>
 
   <ItemGroup>

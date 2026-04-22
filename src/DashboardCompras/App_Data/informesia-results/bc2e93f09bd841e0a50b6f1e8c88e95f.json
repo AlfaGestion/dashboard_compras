@@ -1,0 +1,296 @@
+{
+  "executionId": "bc2e93f0-9bd8-41e0-a50b-6f1e8c88e95f",
+  "exitoso": true,
+  "consultaOriginal": "dame los 10 articulos mas caros del a\u00F1o, incluime la factura en la cual compro",
+  "titulo": "Art\u00EDculos m\u00E1s caros del a\u00F1o",
+  "subtitulo": "Top 10 art\u00EDculos m\u00E1s caros comprados entre fechas",
+  "resumen": "Se obtuvo un resultado din\u00E1mico de 10 fila(s) usando las vistas autorizadas del dashboard.",
+  "mensaje": "",
+  "notaSeguridad": "InformesIA trabaja en modo solo lectura y solo consulta las vistas autorizadas del dashboard.",
+  "tipoResultado": "consulta",
+  "generadoEn": "2026-04-22T14:01:25.574422-03:00",
+  "filtrosAplicados": {
+    "fechaDesde": "2026-01-22T00:00:00-03:00",
+    "fechaHasta": "2026-04-22T00:00:00-03:00",
+    "proveedor": null,
+    "articulo": null,
+    "articuloCodigo": null,
+    "articuloDescripcion": null,
+    "rubro": null,
+    "familia": null,
+    "usuario": null,
+    "sucursal": null,
+    "deposito": null,
+    "estado": null,
+    "tipoComprobante": null
+  },
+  "fuentesAutorizadas": [
+    "vw_compras_detalle_dashboard",
+    "vw_compras_cabecera_dashboard"
+  ],
+  "columnas": [
+    {
+      "key": "IDARTICULO",
+      "label": "IDARTICULO",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "DESCRIPCION_ARTICULO",
+      "label": "DESCRIPCION ARTICULO",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "COSTO",
+      "label": "COSTO",
+      "format": "numero",
+      "align": "right"
+    },
+    {
+      "key": "CANTIDAD",
+      "label": "CANTIDAD",
+      "format": "numero",
+      "align": "right"
+    },
+    {
+      "key": "TotalDashboard",
+      "label": "TotalDashboard",
+      "format": "numero",
+      "align": "right"
+    },
+    {
+      "key": "FECHA",
+      "label": "FECHA",
+      "format": "fechahora",
+      "align": "left"
+    },
+    {
+      "key": "CUENTA",
+      "label": "CUENTA",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "RAZON_SOCIAL",
+      "label": "RAZON SOCIAL",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "SUCURSAL",
+      "label": "SUCURSAL",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "USUARIO",
+      "label": "USUARIO",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "TC",
+      "label": "TC",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "IDCOMPROBANTE",
+      "label": "IDCOMPROBANTE",
+      "format": "texto",
+      "align": "left"
+    }
+  ],
+  "filas": [
+    {
+      "values": [
+        "*",
+        "..",
+        "276.443",
+        "1",
+        "276.443",
+        "09/02/2026 00:00",
+        "211010055",
+        "TRANSPORTES IMAZ SRL",
+        "0034",
+        "Sistemas",
+        "FCC",
+        "003400073914A"
+      ]
+    },
+    {
+      "values": [
+        "*",
+        "..",
+        "271.059",
+        "1",
+        "271.059",
+        "14/03/2026 00:00",
+        "211010022",
+        "DAVID ROSENTAL E HIJOS SACI",
+        "0152",
+        "Sistemas",
+        "FCC",
+        "015201012242A"
+      ]
+    },
+    {
+      "values": [
+        "*",
+        "..",
+        "213.222",
+        "1",
+        "213.222",
+        "31/03/2026 00:00",
+        "211010022",
+        "DAVID ROSENTAL E HIJOS SACI",
+        "0152",
+        "Sistemas",
+        "FCC",
+        "015201014457A"
+      ]
+    },
+    {
+      "values": [
+        "*",
+        "..",
+        "97.451",
+        "1",
+        "97.451",
+        "10/02/2026 00:00",
+        "211010022",
+        "DAVID ROSENTAL E HIJOS SACI",
+        "0152",
+        "Sistemas",
+        "FCC",
+        "015201007810A"
+      ]
+    },
+    {
+      "values": [
+        "                       72",
+        "CREMA ILOLAY BALDE 10LTS",
+        "85.941",
+        "1",
+        "81.643",
+        "01/04/2026 00:00",
+        "211010006",
+        "DISTRIBUIDORA ELPAR SRL",
+        "0011",
+        "Sistemas",
+        "FCC",
+        "001100257579A"
+      ]
+    },
+    {
+      "values": [
+        "                       72",
+        "CREMA ILOLAY BALDE 10LTS",
+        "85.941",
+        "2",
+        "159.849",
+        "05/03/2026 00:00",
+        "211010006",
+        "DISTRIBUIDORA ELPAR SRL",
+        "0011",
+        "Sistemas",
+        "FCC",
+        "001100255345A"
+      ]
+    },
+    {
+      "values": [
+        "                       72",
+        "CREMA ILOLAY BALDE 10LTS",
+        "84.670",
+        "1",
+        "80.437",
+        "22/01/2026 00:00",
+        "211010006",
+        "DISTRIBUIDORA ELPAR SRL",
+        "0011",
+        "Sistemas",
+        "FCC",
+        "001100251286A"
+      ]
+    },
+    {
+      "values": [
+        "*",
+        "..",
+        "56.224",
+        "1",
+        "56.224",
+        "12/03/2026 00:00",
+        "211010055",
+        "TRANSPORTES IMAZ SRL",
+        "0034",
+        "Sistemas",
+        "FCC",
+        "003400074800A"
+      ]
+    },
+    {
+      "values": [
+        "                     1694",
+        "CREMA ILOLAY BALDE 5 LTS",
+        "44.087",
+        "2",
+        "83.765",
+        "12/03/2026 00:00",
+        "211010006",
+        "DISTRIBUIDORA ELPAR SRL",
+        "0011",
+        "Sistemas",
+        "FCC",
+        "001100255940A"
+      ]
+    },
+    {
+      "values": [
+        "                     1694",
+        "CREMA ILOLAY BALDE 5 LTS",
+        "44.087",
+        "2",
+        "83.765",
+        "19/03/2026 00:00",
+        "211010006",
+        "DISTRIBUIDORA ELPAR SRL",
+        "0011",
+        "Sistemas",
+        "FCC",
+        "001100256516A"
+      ]
+    }
+  ],
+  "grafico": null,
+  "sugerenciasRelacionadas": [
+    {
+      "texto": "Proveedores con mayor crecimiento en el per\u00EDodo",
+      "descripcion": "Compara el gasto actual contra el per\u00EDodo anterior y ordena por variaci\u00F3n.",
+      "categoria": "Ranking"
+    },
+    {
+      "texto": "Art\u00EDculos con mayor aumento",
+      "descripcion": "Detecta subas de costo promedio respecto del per\u00EDodo anterior.",
+      "categoria": "Variaci\u00F3n"
+    },
+    {
+      "texto": "Rubros con m\u00E1s participaci\u00F3n",
+      "descripcion": "Muestra concentraci\u00F3n del gasto por rubro en el per\u00EDodo filtrado.",
+      "categoria": "Concentraci\u00F3n"
+    },
+    {
+      "texto": "Familias que m\u00E1s crecieron",
+      "descripcion": "Compara ramas familiares contra el per\u00EDodo anterior.",
+      "categoria": "Comparaci\u00F3n"
+    },
+    {
+      "texto": "Comprobantes con mayor importe",
+      "descripcion": "Lista los comprobantes m\u00E1s altos del per\u00EDodo.",
+      "categoria": "Top"
+    }
+  ],
+  "sqlGenerado": "SELECT TOP (10) d.IDARTICULO, d.DESCRIPCION_ARTICULO, d.COSTO, d.CANTIDAD, d.TotalDashboard, c.FECHA, c.CUENTA, c.RAZON_SOCIAL, c.SUCURSAL, c.USUARIO, c.TC, c.IDCOMPROBANTE FROM vw_compras_detalle_dashboard d JOIN vw_compras_cabecera_dashboard c ON d.TC = c.TC AND d.IDCOMPROBANTE = c.IDCOMPROBANTE AND d.CUENTA = c.CUENTA WHERE (@CurFechaDesde IS NULL OR d.FECHA \u003E= @CurFechaDesde) AND (@CurFechaHasta IS NULL OR d.FECHA \u003C DATEADD(day, 1, @CurFechaHasta)) ORDER BY d.COSTO DESC"
+}

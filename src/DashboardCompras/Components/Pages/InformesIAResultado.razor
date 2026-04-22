@@ -1,4 +1,4 @@
-@page "/informesia/resultado/{ExecutionId:guid}"
+@page "/compras/informesia/resultado/{ExecutionId:guid}"
 @inject DashboardCompras.Services.IInformesIaService InformesIaService
 @inject IJSRuntime JS
 
@@ -104,7 +104,7 @@
                     <div class="ia-chip-list">
                         @foreach (var item in _result.SugerenciasRelacionadas)
                         {
-                            <a class="ia-chip ia-chip--secondary" href="/informesia">
+                            <a class="ia-chip ia-chip--secondary" href="/compras/informesia">
                                 <span class="ia-chip__title">@item.Texto</span>
                             </a>
                         }

@@ -4,13 +4,13 @@
 @using System.Text
 @inject NavigationManager Nav
 
-<PageTitle>Ayuda | Dashboard de Compras</PageTitle>
+<PageTitle>@_pageTitle | Dashboard de Compras</PageTitle>
 
 <section class="page-grid">
     <div class="page-intro">
         <div>
-            <h2 class="page-intro__title">Ayuda</h2>
-            <p class="page-intro__text">Manual operativo, atajos de navegación y respuestas rápidas para cada pantalla del Dashboard de Compras.</p>
+            <h2 class="page-intro__title">@_pageTitle</h2>
+            <p class="page-intro__text">@_pageSubtitle</p>
         </div>
         <div class="help-toc-toggle">
             <button class="btn btn--ghost" @onclick="() => _tocVisible = !_tocVisible">
@@ -22,8 +22,8 @@
     <section class="help-hero panel-card">
         <div>
             <span class="help-hero__eyebrow">Centro de ayuda</span>
-            <h3 class="help-hero__title">Encontrá rápido qué hace cada vista y cómo leer sus métricas</h3>
-            <p class="help-hero__text">Buscá por pantalla, KPI o concepto. El manual completo sigue disponible, pero ahora podés saltar directo al punto exacto.</p>
+            <h3 class="help-hero__title">@_heroTitle</h3>
+            <p class="help-hero__text">@_heroText</p>
         </div>
 
         <div class="help-search">
@@ -130,7 +130,14 @@
     private string _search = string.Empty;
     private List<TocItem> _toc = [];
     private List<HelpSection> _sections = [];
+    private string _loadedTopic = string.Empty;
 
+    private string _pageTitle = "Ayuda";
+    private string _pageSubtitle = "Manual operativo, atajos de navegación y respuestas rápidas para cada pantalla del Dashboard de Compras.";
+    private string _heroTitle = "Encontrá rápido qué hace cada vista y cómo leer sus métricas";
+    private string _heroText = "Buscá por pantalla, KPI o concepto. El manual completo sigue disponible, pero ahora podés saltar directo al punto exacto.";
+
+    [Parameter, SupplyParameterFromQuery] public string? Topic { get; set; }
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
     private IEnumerable<TocItem> VisibleToc =>
@@ -155,14 +162,44 @@
         ? "Buscador listo para usar"
         : $"{SearchResults.Count()} resultado(s) para \"{_search.Trim()}\"";
 
-    protected override Task OnInitializedAsync()
+    protected override Task OnParametersSetAsync()
+    {
+        var topic = Topic?.ToLowerInvariant() ?? string.Empty;
+        if (topic == _loadedTopic)
+            return Task.CompletedTask;
+
+        _loadedTopic = topic;
+        _search = string.Empty;
+        _html = null;
+
+        if (topic == "consultas")
+        {
+            _pageTitle = "Diseñador de Consultas";
+            _pageSubtitle = "Manual del módulo de consultas SQL: árbol jerárquico, ejecución, parámetros, constructor visual y exportación.";
+            _heroTitle = "Creá, organizá y ejecutá consultas SQL directamente desde el navegador";
+            _heroText = "Buscá por función, sección o concepto técnico. Referencia completa del Diseñador de Consultas de Alfa Gestión.";
+            LoadMarkdown("DashboardCompras.Docs.manual_consultas.md");
+        }
+        else
+        {
+            _pageTitle = "Ayuda";
+            _pageSubtitle = "Manual operativo, atajos de navegación y respuestas rápidas para cada pantalla del Dashboard de Compras.";
+            _heroTitle = "Encontrá rápido qué hace cada vista y cómo leer sus métricas";
+            _heroText = "Buscá por pantalla, KPI o concepto. El manual completo sigue disponible, pero ahora podés saltar directo al punto exacto.";
+            LoadMarkdown("DashboardCompras.Docs.manual_usuario.md");
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void LoadMarkdown(string resourceName)
     {
         var assembly = Assembly.GetExecutingAssembly();
-        using var stream = assembly.GetManifestResourceStream("DashboardCompras.Docs.manual_usuario.md");
+        using var stream = assembly.GetManifestResourceStream(resourceName);
         if (stream is null)
         {
             _html = "<p>Manual no disponible.</p>";
-            return Task.CompletedTask;
+            return;
         }
 
         using var reader = new StreamReader(stream);
@@ -176,7 +213,6 @@
             .Build();
 
         _html = Markdown.ToHtml(markdown, pipeline);
-        return Task.CompletedTask;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

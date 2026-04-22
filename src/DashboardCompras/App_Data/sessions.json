@@ -1,0 +1,24 @@
+{
+  "Sessions": [
+    {
+      "Id": "6719513c-7978-4594-940c-b10878fff86b",
+      "Nombre": "SERVER01 \u00B7 FERNANDEZF2",
+      "Servidor": "SERVER01",
+      "BaseDatos": "FERNANDEZF2",
+      "Usuario": "FERNANDEZF2",
+      "Password": "FERNANDEZF2",
+      "TrustServerCertificate": true,
+      "Activa": false
+    },
+    {
+      "Id": "7926143d-f89c-45d4-a812-2032bbd2c906",
+      "Nombre": "OLIVA - REAL",
+      "Servidor": "AGSERVER\\ALFANET",
+      "BaseDatos": "ALFANET",
+      "Usuario": "ALFANET",
+      "Password": "ALFANET",
+      "TrustServerCertificate": true,
+      "Activa": true
+    }
+  ]
+}

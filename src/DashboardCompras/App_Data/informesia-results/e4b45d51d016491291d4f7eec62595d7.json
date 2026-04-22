@@ -1,0 +1,167 @@
+{
+  "executionId": "e4b45d51-d016-4912-91d4-f7eec62595d7",
+  "exitoso": true,
+  "consultaOriginal": "dame los 10 articulos mas caros del a\u00F1o",
+  "titulo": "Art\u00EDculos m\u00E1s caros del a\u00F1o",
+  "subtitulo": "Top 10 art\u00EDculos m\u00E1s caros entre las fechas seleccionadas",
+  "resumen": "Se obtuvo un resultado din\u00E1mico de 10 fila(s) usando las vistas autorizadas del dashboard.",
+  "mensaje": "",
+  "notaSeguridad": "InformesIA trabaja en modo solo lectura y solo consulta las vistas autorizadas del dashboard.",
+  "tipoResultado": "consulta",
+  "generadoEn": "2026-04-22T14:00:46.8938925-03:00",
+  "filtrosAplicados": {
+    "fechaDesde": "2026-01-22T00:00:00-03:00",
+    "fechaHasta": "2026-04-22T00:00:00-03:00",
+    "proveedor": null,
+    "articulo": null,
+    "articuloCodigo": null,
+    "articuloDescripcion": null,
+    "rubro": null,
+    "familia": null,
+    "usuario": null,
+    "sucursal": null,
+    "deposito": null,
+    "estado": null,
+    "tipoComprobante": null
+  },
+  "fuentesAutorizadas": [
+    "vw_compras_detalle_dashboard"
+  ],
+  "columnas": [
+    {
+      "key": "IDARTICULO",
+      "label": "IDARTICULO",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "DESCRIPCION_ARTICULO",
+      "label": "DESCRIPCION ARTICULO",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "COSTO",
+      "label": "COSTO",
+      "format": "numero",
+      "align": "right"
+    },
+    {
+      "key": "TotalVendido",
+      "label": "TotalVendido",
+      "format": "numero",
+      "align": "right"
+    }
+  ],
+  "filas": [
+    {
+      "values": [
+        "*",
+        "..",
+        "276.443",
+        "276.443"
+      ]
+    },
+    {
+      "values": [
+        "*",
+        "..",
+        "271.059",
+        "271.059"
+      ]
+    },
+    {
+      "values": [
+        "*",
+        "..",
+        "213.222",
+        "213.222"
+      ]
+    },
+    {
+      "values": [
+        "*",
+        "..",
+        "97.451",
+        "97.451"
+      ]
+    },
+    {
+      "values": [
+        "                       72",
+        "CREMA ILOLAY BALDE 10LTS",
+        "85.941",
+        "241.493"
+      ]
+    },
+    {
+      "values": [
+        "                       72",
+        "CREMA ILOLAY BALDE 10LTS",
+        "84.670",
+        "80.437"
+      ]
+    },
+    {
+      "values": [
+        "*",
+        "..",
+        "56.224",
+        "56.224"
+      ]
+    },
+    {
+      "values": [
+        "                     1694",
+        "CREMA ILOLAY BALDE 5 LTS",
+        "44.087",
+        "167.530"
+      ]
+    },
+    {
+      "values": [
+        "                      644",
+        "RESINITE FILM RESIMAX 38X1000 MTS",
+        "42.499",
+        "509.990"
+      ]
+    },
+    {
+      "values": [
+        "                        8",
+        "CAFE ITALIANO GRANO LA VIRGINIA 1 KG",
+        "39.763",
+        "96.226"
+      ]
+    }
+  ],
+  "grafico": null,
+  "sugerenciasRelacionadas": [
+    {
+      "texto": "Proveedores con mayor crecimiento en el per\u00EDodo",
+      "descripcion": "Compara el gasto actual contra el per\u00EDodo anterior y ordena por variaci\u00F3n.",
+      "categoria": "Ranking"
+    },
+    {
+      "texto": "Art\u00EDculos con mayor aumento",
+      "descripcion": "Detecta subas de costo promedio respecto del per\u00EDodo anterior.",
+      "categoria": "Variaci\u00F3n"
+    },
+    {
+      "texto": "Rubros con m\u00E1s participaci\u00F3n",
+      "descripcion": "Muestra concentraci\u00F3n del gasto por rubro en el per\u00EDodo filtrado.",
+      "categoria": "Concentraci\u00F3n"
+    },
+    {
+      "texto": "Familias que m\u00E1s crecieron",
+      "descripcion": "Compara ramas familiares contra el per\u00EDodo anterior.",
+      "categoria": "Comparaci\u00F3n"
+    },
+    {
+      "texto": "Comprobantes con mayor importe",
+      "descripcion": "Lista los comprobantes m\u00E1s altos del per\u00EDodo.",
+      "categoria": "Top"
+    }
+  ],
+  "sqlGenerado": "SELECT TOP (10) d.IDARTICULO, d.DESCRIPCION_ARTICULO, d.COSTO, SUM(d.TotalDashboard) AS TotalVendido FROM vw_compras_detalle_dashboard d WHERE (@CurFechaDesde IS NULL OR d.FECHA \u003E= @CurFechaDesde) AND (@CurFechaHasta IS NULL OR d.FECHA \u003C DATEADD(day, 1, @CurFechaHasta)) GROUP BY d.IDARTICULO, d.DESCRIPCION_ARTICULO, d.COSTO ORDER BY d.COSTO DESC"
+}

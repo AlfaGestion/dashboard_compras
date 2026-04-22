@@ -1,4 +1,4 @@
-@page "/articulos"
+@page "/compras/articulos"
 @inject DashboardCompras.Services.IComprasDashboardService DashboardService
 @inject DashboardCompras.Services.FilterStateService FilterState
 
@@ -142,7 +142,7 @@
                         {
                             <div class="detail-row">
                                 <span class="detail-row__label">@item.Fecha.ToString("dd/MM/yy") · @item.Tc @item.IdComprobante</span>
-                                <a class="action-link" href="/comprobantes?tc=@item.Tc&id=@item.IdComprobante&cuenta=@Uri.EscapeDataString(item.Cuenta)">Abrir</a>
+                                <a class="action-link" href="/compras/comprobantes?tc=@item.Tc&id=@item.IdComprobante&cuenta=@Uri.EscapeDataString(item.Cuenta)">Abrir</a>
                             </div>
                         }
                     </div>

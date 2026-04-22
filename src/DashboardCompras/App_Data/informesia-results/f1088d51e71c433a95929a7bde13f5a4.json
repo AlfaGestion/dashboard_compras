@@ -1,0 +1,183 @@
+{
+  "executionId": "f1088d51-e71c-433a-9592-9a7bde13f5a4",
+  "exitoso": true,
+  "consultaOriginal": "decime los 10 productos mas caros del a\u00F1o",
+  "titulo": "Productos m\u00E1s caros del a\u00F1o",
+  "subtitulo": "Top 10 productos con mayor costo",
+  "resumen": "Se obtuvo un resultado din\u00E1mico de 10 fila(s) usando las vistas autorizadas del dashboard.",
+  "mensaje": "",
+  "notaSeguridad": "InformesIA trabaja en modo solo lectura y solo consulta las vistas autorizadas del dashboard.",
+  "tipoResultado": "consulta",
+  "generadoEn": "2026-04-21T17:21:18.8267633-03:00",
+  "filtrosAplicados": {
+    "fechaDesde": "2026-01-21T00:00:00-03:00",
+    "fechaHasta": "2026-04-21T00:00:00-03:00",
+    "proveedor": null,
+    "articulo": null,
+    "articuloCodigo": null,
+    "articuloDescripcion": null,
+    "rubro": null,
+    "familia": null,
+    "usuario": null,
+    "sucursal": null,
+    "deposito": null,
+    "estado": null,
+    "tipoComprobante": null
+  },
+  "fuentesAutorizadas": [
+    "vw_compras_detalle_dashboard"
+  ],
+  "columnas": [
+    {
+      "key": "IDARTICULO",
+      "label": "IDARTICULO",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "DESCRIPCION_ARTICULO",
+      "label": "DESCRIPCION ARTICULO",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "COSTO",
+      "label": "COSTO",
+      "format": "numero",
+      "align": "right"
+    },
+    {
+      "key": "CANTIDAD",
+      "label": "CANTIDAD",
+      "format": "numero",
+      "align": "right"
+    },
+    {
+      "key": "TotalDashboard",
+      "label": "TotalDashboard",
+      "format": "numero",
+      "align": "right"
+    }
+  ],
+  "filas": [
+    {
+      "values": [
+        "*",
+        "ALQUILER VIVIENDA 2025",
+        "432.212",
+        "1",
+        "432.212"
+      ]
+    },
+    {
+      "values": [
+        "                     1946",
+        "COBERTURA AGUILA BLANCA  X KG 3316 1265",
+        "186.911",
+        "1",
+        "186.911"
+      ]
+    },
+    {
+      "values": [
+        "                     1945",
+        "COBERTURA AGUILA LECHE X KILO BOTONES 1238 9298",
+        "179.971",
+        "1",
+        "179.971"
+      ]
+    },
+    {
+      "values": [
+        "                     1946",
+        "COBERTURA AGUILA BLANCA  X KG 3316 1265",
+        "163.360",
+        "2",
+        "326.720"
+      ]
+    },
+    {
+      "values": [
+        "                     5627",
+        "CACEROLA GASTRONOMICA N50 49L.ALMANDOZ.152",
+        "141.400",
+        "1",
+        "141.400"
+      ]
+    },
+    {
+      "values": [
+        "                  4570.92",
+        "LENTEJA CHOCOLATE MINI AGUILA POP/ROCKLETS x 100 Grs. (Bx9kg) 9975 1830",
+        "121.407",
+        "1",
+        "121.407"
+      ]
+    },
+    {
+      "values": [
+        "                  4570.92",
+        "LENTEJA CHOCOLATE MINI AGUILA POP/ROCKLETS x 100 Grs. (Bx9kg) 9975 1830",
+        "121.407",
+        "2",
+        "242.813"
+      ]
+    },
+    {
+      "values": [
+        "                   646126",
+        "(9639) GOTAS CHOCOLATE S/A AGUILA X 5 KG",
+        "93.268",
+        "2",
+        "186.537"
+      ]
+    },
+    {
+      "values": [
+        "                     3470",
+        "CACEROLA GASTRONOMICA N45 36L.ALMANDOZ.151",
+        "89.800",
+        "1",
+        "89.800"
+      ]
+    },
+    {
+      "values": [
+        "                     1949",
+        "CHOCOLATE TAZA  AGUILA SUELTO X KG 9985 1180",
+        "88.306",
+        "10",
+        "883.058"
+      ]
+    }
+  ],
+  "grafico": null,
+  "sugerenciasRelacionadas": [
+    {
+      "texto": "Proveedores con mayor crecimiento en el per\u00EDodo",
+      "descripcion": "Compara el gasto actual contra el per\u00EDodo anterior y ordena por variaci\u00F3n.",
+      "categoria": "Ranking"
+    },
+    {
+      "texto": "Art\u00EDculos con mayor aumento",
+      "descripcion": "Detecta subas de costo promedio respecto del per\u00EDodo anterior.",
+      "categoria": "Variaci\u00F3n"
+    },
+    {
+      "texto": "Rubros con m\u00E1s participaci\u00F3n",
+      "descripcion": "Muestra concentraci\u00F3n del gasto por rubro en el per\u00EDodo filtrado.",
+      "categoria": "Concentraci\u00F3n"
+    },
+    {
+      "texto": "Familias que m\u00E1s crecieron",
+      "descripcion": "Compara ramas familiares contra el per\u00EDodo anterior.",
+      "categoria": "Comparaci\u00F3n"
+    },
+    {
+      "texto": "Comprobantes con mayor importe",
+      "descripcion": "Lista los comprobantes m\u00E1s altos del per\u00EDodo.",
+      "categoria": "Top"
+    }
+  ],
+  "sqlGenerado": "SELECT TOP (10) d.IDARTICULO, d.DESCRIPCION_ARTICULO, d.COSTO, d.CANTIDAD, d.TotalDashboard FROM vw_compras_detalle_dashboard d WHERE (@CurFechaDesde IS NULL OR d.FECHA \u003E= @CurFechaDesde) AND (@CurFechaHasta IS NULL OR d.FECHA \u003C DATEADD(day, 1, @CurFechaHasta)) AND (@CurProveedor IS NULL OR d.CUENTA = @CurProveedor) AND (@CurArticulo IS NULL OR LTRIM(RTRIM(d.IDARTICULO)) = LTRIM(RTRIM(@CurArticulo))) AND (@CurArticuloCodigo IS NULL OR LTRIM(RTRIM(d.IDARTICULO)) = LTRIM(RTRIM(@CurArticuloCodigo))) AND (@CurArticuloDescripcion IS NULL OR d.DESCRIPCION_ARTICULO LIKE \u0027%\u0027 \u002B @CurArticuloDescripcion \u002B \u0027%\u0027) AND (@CurRubro IS NULL OR d.RUBRO = @CurRubro) AND (@CurFamilia IS NULL OR d.FAMILIA = @CurFamilia) AND (@CurUsuario IS NULL OR d.USUARIO = @CurUsuario) AND (@CurSucursal IS NULL OR d.SUCURSAL = @CurSucursal) AND (@CurDeposito IS NULL OR CONVERT(varchar(20), d.IdDeposito) = @CurDeposito) AND (@CurTipoComprobante IS NULL OR d.TC = @CurTipoComprobante) ORDER BY d.COSTO DESC"
+}

@@ -1,4 +1,4 @@
-@page "/rubros"
+@page "/compras/rubros"
 @inject DashboardCompras.Services.IComprasDashboardService DashboardService
 @inject DashboardCompras.Services.FilterStateService FilterState
 
@@ -94,7 +94,7 @@
                     <div class="detail-row"><span class="detail-row__label">Artículos</span><strong>@_detalle.Resumen.CantidadArticulos</strong></div>
                     <div class="detail-row"><span class="detail-row__label">Ticket promedio</span><strong>@Moneda(_detalle.Resumen.TicketPromedio)</strong></div>
                     <div class="detail-row"><span class="detail-row__label">Última compra</span><strong>@Fecha(_detalle.Resumen.UltimaCompra)</strong></div>
-                    <div class="detail-row"><span class="detail-row__label">Drill down</span><a class="action-link" href="/articulos?rubro=@Uri.EscapeDataString(_detalle.Resumen.Rubro)">Ver artículos</a></div>
+                    <div class="detail-row"><span class="detail-row__label">Drill down</span><a class="action-link" href="/compras/articulos?rubro=@Uri.EscapeDataString(_detalle.Resumen.Rubro)">Ver artículos</a></div>
                 </DetailCard>
             }
         </div>
@@ -133,7 +133,7 @@
                                 <td>@item.IdComprobante</td>
                                 <td>@item.RazonSocial</td>
                                 <td style="text-align:right;">@Moneda(item.ImporteDashboard)</td>
-                                <td><a class="action-link" href="/comprobantes?tc=@item.Tc&id=@item.IdComprobante&cuenta=@Uri.EscapeDataString(item.Cuenta)">Abrir</a></td>
+                                <td><a class="action-link" href="/compras/comprobantes?tc=@item.Tc&id=@item.IdComprobante&cuenta=@Uri.EscapeDataString(item.Cuenta)">Abrir</a></td>
                             </tr>
                         }
                     </tbody>

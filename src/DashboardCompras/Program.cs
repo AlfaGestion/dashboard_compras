@@ -1,5 +1,6 @@
 using DashboardCompras.Components;
 using DashboardCompras.Configuration;
+using DashboardCompras.Models;
 using DashboardCompras.Services;
 using System.Diagnostics;
 
@@ -43,8 +44,11 @@ public class Program
         // Add services to the container.
         builder.Services.AddRazorComponents()
             .AddInteractiveServerComponents();
+        builder.Services.AddSingleton<ISessionService, SessionService>();
         builder.Services.AddScoped<IComprasDashboardService, ComprasDashboardService>();
         builder.Services.AddScoped<IInformesIaService, InformesIaService>();
+        builder.Services.AddScoped<IConsultasService, ConsultasService>();
+        builder.Services.AddSingleton<ConsultasExcelExporter>();
         builder.Services.AddSingleton<InformesIaHistoryStore>();
         builder.Services.AddSingleton<InformesIaResultStore>();
         builder.Services.AddScoped<FilterStateService>();
@@ -67,6 +71,37 @@ public class Program
 
         app.MapRazorComponents<App>()
             .AddInteractiveServerRenderMode();
+
+        app.MapGet("/consultas/{id:int}/descargar-excel", async (
+            int id,
+            HttpRequest request,
+            IConsultasService svc,
+            ConsultasExcelExporter exporter,
+            CancellationToken ct) =>
+        {
+            var consulta = await svc.GetConsultaAsync(id, ct);
+            if (consulta is null) return Results.NotFound();
+
+            var valores = new List<string>();
+            for (int i = 0; request.Query.ContainsKey($"p{i}"); i++)
+                valores.Add(request.Query[$"p{i}"].ToString());
+
+            var resultado = await svc.EjecutarAsync(new EjecutarConsultaRequest
+            {
+                ConsultaId = id,
+                ValoresParametros = valores,
+                MaxFilas = 100_000
+            }, ct);
+
+            if (!resultado.Exitoso)
+                return Results.BadRequest(resultado.MensajeError);
+
+            var bytes = exporter.Exportar(consulta, resultado);
+            var filename = ConsultasExcelExporter.NombreArchivo(consulta);
+            return Results.File(bytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                filename);
+        });
 
         try
         {

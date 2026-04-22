@@ -4,7 +4,7 @@ using System.Diagnostics;
 
 namespace DashboardCompras.Services;
 
-public sealed partial class ComprasDashboardService(IConfiguration configuration, ILogger<ComprasDashboardService> logger) : IComprasDashboardService
+public sealed partial class ComprasDashboardService(IConfiguration configuration, ILogger<ComprasDashboardService> logger, ISessionService sessionService) : IComprasDashboardService
 {
     private const string HeaderFromClause = """
         FROM vw_compras_cabecera_dashboard c
@@ -106,8 +106,11 @@ public sealed partial class ComprasDashboardService(IConfiguration configuration
           AND (@TipoComprobante IS NULL OR d.TC = @TipoComprobante)
         """;
 
-    private readonly string _connectionString = configuration.GetConnectionString("AlfaGestion")
-        ?? throw new InvalidOperationException("No se configuró la cadena de conexión 'ConnectionStrings:AlfaGestion'.");
+    private readonly ISessionService _sessionService = sessionService;
+    private string _connectionString => _sessionService.GetConnectionString().Length > 0
+        ? _sessionService.GetConnectionString()
+        : configuration.GetConnectionString("AlfaGestion")
+          ?? throw new InvalidOperationException("No se configuró la cadena de conexión 'ConnectionStrings:AlfaGestion'.");
     private readonly ILogger<ComprasDashboardService> _logger = logger;
     private readonly DashboardCompras.Configuration.DatosSqlOptions _sqlOptions =
         configuration.GetSection(DashboardCompras.Configuration.DatosSqlOptions.SectionName).Get<DashboardCompras.Configuration.DatosSqlOptions>() ?? new();

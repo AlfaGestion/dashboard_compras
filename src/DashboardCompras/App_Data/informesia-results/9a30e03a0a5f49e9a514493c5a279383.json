@@ -1,0 +1,183 @@
+{
+  "executionId": "9a30e03a-0a5f-49e9-a514-493c5a279383",
+  "exitoso": true,
+  "consultaOriginal": "dame los 10 articulos mas caros del a\u00F1o",
+  "titulo": "Top 10 Art\u00EDculos M\u00E1s Caros del A\u00F1o",
+  "subtitulo": "Consulta de los art\u00EDculos m\u00E1s caros en el rango de fechas especificado",
+  "resumen": "Se obtuvo un resultado din\u00E1mico de 10 fila(s) usando las vistas autorizadas del dashboard.",
+  "mensaje": "",
+  "notaSeguridad": "InformesIA trabaja en modo solo lectura y solo consulta las vistas autorizadas del dashboard.",
+  "tipoResultado": "consulta",
+  "generadoEn": "2026-04-22T14:01:02.4169728-03:00",
+  "filtrosAplicados": {
+    "fechaDesde": "2026-01-22T00:00:00-03:00",
+    "fechaHasta": "2026-04-22T00:00:00-03:00",
+    "proveedor": null,
+    "articulo": null,
+    "articuloCodigo": null,
+    "articuloDescripcion": null,
+    "rubro": null,
+    "familia": null,
+    "usuario": null,
+    "sucursal": null,
+    "deposito": null,
+    "estado": null,
+    "tipoComprobante": null
+  },
+  "fuentesAutorizadas": [
+    "vw_compras_detalle_dashboard"
+  ],
+  "columnas": [
+    {
+      "key": "IDARTICULO",
+      "label": "IDARTICULO",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "DESCRIPCION_ARTICULO",
+      "label": "DESCRIPCION ARTICULO",
+      "format": "texto",
+      "align": "left"
+    },
+    {
+      "key": "COSTO",
+      "label": "COSTO",
+      "format": "numero",
+      "align": "right"
+    },
+    {
+      "key": "CANTIDAD",
+      "label": "CANTIDAD",
+      "format": "numero",
+      "align": "right"
+    },
+    {
+      "key": "TotalDashboard",
+      "label": "TotalDashboard",
+      "format": "numero",
+      "align": "right"
+    }
+  ],
+  "filas": [
+    {
+      "values": [
+        "*",
+        "..",
+        "276.443",
+        "1",
+        "276.443"
+      ]
+    },
+    {
+      "values": [
+        "*",
+        "..",
+        "271.059",
+        "1",
+        "271.059"
+      ]
+    },
+    {
+      "values": [
+        "*",
+        "..",
+        "213.222",
+        "1",
+        "213.222"
+      ]
+    },
+    {
+      "values": [
+        "*",
+        "..",
+        "97.451",
+        "1",
+        "97.451"
+      ]
+    },
+    {
+      "values": [
+        "                       72",
+        "CREMA ILOLAY BALDE 10LTS",
+        "85.941",
+        "2",
+        "159.849"
+      ]
+    },
+    {
+      "values": [
+        "                       72",
+        "CREMA ILOLAY BALDE 10LTS",
+        "85.941",
+        "1",
+        "81.643"
+      ]
+    },
+    {
+      "values": [
+        "                       72",
+        "CREMA ILOLAY BALDE 10LTS",
+        "84.670",
+        "1",
+        "80.437"
+      ]
+    },
+    {
+      "values": [
+        "*",
+        "..",
+        "56.224",
+        "1",
+        "56.224"
+      ]
+    },
+    {
+      "values": [
+        "                     1694",
+        "CREMA ILOLAY BALDE 5 LTS",
+        "44.087",
+        "2",
+        "83.765"
+      ]
+    },
+    {
+      "values": [
+        "                     1694",
+        "CREMA ILOLAY BALDE 5 LTS",
+        "44.087",
+        "2",
+        "83.765"
+      ]
+    }
+  ],
+  "grafico": null,
+  "sugerenciasRelacionadas": [
+    {
+      "texto": "Proveedores con mayor crecimiento en el per\u00EDodo",
+      "descripcion": "Compara el gasto actual contra el per\u00EDodo anterior y ordena por variaci\u00F3n.",
+      "categoria": "Ranking"
+    },
+    {
+      "texto": "Art\u00EDculos con mayor aumento",
+      "descripcion": "Detecta subas de costo promedio respecto del per\u00EDodo anterior.",
+      "categoria": "Variaci\u00F3n"
+    },
+    {
+      "texto": "Rubros con m\u00E1s participaci\u00F3n",
+      "descripcion": "Muestra concentraci\u00F3n del gasto por rubro en el per\u00EDodo filtrado.",
+      "categoria": "Concentraci\u00F3n"
+    },
+    {
+      "texto": "Familias que m\u00E1s crecieron",
+      "descripcion": "Compara ramas familiares contra el per\u00EDodo anterior.",
+      "categoria": "Comparaci\u00F3n"
+    },
+    {
+      "texto": "Comprobantes con mayor importe",
+      "descripcion": "Lista los comprobantes m\u00E1s altos del per\u00EDodo.",
+      "categoria": "Top"
+    }
+  ],
+  "sqlGenerado": "SELECT TOP (10) d.IDARTICULO, d.DESCRIPCION_ARTICULO, d.COSTO, d.CANTIDAD, d.TotalDashboard FROM vw_compras_detalle_dashboard d WHERE (@CurFechaDesde IS NULL OR d.FECHA \u003E= @CurFechaDesde) AND (@CurFechaHasta IS NULL OR d.FECHA \u003C DATEADD(day, 1, @CurFechaHasta)) AND (@CurProveedor IS NULL OR d.CUENTA = @CurProveedor) AND (@CurArticulo IS NULL OR LTRIM(RTRIM(d.IDARTICULO)) = LTRIM(RTRIM(@CurArticulo))) AND (@CurArticuloCodigo IS NULL OR LTRIM(RTRIM(d.IDARTICULO)) = LTRIM(RTRIM(@CurArticuloCodigo))) AND (@CurArticuloDescripcion IS NULL OR d.DESCRIPCION_ARTICULO LIKE \u0027%\u0027 \u002B @CurArticuloDescripcion \u002B \u0027%\u0027) AND (@CurRubro IS NULL OR d.RUBRO = @CurRubro) AND (@CurFamilia IS NULL OR d.FAMILIA = @CurFamilia) AND (@CurUsuario IS NULL OR d.USUARIO = @CurUsuario) AND (@CurSucursal IS NULL OR d.SUCURSAL = @CurSucursal) AND (@CurDeposito IS NULL OR CONVERT(varchar(20), d.IdDeposito) = @CurDeposito) AND (@CurTipoComprobante IS NULL OR d.TC = @CurTipoComprobante) ORDER BY d.COSTO DESC"
+}
