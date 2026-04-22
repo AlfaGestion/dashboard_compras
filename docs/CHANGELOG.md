@@ -4,6 +4,28 @@ Formato: `[versión] — fecha — descripción`
 
 ---
 
+## [1.2.0] — 2026-04-22
+
+### Agregado
+
+**Módulo Diseñador de Consultas** (`/consultas`):
+- Árbol jerárquico organizado por campo CLAVE (2 dígitos por nivel, hasta 6 niveles). Nodos expandibles/colapsables, buscador en tiempo real por nombre o código.
+- Ejecución con parámetros tipados (fecha, número, texto). Sin parámetros se ejecuta automáticamente al abrir.
+- Resultado interactivo: buscador sobre todas las columnas (Enter/Esc), ordenamiento por encabezado (asc/desc/original), paginación configurable 25/50/100/200 filas.
+- **Gráficos SVG** sin dependencias JS: barras agrupadas y líneas Catmull-Rom. Ejes configurables, preselección de columnas desde metadato `CamposTotaliza`, límite 60 puntos.
+- **Tabla dinámica de agrupación**: columna agrupadora seleccionable, operación por columna (Suma / Conteo / Promedio / Mínimo / Máximo / excluir), fila de totales globales, ordenamiento numérico. Se recalcula automáticamente al aplicar filtro.
+- Editor: campos básicos + metadatos opcionales (tabla, campos a totalizar, orden por defecto). Validación de instrucciones de escritura. Token `<P>` para parámetros en tiempo de ejecución.
+- Constructor visual: búsqueda de tablas/vistas en `INFORMATION_SCHEMA`, selector de columnas con resaltado de búsqueda, filtros con soporte `<P>`, ORDER BY configurable. SQL generado es editable.
+- Duplicar consulta con pre-llenado completo.
+- Exportación a Excel sin límite de filas (ClosedXML tabla formateada) y PDF por impresión del navegador.
+- **Gestor de sesiones**: panel lateral para cambiar conexión activa, alta/baja de sesiones, persistencia en `App_Data/sessions.json`. Árbol se recarga al cambiar sesión.
+
+**Ayuda contextual por módulo**: `/ayuda?topic=consultas` carga `manual_consultas.md`; sin parámetro carga `manual_usuario.md`. Sidebar y botón `?` del header apuntan al manual del módulo activo.
+
+**Botón PDF condicional**: visible solo en páginas del módulo `compras`; oculto en Consultas, Ayuda e Inicio.
+
+---
+
 ## [1.1.0] — 2026-04-21
 
 ### Agregado
