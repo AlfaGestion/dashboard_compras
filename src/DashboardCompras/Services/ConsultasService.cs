@@ -128,6 +128,7 @@ public sealed class ConsultasService(IConfiguration configuration, ILogger<Consu
                    LTRIM(RTRIM(ISNULL(s.DESCRIPCION, ''))),
                    ISNULL(CAST(s.SQL AS nvarchar(max)), ''),
                    LTRIM(RTRIM(ISNULL(s.TABLA, ''))),
+                   LTRIM(RTRIM(ISNULL(s.CamposGrupo, ''))),
                    LTRIM(RTRIM(ISNULL(s.CamposTotaliza, ''))),
                    LTRIM(RTRIM(ISNULL(s.CamposOrdenar, '')))
             FROM V_TA_SCRIPT s
@@ -137,7 +138,7 @@ public sealed class ConsultasService(IConfiguration configuration, ILogger<Consu
         await using var cn = new SqlConnection(_connectionString);
         await cn.OpenAsync(ct);
 
-        int idVal; string clave, grupo, descripcion, sqlTexto, tabla, camposTotaliza, camposOrdenar;
+        int idVal; string clave, grupo, descripcion, sqlTexto, tabla, camposGrupo, camposTotaliza, camposOrdenar;
 
         await using (var cmd = new SqlCommand(sqlConsulta, cn) { CommandTimeout = TimeoutCargaSegundos })
         {
@@ -151,8 +152,9 @@ public sealed class ConsultasService(IConfiguration configuration, ILogger<Consu
             descripcion = rd.GetString(3);
             sqlTexto = rd.GetString(4);
             tabla = rd.GetString(5);
-            camposTotaliza = rd.GetString(6);
-            camposOrdenar = rd.GetString(7);
+            camposGrupo = rd.GetString(6);
+            camposTotaliza = rd.GetString(7);
+            camposOrdenar = rd.GetString(8);
         }
 
         // Los parámetros son campos con EsParametro = 1.
@@ -191,6 +193,7 @@ public sealed class ConsultasService(IConfiguration configuration, ILogger<Consu
             Descripcion = descripcion,
             Sql = sqlTexto,
             Tabla = tabla,
+            CamposGrupo = camposGrupo,
             CamposTotaliza = camposTotaliza,
             CamposOrdenar = camposOrdenar,
             Parametros = parametros
@@ -388,7 +391,7 @@ public sealed class ConsultasService(IConfiguration configuration, ILogger<Consu
             const string sqlUpdate = """
                 UPDATE V_TA_SCRIPT
                 SET CLAVE = @Clave, GRUPO = @Grupo, DESCRIPCION = @Descripcion, SQL = @Sql,
-                    TABLA = @Tabla, CamposTotaliza = @CamposTotaliza, CamposOrdenar = @CamposOrdenar
+                    TABLA = @Tabla, CamposGrupo = @CamposGrupo, CamposTotaliza = @CamposTotaliza, CamposOrdenar = @CamposOrdenar
                 WHERE ID = @Id AND Marca = 'CL'
                 """;
             await using var cmdU = new SqlCommand(sqlUpdate, cn) { CommandTimeout = TimeoutCargaSegundos };
@@ -398,6 +401,7 @@ public sealed class ConsultasService(IConfiguration configuration, ILogger<Consu
             cmdU.Parameters.AddWithValue("@Descripcion", request.Descripcion);
             cmdU.Parameters.AddWithValue("@Sql", request.Sql);
             cmdU.Parameters.AddWithValue("@Tabla", (object?)request.Tabla ?? DBNull.Value);
+            cmdU.Parameters.AddWithValue("@CamposGrupo", (object?)request.CamposGrupo ?? DBNull.Value);
             cmdU.Parameters.AddWithValue("@CamposTotaliza", (object?)request.CamposTotaliza ?? DBNull.Value);
             cmdU.Parameters.AddWithValue("@CamposOrdenar", (object?)request.CamposOrdenar ?? DBNull.Value);
             await cmdU.ExecuteNonQueryAsync(ct);
@@ -406,8 +410,8 @@ public sealed class ConsultasService(IConfiguration configuration, ILogger<Consu
         else
         {
             const string sqlInsert = """
-                INSERT INTO V_TA_SCRIPT (CLAVE, GRUPO, DESCRIPCION, SQL, Marca, TABLA, CamposTotaliza, CamposOrdenar)
-                VALUES (@Clave, @Grupo, @Descripcion, @Sql, 'CL', @Tabla, @CamposTotaliza, @CamposOrdenar)
+                INSERT INTO V_TA_SCRIPT (CLAVE, GRUPO, DESCRIPCION, SQL, Marca, TABLA, CamposGrupo, CamposTotaliza, CamposOrdenar)
+                VALUES (@Clave, @Grupo, @Descripcion, @Sql, 'CL', @Tabla, @CamposGrupo, @CamposTotaliza, @CamposOrdenar)
                 SELECT CAST(SCOPE_IDENTITY() AS int)
                 """;
             await using var cmdI = new SqlCommand(sqlInsert, cn) { CommandTimeout = TimeoutCargaSegundos };
@@ -416,6 +420,7 @@ public sealed class ConsultasService(IConfiguration configuration, ILogger<Consu
             cmdI.Parameters.AddWithValue("@Descripcion", request.Descripcion);
             cmdI.Parameters.AddWithValue("@Sql", request.Sql);
             cmdI.Parameters.AddWithValue("@Tabla", (object?)request.Tabla ?? DBNull.Value);
+            cmdI.Parameters.AddWithValue("@CamposGrupo", (object?)request.CamposGrupo ?? DBNull.Value);
             cmdI.Parameters.AddWithValue("@CamposTotaliza", (object?)request.CamposTotaliza ?? DBNull.Value);
             cmdI.Parameters.AddWithValue("@CamposOrdenar", (object?)request.CamposOrdenar ?? DBNull.Value);
             var result = await cmdI.ExecuteScalarAsync(ct);

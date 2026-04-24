@@ -48,6 +48,8 @@ public class Program
         builder.Services.AddScoped<IComprasDashboardService, ComprasDashboardService>();
         builder.Services.AddScoped<IInformesIaService, InformesIaService>();
         builder.Services.AddScoped<IConsultasService, ConsultasService>();
+        builder.Services.AddScoped<ICostosService, CostosService>();
+        builder.Services.AddSingleton<IAppEventService, AppEventService>();
         builder.Services.AddSingleton<ConsultasExcelExporter>();
         builder.Services.AddSingleton<InformesIaHistoryStore>();
         builder.Services.AddSingleton<InformesIaResultStore>();
@@ -66,11 +68,31 @@ public class Program
             app.UseExceptionHandler("/Error");
         }
 
+        app.UseMiddleware<AppExceptionLoggingMiddleware>();
         app.UseStaticFiles();
         app.UseAntiforgery();
 
         app.MapRazorComponents<App>()
             .AddInteractiveServerRenderMode();
+
+        app.MapGet("/api/costos/importaciones/{batchId:int}/descargar-archivo", async (
+            int batchId,
+            ICostosService costosSvc,
+            CancellationToken ct) =>
+        {
+            var detail = await costosSvc.GetBatchDetailAsync(batchId, ct);
+            if (detail is null) return Results.NotFound();
+
+            var path = detail.Batch.SourceFilePath;
+            if (!File.Exists(path)) return Results.NotFound("El archivo ya no existe en el servidor.");
+
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            var contentType = ext == ".xlsx"
+                ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                : "text/plain";
+
+            return Results.File(path, contentType, Path.GetFileName(path));
+        });
 
         app.MapGet("/consultas/{id:int}/descargar-excel", async (
             int id,
@@ -96,7 +118,28 @@ public class Program
             if (!resultado.Exitoso)
                 return Results.BadRequest(resultado.MensajeError);
 
-            var bytes = exporter.Exportar(consulta, resultado);
+            var agruparPor = request.Query["agruparPor"].ToString();
+            var columnasAgrupadas = request.Query["ga"]
+                .Select(v => v ?? string.Empty)
+                .Where(v => !string.IsNullOrWhiteSpace(v))
+                .ToArray();
+            var filasAgrupadas = request.Query["gf"].ToArray()
+                .Select(f => (f ?? string.Empty).Split('\u001F'))
+                .ToList();
+
+            var exportarAgrupado =
+                !string.IsNullOrWhiteSpace(agruparPor) &&
+                columnasAgrupadas.Length > 0 &&
+                filasAgrupadas.Count > 0;
+
+            var bytes = exportarAgrupado
+                ? exporter.ExportarAgrupado(
+                    consulta,
+                    resultado.EjecutadoEn,
+                    columnasAgrupadas,
+                    filasAgrupadas,
+                    $"Agrupado por {agruparPor}")
+                : exporter.Exportar(consulta, resultado);
             var filename = ConsultasExcelExporter.NombreArchivo(consulta);
             return Results.File(bytes,
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

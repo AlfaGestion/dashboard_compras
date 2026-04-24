@@ -4,7 +4,82 @@ Formato: `[versión] — fecha — descripción`
 
 ---
 
+## [1.4.0] — 2026-04-24
+
+### Módulo Costos — Revisión operativa, matching y auditoría
+
+**Actualización de Costos (`/costos`)**
+- Nuevo módulo integrado al launcher como aplicación independiente.
+- Pantallas base incorporadas: inicio, nueva importación, perfiles, historial y detalle de lote.
+- Importación estructurada de archivos `.xlsx`, `.csv` y `.txt`.
+- Preselección automática del último perfil utilizado.
+- Búsqueda de perfiles por contenido en `Nueva Importación`, ya no limitada al prefijo del combo nativo.
+
+**Perfiles de importación**
+- ABM web completo sobre `V_Ta_InterODBC`: alta, edición, duplicado y baja.
+- Terminología ajustada al uso real: `Proveedor` pasa a representar el nombre del perfil y `CuentaProveedor` el código del proveedor.
+- Búsqueda asistida de proveedor contra `VT_PROVEEDORES`, con validación de código existente y posibilidad de guardar sin código.
+- Ocultados en la UI los campos no usados por ahora: `Lista`, `Hoja`, `Campos clave`, `Rango desde`, `Rango hasta` y `Política de precios`.
+
+**Lotes y matching**
+- Matching inicial por `CuentaProveedor + CodigoArtProveedor` como coincidencia exacta prioritaria.
+- Matching secundario por descripción, con score visible y penalización por diferencias de costo no razonables.
+- Se incorpora `% variación` entre costo leído y costo actual, con alertas visuales para subas y bajas.
+- Revisión de lote rediseñada como grilla operativa única con orden por columnas, checks por fila y aplicación masiva solo sobre filas chequeadas.
+- El check solo queda habilitado cuando ya hay artículo elegido.
+- Panel de candidatos movido a apertura a demanda en modal grande, evitando tapar columnas de la grilla principal.
+- Búsqueda manual de candidatos dentro del proveedor y opción `Plan B` para ampliar fuera del proveedor.
+- Scroll horizontal contenido dentro de la misma vista de la tabla y encabezados fijos para mejorar revisión intensiva.
+
+**Aplicación y deshacer**
+- Aplicación transaccional de costos a `V_MA_ARTICULOS` solo sobre filas seleccionadas.
+- Registro por fila del resultado de aplicación, incluyendo `OK`, `SIN_CAMBIO` y `ERROR`.
+- Historial de actualización persistido en `IA_Costos_Actualizacion_Hist`.
+- Nueva opción de deshacer aplicación masiva por lote, restaurando el costo anterior cuando existe historial.
+
+**Errores y auditoría**
+- Infraestructura transversal de logging y auditoría incorporada para la aplicación.
+- Middleware global para capturar excepciones no controladas y registrar incidentes.
+- Mensajes amigables al usuario con código de incidente en lugar de pantallas rotas.
+- Registro de eventos y errores en archivos `jsonl` dentro de `App_Data/diagnostics`.
+- Base preparada para extender este esquema a los próximos módulos.
+
+**Consultas y robustez general**
+- Ajustes en `Compras` y `Costos` para no dejar pantallas colgadas cuando faltan vistas o tablas SQL en una base determinada.
+- El módulo `Compras` ahora captura mejor errores de inicialización y muestra estado controlado en pantalla.
+
+---
+
+## [1.3.0] — 2026-04-23
+
+### Módulo Costos — Mejoras de UX e importación
+
+**CostosNueva (`/costos/nueva`)**
+- Al abrir la página se pre-selecciona automáticamente el último perfil utilizado (consulta `IA_Costos_Importacion_CAB`).
+- La barra de progreso ahora es visible (corregido uso de variable CSS `--color-accent` que no existía → cambiado a `--color-primary`).
+- Botón renombrado: "Crear corrida" → "Iniciar importación".
+- Eliminado el subtítulo técnico con los nombres de las tablas SQL.
+- Botón "Abrir lote" movido al área de acciones (junto a "Volver a correr") en lugar del header del panel.
+
+**CostosLoteDetalle (`/costos/lotes/{id}`)**
+- Header rediseñado: muestra el nombre del proveedor como título principal y el perfil, archivo y estado como subtítulo.
+- Botón "Archivo original" incorporado en el header para descargar el archivo importado directamente desde el lote.
+- "Procesar matching" ahora muestra barra de progreso por fila y botón Cancelar durante el proceso.
+
+**CostosService — Matching**
+- `ProcessMatchingAsync` acepta `IProgress<int>?` y `CancellationToken`; reporta progreso por fila (5–95%) y respeta cancelación entre filas.
+- `NormalizeCode` mejorado: detecta valores numéricos con decimales exportados por Excel (ej. "1915.00") y los normaliza a entero ("1915") antes de comparar con `CodigoArtProveedor`.
+- Nuevo método `GetLastUsedProfileIdAsync`: retorna el `IdInterODBC` de la importación más reciente.
+
+---
+
 ## [1.2.0] — 2026-04-22
+
+### Ajustado
+- Resultado principal de Consultas: el ordenamiento ahora detecta números y fechas para no ordenar importes o cantidades como texto.
+- Editor de consultas: ahora permite guardar `CamposGrupo` además de `CamposTotaliza`, y al editar precarga la tabla fuente actual detectada desde `TABLA` o el `FROM` del SQL.
+- Exportación a Excel: si el usuario tiene abierto el agrupador dinámico, el botón Excel exporta esa tabla agrupada y no el resultado crudo.
+- Tabla agrupada: suma paginación propia para consultas con muchos grupos.
 
 ### Agregado
 

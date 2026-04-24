@@ -17,6 +17,7 @@ public sealed class ConsultaGuardadaDto
     public string Descripcion { get; init; } = string.Empty; // DESCRIPCION = ayuda al usuario final
     public string Sql { get; init; } = string.Empty;
     public string Tabla { get; init; } = string.Empty;
+    public string CamposGrupo { get; init; } = string.Empty;
     public string CamposTotaliza { get; init; } = string.Empty;
     public string CamposOrdenar { get; init; } = string.Empty;
     public IReadOnlyList<ParametroConsultaDto> Parametros { get; init; } = [];
@@ -81,6 +82,7 @@ public sealed class GuardarConsultaRequest
     public string Descripcion { get; set; } = string.Empty; // DESCRIPCION = ayuda al usuario
     public string Sql { get; set; } = string.Empty;
     public string Tabla { get; set; } = string.Empty;
+    public string CamposGrupo { get; set; } = string.Empty;
     public string CamposTotaliza { get; set; } = string.Empty;
     public string CamposOrdenar { get; set; } = string.Empty;
     public List<string> EtiquetasParametros { get; set; } = [];

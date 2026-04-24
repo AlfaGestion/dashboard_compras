@@ -199,75 +199,147 @@ else
                         </select>
                     </div>
 
-                    @if (_colAgrupador >= 0)
+                    @if (_gruposDetalle.Count > 0)
                     {
-                        <div class="result-group-cols">
-                            @foreach (var (col, i) in _resultado.Columnas.Select((c, i) => (c, i)).Where(t => t.i != _colAgrupador))
-                            {
-                                var iCopy = i;
-                                <div class="result-group-col">
-                                    <span class="result-group-col__name" title="@col">@col</span>
-                                    <select class="result-group-col__op"
-                                            @onchange="e => OnAgregacionChanged(iCopy, e.Value?.ToString() ?? string.Empty)">
-                                        <option value="" selected="@(_agregaciones.GetValueOrDefault(i) == string.Empty)">excluir</option>
-                                        <option value="SUM" selected="@(_agregaciones.GetValueOrDefault(i) == "SUM")">Suma</option>
-                                        <option value="COUNT" selected="@(_agregaciones.GetValueOrDefault(i) == "COUNT")">Conteo</option>
-                                        <option value="AVG" selected="@(_agregaciones.GetValueOrDefault(i) == "AVG")">Promedio</option>
-                                        <option value="MIN" selected="@(_agregaciones.GetValueOrDefault(i) == "MIN")">Mínimo</option>
-                                        <option value="MAX" selected="@(_agregaciones.GetValueOrDefault(i) == "MAX")">Máximo</option>
-                                    </select>
-                                </div>
-                            }
+                        <div class="result-group-toolbar">
+                            <button type="button" class="btn btn--ghost btn--sm" @onclick="ExpandirTodosGrupos">
+                                <i class="bi bi-arrows-expand"></i> Expandir todos
+                            </button>
+                            <button type="button" class="btn btn--ghost btn--sm" @onclick="ContraerTodosGrupos">
+                                <i class="bi bi-arrows-collapse"></i> Contraer todos
+                            </button>
                         </div>
                     }
+
                 </div>
 
                 @if (_colAgrupador >= 0 && _tablaAgrupada.Count > 0)
                 {
-                    <div class="result-group-table-wrap">
-                        <table class="result-group-table">
-                            <thead>
-                                <tr>
-                                    @foreach (var (col, i) in _columnasAgrupadas.Select((c, i) => (c, i)))
-                                    {
-                                        <th class="sortable @(_sortColAgrupada == i ? (_sortDescAgrupada ? "sort-desc" : "sort-asc") : "")"
-                                            @onclick="() => SortByAgrupada(i)">
-                                            @col
-                                            <i class="bi @(_sortColAgrupada == i ? (_sortDescAgrupada ? "bi-sort-down" : "bi-sort-up") : "bi-arrow-down-up") sort-icon"></i>
-                                        </th>
-                                    }
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var fila in TablaAgrupadaOrdenada())
-                                {
-                                    <tr>
-                                        @foreach (var (val, j) in fila.Select((v, j) => (v, j)))
-                                        {
-                                            <td class="@(j > 0 ? "result-group-table__num" : "")">@val</td>
-                                        }
-                                    </tr>
-                                }
-                            </tbody>
-                            @if (_totalesAgrupados.Length > 0)
-                            {
-                                <tfoot>
-                                    <tr class="result-group-total">
-                                        @foreach (var (val, j) in _totalesAgrupados.Select((v, j) => (v, j)))
-                                        {
-                                            <td class="@(j > 0 ? "result-group-table__num" : "")">@val</td>
-                                        }
-                                    </tr>
-                                </tfoot>
-                            }
-                        </table>
+                    <div class="result-search" style="margin: 0 1rem .5rem;">
+                        <i class="bi bi-search result-search__icon"></i>
+                        <input class="result-search__input"
+                               @bind="_filtroResultado"
+                               @bind:event="oninput"
+                               @onkeydown="OnFiltroBuscarKeyDown"
+                               placeholder="Buscar en el resultado… (Enter para filtrar, Esc para limpiar)" />
+                        @if (!string.IsNullOrWhiteSpace(_filtroAplicado))
+                        {
+                            <span class="result-search__count">@_filasFiltradas.Count filas</span>
+                            <button class="result-search__clear" @onclick="LimpiarFiltro" title="Limpiar filtro">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        }
                     </div>
+
+                    <div class="result-group-blocks">
+                        @foreach (var grupo in GruposDetallePagina())
+                        {
+                            <section class="result-group-block">
+                                <button type="button" class="result-group-block__header" @onclick="() => ToggleGrupoExpandido(grupo.Grupo)">
+                                    <div>
+                                        <p class="result-group-block__eyebrow">
+                                            <i class="bi @(GrupoEstaExpandido(grupo.Grupo) ? "bi-caret-down-fill" : "bi-caret-right-fill")"></i>
+                                            @_resultado.Columnas[_colAgrupador]
+                                        </p>
+                                        <h3 class="result-group-block__title">@grupo.Grupo</h3>
+                                    </div>
+
+                                    @if (grupo.Totales.Count > 0)
+                                    {
+                                        <div class="result-group-block__totals">
+                                            @foreach (var total in grupo.Totales)
+                                            {
+                                                <div class="result-group-block__total">
+                                                    <span class="result-group-block__total-label">@total.Label</span>
+                                                    <strong class="result-group-block__total-value">@total.Valor</strong>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </button>
+
+                                @if (GrupoEstaExpandido(grupo.Grupo))
+                                {
+                                    <div class="result-group-table-wrap">
+                                        <table class="result-group-table">
+                                            <thead>
+                                                <tr>
+                                                    @foreach (var col in _resultado.Columnas)
+                                                    {
+                                                        <th>@col</th>
+                                                    }
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var fila in grupo.Filas)
+                                                {
+                                                    <tr>
+                                                        @foreach (var (val, j) in fila.Select((v, j) => (v, j)))
+                                                        {
+                                                            <td class="@(EsColumnaNumerica(j) ? "result-group-table__num" : "")">@val</td>
+                                                        }
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                }
+                            </section>
+                        }
+                    </div>
+
+                    @if (_totalesAgrupados.Length > 0)
+                    {
+                        <div class="result-group-global">
+                            <span class="result-group-global__label">Totales generales</span>
+                            <div class="result-group-block__totals">
+                                @foreach (var total in TotalesGlobalesFormateados())
+                                {
+                                    <div class="result-group-block__total">
+                                        <span class="result-group-block__total-label">@total.Label</span>
+                                        <strong class="result-group-block__total-value">@total.Valor</strong>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
                     <p class="result-group-info">
                         @_tablaAgrupada.Count grupo(s) ·
                         @(string.IsNullOrWhiteSpace(_filtroAplicado)
                             ? _resultado.TotalFilas.ToString("N0")
                             : _filasFiltradas.Count.ToString("N0")) filas procesadas
                     </p>
+                    @if (TotalPaginasAgrupada > 1)
+                    {
+                        <div class="result-pagination">
+                            <div class="result-pagination__info">
+                                Mostrando @(_paginaAgrupada * _filasPorPaginaAgrupada + 1)–@(Math.Min((_paginaAgrupada + 1) * _filasPorPaginaAgrupada, _tablaAgrupada.Count))
+                                de @_tablaAgrupada.Count grupos
+                            </div>
+                            <div class="result-pagination__controls">
+                                <button class="result-pagination__btn" @onclick="() => _paginaAgrupada = 0" disabled="@(_paginaAgrupada == 0)" title="Primera">«</button>
+                                <button class="result-pagination__btn" @onclick="() => _paginaAgrupada--" disabled="@(_paginaAgrupada == 0)" title="Anterior">‹</button>
+                                @{
+                                    int desdeAgr = Math.Max(0, _paginaAgrupada - 2);
+                                    int hastaAgr = Math.Min(TotalPaginasAgrupada - 1, _paginaAgrupada + 2);
+                                }
+                                @for (int p = desdeAgr; p <= hastaAgr; p++)
+                                {
+                                    var pCopy = p;
+                                    <button class="result-pagination__btn @(pCopy == _paginaAgrupada ? "result-pagination__btn--active" : "")"
+                                            @onclick="() => _paginaAgrupada = pCopy">@(pCopy + 1)</button>
+                                }
+                                <button class="result-pagination__btn" @onclick="() => _paginaAgrupada++" disabled="@(_paginaAgrupada >= TotalPaginasAgrupada - 1)" title="Siguiente">›</button>
+                                <button class="result-pagination__btn" @onclick="() => _paginaAgrupada = TotalPaginasAgrupada - 1" disabled="@(_paginaAgrupada >= TotalPaginasAgrupada - 1)" title="Última">»</button>
+                            </div>
+                            <select class="result-pagination__size" @onchange="e => { _filasPorPaginaAgrupada = int.Parse(e.Value!.ToString()!); _paginaAgrupada = 0; }">
+                                <option value="25" selected="@(_filasPorPaginaAgrupada == 25)">25 / pág.</option>
+                                <option value="50" selected="@(_filasPorPaginaAgrupada == 50)">50 / pág.</option>
+                                <option value="100" selected="@(_filasPorPaginaAgrupada == 100)">100 / pág.</option>
+                                <option value="200" selected="@(_filasPorPaginaAgrupada == 200)">200 / pág.</option>
+                            </select>
+                        </div>
+                    }
                 }
                 else if (_colAgrupador >= 0)
                 {
@@ -276,7 +348,23 @@ else
             </div>
         }
 
-        @if (_resultado is not null)
+        @if (DebeMostrarTotalesResultado())
+        {
+            <div class="result-group-global" style="margin-bottom:1rem;">
+                <span class="result-group-global__label">Totales del resultado</span>
+                <div class="result-group-block__totals">
+                    @foreach (var total in _totalesResultado)
+                    {
+                        <div class="result-group-block__total">
+                            <span class="result-group-block__total-label">@total.Label</span>
+                            <strong class="result-group-block__total-value">@total.Valor</strong>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (_resultado is not null && !DebeOcultarResultadoPlano())
         {
             <div class="consulta-result">
                 @if (!_resultado.Exitoso)
@@ -426,6 +514,8 @@ else
                 .Where(r => r.Any(v => v.Contains(_filtroAplicado, StringComparison.CurrentCultureIgnoreCase)))
                 .ToList() ?? []);
 
+        RecalcularTotalesResultado();
+
         if (_mostrarAgrupador && _colAgrupador >= 0)
             RecalcularAgrupacion();
     }
@@ -445,8 +535,8 @@ else
     private IEnumerable<string[]> FilasOrdenadas() => _sortCol < 0
         ? _filasFiltradas
         : _sortDesc
-            ? _filasFiltradas.OrderByDescending(r => r[_sortCol])
-            : _filasFiltradas.OrderBy(r => r[_sortCol]);
+            ? _filasFiltradas.OrderByDescending(r => ValorOrdenable(r, _sortCol))
+            : _filasFiltradas.OrderBy(r => ValorOrdenable(r, _sortCol));
 
     private IEnumerable<string[]> FilasPagina() =>
         FilasOrdenadas().Skip(_pagina * _filasPorPagina).Take(_filasPorPagina);
@@ -466,35 +556,90 @@ else
     private List<string> _columnasAgrupadas = [];
     private List<string[]> _tablaAgrupada = [];
     private List<decimal[]> _tablaAgrupadaRaw = [];
+    private List<GrupoDetalleResultado> _gruposDetalle = [];
+    private HashSet<string> _gruposExpandidos = new(StringComparer.OrdinalIgnoreCase);
     private string[] _totalesAgrupados = [];
+    private List<TotalGrupoResultado> _totalesResultado = [];
     private int _sortColAgrupada = -1;
     private bool _sortDescAgrupada;
+    private int _paginaAgrupada;
+    private int _filasPorPaginaAgrupada = 50;
+    private int TotalPaginasAgrupada => (int)Math.Ceiling(_tablaAgrupada.Count / (double)_filasPorPaginaAgrupada);
 
     private void ToggleAgrupador()
     {
         _mostrarAgrupador = !_mostrarAgrupador;
         if (_mostrarAgrupador && !_agrupadorInicializado)
+        {
             _agrupadorInicializado = true;
+            InicializarAgrupadorDesdeConsulta();
+        }
+    }
+
+    private bool DebeOcultarResultadoPlano() =>
+        _mostrarAgrupador && _colAgrupador >= 0 && _tablaAgrupada.Count > 0;
+
+    private bool DebeMostrarTotalesResultado() =>
+        _resultado is { Exitoso: true, Filas.Count: > 0 } &&
+        !DebeOcultarResultadoPlano() &&
+        _totalesResultado.Count > 0;
+
+    private bool GrupoEstaExpandido(string grupo) => _gruposExpandidos.Contains(grupo);
+
+    private void ToggleGrupoExpandido(string grupo)
+    {
+        if (!_gruposExpandidos.Add(grupo))
+            _gruposExpandidos.Remove(grupo);
+    }
+
+    private void ExpandirTodosGrupos() =>
+        _gruposExpandidos = _gruposDetalle
+            .Select(g => g.Grupo)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private void ContraerTodosGrupos() => _gruposExpandidos.Clear();
+
+    private void InicializarAgrupadorDesdeConsulta()
+    {
+        if (_resultado is null || _consulta is null)
+            return;
+
+        if (!string.IsNullOrWhiteSpace(_consulta.CamposGrupo))
+        {
+            var campoGrupo = _consulta.CamposGrupo
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .FirstOrDefault();
+
+            if (!string.IsNullOrWhiteSpace(campoGrupo))
+            {
+                var idx = _resultado.Columnas.ToList().FindIndex(c =>
+                    string.Equals(c, campoGrupo, StringComparison.OrdinalIgnoreCase));
+                if (idx >= 0)
+                {
+                    _colAgrupador = idx;
+                    OnAgrupadorChanged();
+                    return;
+                }
+            }
+        }
     }
 
     private void OnAgrupadorChanged()
     {
-        if (_colAgrupador < 0) { _tablaAgrupada = []; _totalesAgrupados = []; return; }
+        if (_colAgrupador < 0) { _tablaAgrupada = []; _gruposDetalle = []; _totalesAgrupados = []; return; }
 
         _agregaciones = [];
+        var operacionesGuardadas = ParseCamposTotaliza(_consulta?.CamposTotaliza);
         for (int i = 0; i < _resultado!.Columnas.Count; i++)
         {
             if (i == _colAgrupador) continue;
-            _agregaciones[i] = EsColumnaNumerica(i) ? "SUM" : string.Empty;
+            if (operacionesGuardadas.TryGetValue(_resultado.Columnas[i], out var operacionGuardada))
+                _agregaciones[i] = operacionGuardada;
         }
+
         _sortColAgrupada = -1;
         _sortDescAgrupada = false;
-        RecalcularAgrupacion();
-    }
-
-    private void OnAgregacionChanged(int colIdx, string op)
-    {
-        _agregaciones[colIdx] = op;
+        _paginaAgrupada = 0;
         RecalcularAgrupacion();
     }
 
@@ -516,9 +661,33 @@ else
         return ordered.Select(t => t.r);
     }
 
+    private IEnumerable<string[]> TablaAgrupadaPagina() =>
+        TablaAgrupadaOrdenada()
+            .Skip(_paginaAgrupada * _filasPorPaginaAgrupada)
+            .Take(_filasPorPaginaAgrupada);
+
+    private IEnumerable<GrupoDetalleResultado> GruposDetalleOrdenados()
+    {
+        if (_sortColAgrupada < 0)
+            return _gruposDetalle;
+
+        var withRaw = _gruposDetalle.Zip(_tablaAgrupadaRaw, (grupo, raw) => (grupo, raw)).ToList();
+        IEnumerable<(GrupoDetalleResultado grupo, decimal[] raw)> ordered = _sortColAgrupada == 0
+            ? (_sortDescAgrupada ? withRaw.OrderByDescending(t => t.grupo.Grupo) : withRaw.OrderBy(t => t.grupo.Grupo))
+            : (_sortDescAgrupada
+                ? withRaw.OrderByDescending(t => _sortColAgrupada - 1 < t.raw.Length ? t.raw[_sortColAgrupada - 1] : 0m)
+                : withRaw.OrderBy(t => _sortColAgrupada - 1 < t.raw.Length ? t.raw[_sortColAgrupada - 1] : 0m));
+        return ordered.Select(t => t.grupo);
+    }
+
+    private IEnumerable<GrupoDetalleResultado> GruposDetallePagina() =>
+        GruposDetalleOrdenados()
+            .Skip(_paginaAgrupada * _filasPorPaginaAgrupada)
+            .Take(_filasPorPaginaAgrupada);
+
     private void RecalcularAgrupacion()
     {
-        if (_colAgrupador < 0 || _resultado is null) { _tablaAgrupada = []; _totalesAgrupados = []; return; }
+        if (_colAgrupador < 0 || _resultado is null) { _tablaAgrupada = []; _gruposDetalle = []; _gruposExpandidos.Clear(); _totalesAgrupados = []; return; }
 
         var colsConOp = _agregaciones
             .Where(kv => !string.IsNullOrEmpty(kv.Value))
@@ -536,6 +705,7 @@ else
 
         _tablaAgrupada = [];
         _tablaAgrupadaRaw = [];
+        _gruposDetalle = [];
         var sumasTotal = new decimal[colsConOp.Count];
 
         foreach (var grupo in grupos)
@@ -568,7 +738,18 @@ else
 
             _tablaAgrupada.Add(fila);
             _tablaAgrupadaRaw.Add(raw);
+            _gruposDetalle.Add(new GrupoDetalleResultado
+            {
+                Grupo = grupo.Key,
+                Filas = grupo.ToList(),
+                Totales = colsConOp.Select((colOp, idx) => new TotalGrupoResultado(
+                    $"{OpLabel(colOp.Value)}({_resultado.Columnas[colOp.Key]})",
+                    fila[idx + 1]))
+                    .ToList()
+            });
         }
+        ExpandirTodosGrupos();
+        _paginaAgrupada = 0;
 
         // Fila de totales
         _totalesAgrupados = new string[1 + colsConOp.Count];
@@ -596,10 +777,61 @@ else
         }
     }
 
+    private void RecalcularTotalesResultado()
+    {
+        _totalesResultado = [];
+        if (_resultado is null)
+            return;
+
+        var fuente = string.IsNullOrWhiteSpace(_filtroAplicado) ? _resultado.Filas : _filasFiltradas;
+        var operaciones = ParseCamposTotaliza(_consulta?.CamposTotaliza);
+        foreach (var (nombreColumna, operacion) in operaciones)
+        {
+            var indice = _resultado.Columnas.ToList().FindIndex(c =>
+                string.Equals(c, nombreColumna, StringComparison.OrdinalIgnoreCase));
+            if (indice < 0)
+                continue;
+
+            decimal valor = operacion switch
+            {
+                "COUNT" => fuente.Count,
+                "SUM" => fuente.Sum(r => ParseAgrupDecimal(indice < r.Length ? r[indice] : string.Empty)),
+                "AVG" => fuente.Count > 0
+                    ? Math.Round(fuente.Average(r => ParseAgrupDecimal(indice < r.Length ? r[indice] : string.Empty)), 2)
+                    : 0m,
+                "MIN" => fuente.Count > 0
+                    ? fuente.Min(r => ParseAgrupDecimal(indice < r.Length ? r[indice] : string.Empty))
+                    : 0m,
+                "MAX" => fuente.Count > 0
+                    ? fuente.Max(r => ParseAgrupDecimal(indice < r.Length ? r[indice] : string.Empty))
+                    : 0m,
+                _ => 0m
+            };
+
+            _totalesResultado.Add(new TotalGrupoResultado(
+                $"{OpLabel(operacion)}({nombreColumna})",
+                FormatAgregado(valor, operacion)));
+        }
+    }
+
     private static decimal ParseAgrupDecimal(string s) =>
         decimal.TryParse(s.Replace(',', '.'),
             System.Globalization.NumberStyles.Any,
             System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : 0m;
+
+    private static IComparable ValorOrdenable(string[] fila, int colIdx)
+    {
+        var valor = colIdx < fila.Length ? fila[colIdx] : string.Empty;
+        if (decimal.TryParse(valor.Replace(',', '.'),
+            System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var numero))
+            return numero;
+
+        if (DateTime.TryParse(valor, out var fecha))
+            return fecha;
+
+        return valor;
+    }
 
     private static string FormatAgregado(decimal v, string op)
     {
@@ -613,6 +845,34 @@ else
         "SUM" => "Suma", "COUNT" => "Conteo", "AVG" => "Promedio",
         "MIN" => "Mín", "MAX" => "Máx", _ => op
     };
+
+    private static Dictionary<string, string> ParseCamposTotaliza(string? valor)
+    {
+        var resultado = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(valor))
+            return resultado;
+
+        foreach (var token in valor.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(
+                token,
+                @"^(?<op>SUM|COUNT|AVG|MIN|MAX)\((?<campo>.+)\)$",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            if (match.Success)
+                resultado[match.Groups["campo"].Value.Trim()] = match.Groups["op"].Value.ToUpperInvariant();
+            else
+                resultado[token.Trim()] = "SUM";
+        }
+
+        return resultado;
+    }
+
+    private IEnumerable<TotalGrupoResultado> TotalesGlobalesFormateados()
+    {
+        for (int i = 1; i < _totalesAgrupados.Length; i++)
+            yield return new TotalGrupoResultado(_columnasAgrupadas[i], _totalesAgrupados[i]);
+    }
 
     // ── Gráfico ──
     private bool _mostrarGrafico;
@@ -652,8 +912,7 @@ else
         _colsValores = [];
         if (!string.IsNullOrWhiteSpace(_consulta?.CamposTotaliza))
         {
-            var campos = _consulta.CamposTotaliza
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var campos = ParseCamposTotaliza(_consulta.CamposTotaliza).Keys;
             _colsValores = campos
                 .Select(c => _resultado.Columnas.ToList().IndexOf(c))
                 .Where(i => i >= 0)
@@ -722,7 +981,11 @@ else
         _colAgrupador = -1;
         _agregaciones = [];
         _tablaAgrupada = [];
+        _gruposDetalle = [];
+        _gruposExpandidos.Clear();
         _totalesAgrupados = [];
+        _totalesResultado = [];
+        _paginaAgrupada = 0;
         StateHasChanged();
         try
         {
@@ -732,6 +995,7 @@ else
                 ValoresParametros = [.. _valores]
             });
             AplicarFiltro(string.Empty);
+            AplicarConfiguracionVisualInicial();
         }
         finally
         {
@@ -739,12 +1003,48 @@ else
         }
     }
 
+    private void AplicarConfiguracionVisualInicial()
+    {
+        RecalcularTotalesResultado();
+
+        if (_resultado is null || _consulta is null)
+            return;
+
+        var tieneAgrupacionConfigurada = !string.IsNullOrWhiteSpace(_consulta.CamposGrupo);
+        _mostrarAgrupador = tieneAgrupacionConfigurada;
+        _agrupadorInicializado = tieneAgrupacionConfigurada;
+
+        if (tieneAgrupacionConfigurada)
+            InicializarAgrupadorDesdeConsulta();
+    }
+
     private string GetExcelUrl()
     {
         var qs = string.Join("&", _valores.Select((v, i) => $"p{i}={Uri.EscapeDataString(v)}"));
+        if (_mostrarAgrupador && _colAgrupador >= 0 && _columnasAgrupadas.Count > 0 && _tablaAgrupada.Count > 0)
+        {
+            var partes = new List<string>();
+            if (!string.IsNullOrWhiteSpace(qs))
+                partes.Add(qs);
+
+            partes.Add($"agruparPor={Uri.EscapeDataString(_resultado!.Columnas[_colAgrupador])}");
+            partes.AddRange(_columnasAgrupadas.Select(c => $"ga={Uri.EscapeDataString(c)}"));
+            partes.AddRange(TablaAgrupadaOrdenada().Select(f => $"gf={Uri.EscapeDataString(string.Join('\u001F', f))}"));
+            return $"/consultas/{Id}/descargar-excel?{string.Join("&", partes)}";
+        }
+
         return qs.Length > 0 ? $"/consultas/{Id}/descargar-excel?{qs}" : $"/consultas/{Id}/descargar-excel";
     }
 
     private async Task ImprimirAsync() =>
         await JS.InvokeVoidAsync("dashboardExport.printCurrentPage", _consulta?.Descripcion ?? "Consulta");
+
+    private sealed class GrupoDetalleResultado
+    {
+        public string Grupo { get; init; } = string.Empty;
+        public List<string[]> Filas { get; init; } = [];
+        public List<TotalGrupoResultado> Totales { get; init; } = [];
+    }
+
+    private sealed record TotalGrupoResultado(string Label, string Valor);
 }

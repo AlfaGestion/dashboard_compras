@@ -6,34 +6,60 @@ namespace DashboardCompras.Services;
 public sealed class ConsultasExcelExporter
 {
     public byte[] Exportar(ConsultaGuardadaDto consulta, ConsultaResultadoDto resultado)
+        => ExportarTabla(
+            $"{consulta.Clave} — {consulta.Descripcion}",
+            resultado.EjecutadoEn,
+            resultado.TotalFilas,
+            resultado.Columnas,
+            resultado.Filas);
+
+    public byte[] ExportarAgrupado(
+        ConsultaGuardadaDto consulta,
+        DateTime ejecutadoEn,
+        IReadOnlyList<string> columnas,
+        IReadOnlyList<string[]> filas,
+        string? etiqueta = null)
+        => ExportarTabla(
+            $"{consulta.Clave} — {consulta.Descripcion}{(string.IsNullOrWhiteSpace(etiqueta) ? string.Empty : $" — {etiqueta}")}",
+            ejecutadoEn,
+            filas.Count,
+            columnas,
+            filas);
+
+    private static byte[] ExportarTabla(
+        string titulo,
+        DateTime ejecutadoEn,
+        int totalFilas,
+        IReadOnlyList<string> columnas,
+        IReadOnlyList<string[]> filas)
     {
         using var wb = new XLWorkbook();
         var ws = wb.Worksheets.Add("Resultado");
 
         // Fila 1: título
         var titleCell = ws.Cell(1, 1);
-        titleCell.Value = $"{consulta.Clave} — {consulta.Descripcion}";
+        titleCell.Value = titulo;
         titleCell.Style.Font.Bold = true;
         titleCell.Style.Font.FontSize = 12;
         titleCell.Style.Fill.BackgroundColor = XLColor.FromHtml("#1e3a5f");
         titleCell.Style.Font.FontColor = XLColor.White;
-        if (resultado.Columnas.Count > 1)
-            ws.Range(1, 1, 1, resultado.Columnas.Count).Merge();
+        if (columnas.Count > 1)
+            ws.Range(1, 1, 1, columnas.Count).Merge();
 
         // Fila 2: fecha de exportación
         var dateCell = ws.Cell(2, 1);
-        dateCell.Value = $"Exportado el {resultado.EjecutadoEn:dd/MM/yyyy HH:mm} — {resultado.TotalFilas} filas";
+        dateCell.Value = $"Exportado el {ejecutadoEn:dd/MM/yyyy HH:mm} — {totalFilas} filas";
         dateCell.Style.Font.Italic = true;
         dateCell.Style.Font.FontSize = 9;
         dateCell.Style.Font.FontColor = XLColor.FromHtml("#64748b");
-        if (resultado.Columnas.Count > 1)
-            ws.Range(2, 1, 2, resultado.Columnas.Count).Merge();
+        if (columnas.Count > 1)
+            ws.Range(2, 1, 2, columnas.Count).Merge();
 
         // Fila 3: encabezados
-        for (int i = 0; i < resultado.Columnas.Count; i++)
+        for (int i = 0; i < columnas.Count; i++)
         {
             var cell = ws.Cell(3, i + 1);
-            cell.Value = resultado.Columnas[i];
+            cell.Value = columnas[i];
             cell.Style.Font.Bold = true;
             cell.Style.Font.FontColor = XLColor.White;
             cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#0369a1");
@@ -41,9 +67,9 @@ public sealed class ConsultasExcelExporter
         }
 
         // Filas de datos
-        for (int r = 0; r < resultado.Filas.Count; r++)
+        for (int r = 0; r < filas.Count; r++)
         {
-            var fila = resultado.Filas[r];
+            var fila = filas[r];
             for (int c = 0; c < fila.Length; c++)
             {
                 var cell = ws.Cell(r + 4, c + 1);

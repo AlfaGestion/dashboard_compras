@@ -1,6 +1,24 @@
 {
   "anonimo": [
     {
+      "id": "f6331a4d-033b-4608-8feb-b404d7ed5d4b",
+      "executionId": "cb340ec6-3eb9-4178-9f52-956c64a1f5dd",
+      "consulta": "decime qu\u00E9 usuario carg\u00F3 m\u00E1s items este mes",
+      "fechaHora": "2026-04-23T12:01:57.6142307-03:00",
+      "exitosa": true,
+      "tipoResultado": "actividad",
+      "titulo": "Usuarios con m\u00E1s actividad"
+    },
+    {
+      "id": "03b87edb-d791-4845-9526-0b0182dd5024",
+      "executionId": "d6dae243-6459-4903-9f77-8991a0caf512",
+      "consulta": "decime qu\u00E9 usuario carg\u00F3 m\u00E1s comprobantes este mes",
+      "fechaHora": "2026-04-23T12:01:36.7839703-03:00",
+      "exitosa": true,
+      "tipoResultado": "actividad",
+      "titulo": "Usuarios con m\u00E1s actividad"
+    },
+    {
       "id": "1b254aab-c266-4546-859b-66367eb002a6",
       "executionId": "bc2e93f0-9bd8-41e0-a50b-6f1e8c88e95f",
       "consulta": "dame los 10 articulos mas caros del a\u00F1o, incluime la factura en la cual compro",
@@ -158,24 +176,6 @@
       "executionId": "6f60f89d-09e5-4685-829d-afcf2ceef638",
       "consulta": "listado de compras del mes de marzo, mostrame las columnas fecha factura, tc ,idcomprobante, cuenta, nombre, importe sin iva, iva, total, usuario que cargo el comprobante y la fecha y hora, no generes grafico, solo los campos del libro de iva compras",
       "fechaHora": "2026-04-17T09:17:33.5186198-03:00",
-      "exitosa": true,
-      "tipoResultado": "listado",
-      "titulo": "Listado de compras"
-    },
-    {
-      "id": "bc4ed4b7-adcb-49f0-9234-58eb59a9d562",
-      "executionId": "b93baa44-caa9-4d35-81ee-c3dadecd0087",
-      "consulta": "listado de compras del mes de marzo, mostrame las columnas fecha factura, tc ,idcomprobante, cuenta, nombre, importe sin iva, iva, total, usuario que cargo el comprobante y la fecha y hora, no generes grafico, solo los campos del libro de iva compras",
-      "fechaHora": "2026-04-17T09:16:32.447989-03:00",
-      "exitosa": true,
-      "tipoResultado": "listado",
-      "titulo": "Listado de compras"
-    },
-    {
-      "id": "7e5cf837-3a8a-41f5-9138-274347c17929",
-      "executionId": "6205ad6f-c4f2-4d25-961e-b3c338b7e642",
-      "consulta": "listado de compras del mes anterior, mostrame las columnas fecha factura, tc ,idcomprobante, cuenta, nombre, importe sin iva, iva, total, usuario que cargo el comprobante y la fecha y hora, no generes grafico, solo los campos del libro de iva compras",
-      "fechaHora": "2026-04-17T09:16:14.9497338-03:00",
       "exitosa": true,
       "tipoResultado": "listado",
       "titulo": "Listado de compras"

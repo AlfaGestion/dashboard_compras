@@ -105,8 +105,19 @@
     protected override async Task OnInitializedAsync()
     {
         _filters = FilterState.Current;
-        _options = await DashboardService.GetFilterOptionsAsync();
-        await LoadAsync();
+        _error = null;
+
+        try
+        {
+            _options = await DashboardService.GetFilterOptionsAsync();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _dashboard = null;
+            _options = new FilterOptionsDto();
+        }
     }
 
     private async Task LoadAsync()
