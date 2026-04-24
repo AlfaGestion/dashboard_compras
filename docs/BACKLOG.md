@@ -19,6 +19,8 @@
 - [ ] **Agrupador persistente entre ejecuciones**: opcionalmente conservar la configuración de agrupación al re-ejecutar con parámetros distintos.
 - [x] **Diseñador de Consultas en el Launcher**: el badge "Próximamente" en la pantalla principal puede activarse ahora que el módulo está completo.
 - [x] **Paginación en tabla agrupada**: si hay muchos grupos, mostrar paginación como en la tabla principal.
+- [ ] **Navegación y pantallas derivadas para módulos de gestión**: desarrollar menús laterales, drill-down y páginas específicas para `Ventas`, `Stock`, `Caja y Bancos` y `Contabilidad`.
+  Referencia: `docs/issue_modulos_gestion_navegacion.md`
 
 ---
 
@@ -27,5 +29,4 @@
 - [ ] Guardar consultas favoritas por usuario (localStorage).
 - [ ] Columna de última ejecución en el árbol de consultas.
 - [ ] Vista previa del SQL al pasar el cursor por un nodo del árbol.
-- [ ] Módulo Ventas (estructura similar a Compras).
-- [ ] Módulo Stock.
+- [ ] Vistas SQL resumidas por módulo para performance (`ventas mensual`, `stock valorizado mensual`, `caja/bancos`, `contabilidad`).

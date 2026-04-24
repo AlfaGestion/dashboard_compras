@@ -1,0 +1,86 @@
+@page "/ventas/rubros"
+@inject DashboardCompras.Services.IGestionDashboardService GestionSvc
+@inject DashboardCompras.Services.GestionFilterStateService FilterState
+
+<PageTitle>Rubros | Ventas</PageTitle>
+
+<section class="page-grid">
+    <div class="page-intro">
+        <div>
+            <h2 class="page-intro__title">Rubros más vendidos</h2>
+            <p class="page-intro__text">Lectura comercial por rubro para identificar concentración y categorías líderes.</p>
+        </div>
+    </div>
+
+    <VentasFiltersBar Model="_filters" Options="_options" OnApply="LoadAsync" Titulo="Filtros de rubros" Subtitulo="Acotá el análisis de categorías vendidas." />
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="panel-card empty-state"><p>@_error</p></div>
+    }
+    else if (_page is null)
+    {
+        <div class="loading">Cargando rubros...</div>
+    }
+    else
+    {
+        <div class="kpi-grid">
+            <KpiCard Titulo="Total vendido" Valor="@Moneda(_page.TotalVendido)" Icono="$" />
+            <KpiCard Titulo="Rubros activos" Valor="@_page.RubrosActivos.ToString("N0")" Icono="R" />
+        </div>
+
+        <div class="split-grid">
+            <section class="panel-card">
+                <HorizontalBarChart Data="_page.TopRubros" Titulo="Top rubros" Subtitulo="Rubros con mayor venta" />
+            </section>
+
+            <DataTable Titulo="Listado de rubros" Subtitulo="Participación comercial por categoría">
+                <Header>
+                    <tr>
+                        <th>Rubro</th>
+                        <th style="text-align:right;">Total</th>
+                        <th style="text-align:right;">% total</th>
+                        <th style="text-align:right;">Artículos</th>
+                        <th style="text-align:right;">Comprobantes</th>
+                    </tr>
+                </Header>
+                <Rows>
+                    @foreach (var item in _page.Rubros)
+                    {
+                        <tr>
+                            <td><strong>@item.Rubro</strong></td>
+                            <td style="text-align:right;">@Moneda(item.TotalVendido)</td>
+                            <td style="text-align:right;">@Porcentaje(item.Participacion)</td>
+                            <td style="text-align:right;">@item.CantidadArticulos.ToString("N0")</td>
+                            <td style="text-align:right;">@item.CantidadComprobantes.ToString("N0")</td>
+                        </tr>
+                    }
+                </Rows>
+            </DataTable>
+        </div>
+    }
+</section>
+
+@code {
+    private VentasDashboardFilters _filters = null!;
+    private VentasFilterOptionsDto _options = new();
+    private VentasRubrosPageDto? _page;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _filters = FilterState.Ventas;
+        _options = await GestionSvc.GetVentasFilterOptionsAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        try { _page = await GestionSvc.GetVentasRubrosAsync(_filters); }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private static string Moneda(decimal valor) => valor.ToString("$ #,##0.00", System.Globalization.CultureInfo.GetCultureInfo("es-AR"));
+    private static string Porcentaje(decimal valor) => valor.ToString("P1", System.Globalization.CultureInfo.GetCultureInfo("es-AR"));
+}

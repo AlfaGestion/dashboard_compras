@@ -1,5 +1,9 @@
 using DashboardCompras.Models;
+using DashboardCompras.Repositories;
+using Microsoft.Data.SqlClient;
 using System.Diagnostics;
+using System.Net;
+using System.Net.Sockets;
 using System.Text.Json;
 
 namespace DashboardCompras.Services;
@@ -8,6 +12,7 @@ public sealed class AppEventService(
     IWebHostEnvironment env,
     IHttpContextAccessor httpContextAccessor,
     ISessionService sessionService,
+    IAuxErrRepository auxErrRepository,
     ILogger<AppEventService> logger) : IAppEventService
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -35,8 +40,26 @@ public sealed class AppEventService(
         record.StackTrace = exception.StackTrace ?? string.Empty;
 
         logger.LogError(exception, "[{EventId}] {Module}/{Action}: {UserMessage}", eventId, module, action, userMessage);
-        await WriteAsync(record, ct);
-        return eventId.ToString("N");
+
+        try
+        {
+            var auxErrId = await auxErrRepository.InsertAsync(CreateAuxErrEntry(record, exception), ct);
+            record.EntityType = "AUX_ERR";
+            record.EntityId = auxErrId > 0 ? auxErrId.ToString() : string.Empty;
+            await WriteAsync(record, ct);
+            return auxErrId > 0 ? auxErrId.ToString() : eventId.ToString("N");
+        }
+        catch (Exception insertEx)
+        {
+            logger.LogError(insertEx, "[{EventId}] No se pudo registrar en AUX_ERR el error {Module}/{Action}.", eventId, module, action);
+            record.DataJson = MergeData(record.DataJson, new
+            {
+                AuxErrFallback = true,
+                AuxErrInsertError = insertEx.Message
+            });
+            await WriteAsync(record, ct);
+            return eventId.ToString("N");
+        }
     }
 
     public async Task<string> LogAuditAsync(
@@ -95,6 +118,23 @@ public sealed class AppEventService(
         };
     }
 
+    private AuxErrEntry CreateAuxErrEntry(AppEventRecord record, Exception exception)
+    {
+        var sqlEx = FindSqlException(exception);
+        var process = $"{record.Module}.{record.Action}".Trim('.');
+        var technicalDetail = BuildTechnicalDetail(record, exception);
+
+        return new AuxErrEntry
+        {
+            Process = process,
+            ErrorCode = sqlEx?.Number ?? 0,
+            Description = string.IsNullOrWhiteSpace(record.UserMessage) ? record.Message : record.UserMessage,
+            SqlDetail = technicalDetail,
+            Pc = ResolvePc(record),
+            UserName = record.UserName
+        };
+    }
+
     private async Task WriteAsync(AppEventRecord record, CancellationToken ct)
     {
         Directory.CreateDirectory(_logDirectory);
@@ -125,5 +165,67 @@ public sealed class AppEventService(
         {
             return data.ToString() ?? string.Empty;
         }
+    }
+
+    private static SqlException? FindSqlException(Exception exception)
+    {
+        var current = exception;
+        while (current is not null)
+        {
+            if (current is SqlException sqlException)
+                return sqlException;
+            current = current.InnerException!;
+        }
+
+        return null;
+    }
+
+    private static string BuildTechnicalDetail(AppEventRecord record, Exception exception)
+    {
+        var parts = new List<string>
+        {
+            $"Mensaje: {exception.Message}",
+            $"Tipo: {exception.GetType().FullName ?? exception.GetType().Name}"
+        };
+
+        if (!string.IsNullOrWhiteSpace(record.RequestPath))
+            parts.Add($"Request: {record.HttpMethod} {record.RequestPath}");
+        if (!string.IsNullOrWhiteSpace(record.SessionServer) || !string.IsNullOrWhiteSpace(record.SessionDatabase))
+            parts.Add($"Sesion SQL: {record.SessionServer} / {record.SessionDatabase}");
+        if (!string.IsNullOrWhiteSpace(record.TraceId))
+            parts.Add($"Trace: {record.TraceId}");
+        if (!string.IsNullOrWhiteSpace(record.DataJson))
+            parts.Add($"Data: {record.DataJson}");
+        if (!string.IsNullOrWhiteSpace(record.StackTrace))
+            parts.Add($"Stack: {record.StackTrace}");
+
+        return string.Join(Environment.NewLine, parts);
+    }
+
+    private string ResolvePc(AppEventRecord record)
+    {
+        var http = httpContextAccessor.HttpContext;
+        var remoteIp = http?.Connection.RemoteIpAddress?.ToString();
+        if (!string.IsNullOrWhiteSpace(remoteIp))
+            return $"{Environment.MachineName} [{remoteIp}]";
+
+        try
+        {
+            var hostEntry = Dns.GetHostEntry(Dns.GetHostName());
+            var ipv4 = hostEntry.AddressList.FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetwork)?.ToString();
+            return string.IsNullOrWhiteSpace(ipv4) ? Environment.MachineName : $"{Environment.MachineName} [{ipv4}]";
+        }
+        catch
+        {
+            return Environment.MachineName;
+        }
+    }
+
+    private static string MergeData(string existingJson, object extraData)
+    {
+        if (string.IsNullOrWhiteSpace(existingJson))
+            return SerializeData(extraData);
+
+        return $"{existingJson} | {SerializeData(extraData)}";
     }
 }

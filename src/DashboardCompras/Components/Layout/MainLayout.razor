@@ -66,6 +66,96 @@
                     </NavLink>
                 </nav>
             }
+            else if (_currentModule == "auditoria")
+            {
+                <a class="menu__back" href="/">
+                    <i class="bi bi-grid-3x3-gap-fill"></i>
+                    <span>Aplicaciones</span>
+                </a>
+                <p class="menu__section">Auditoría</p>
+                <nav class="menu__nav">
+                    <NavLink class="menu__link" href="/auditoria" Match="NavLinkMatch.All">
+                        <span class="menu__icon"><i class="bi bi-shield-exclamation"></i></span>
+                        <span>Resumen</span>
+                    </NavLink>
+                    <NavLink class="menu__link" href="/auditoria/errores" Match="NavLinkMatch.Prefix">
+                        <span class="menu__icon"><i class="bi bi-bug"></i></span>
+                        <span>Errores</span>
+                    </NavLink>
+                </nav>
+            }
+            else if (_currentModule == "ventas")
+            {
+                <a class="menu__back" href="/">
+                    <i class="bi bi-grid-3x3-gap-fill"></i>
+                    <span>Aplicaciones</span>
+                </a>
+                <p class="menu__section">Ventas</p>
+                <nav class="menu__nav">
+                    <NavLink class="menu__link" href="/ventas" Match="NavLinkMatch.All">
+                        <span class="menu__icon"><i class="bi bi-graph-up-arrow"></i></span>
+                        <span>Inicio</span>
+                    </NavLink>
+                    <NavLink class="menu__link" href="/ventas/clientes">
+                        <span class="menu__icon"><i class="bi bi-people-fill"></i></span>
+                        <span>Clientes</span>
+                    </NavLink>
+                    <NavLink class="menu__link" href="/ventas/rubros">
+                        <span class="menu__icon"><i class="bi bi-tag-fill"></i></span>
+                        <span>Rubros</span>
+                    </NavLink>
+                    <NavLink class="menu__link" href="/ventas/familias">
+                        <span class="menu__icon"><i class="bi bi-collection-fill"></i></span>
+                        <span>Familias</span>
+                    </NavLink>
+                    <NavLink class="menu__link" href="/ventas/articulos">
+                        <span class="menu__icon"><i class="bi bi-box-fill"></i></span>
+                        <span>Artículos</span>
+                    </NavLink>
+                </nav>
+            }
+            else if (_currentModule == "stock")
+            {
+                <a class="menu__back" href="/">
+                    <i class="bi bi-grid-3x3-gap-fill"></i>
+                    <span>Aplicaciones</span>
+                </a>
+                <p class="menu__section">Stock</p>
+                <nav class="menu__nav">
+                    <NavLink class="menu__link" href="/stock" Match="NavLinkMatch.All">
+                        <span class="menu__icon"><i class="bi bi-box-seam"></i></span>
+                        <span>Resumen</span>
+                    </NavLink>
+                </nav>
+            }
+            else if (_currentModule == "caja-bancos")
+            {
+                <a class="menu__back" href="/">
+                    <i class="bi bi-grid-3x3-gap-fill"></i>
+                    <span>Aplicaciones</span>
+                </a>
+                <p class="menu__section">Caja y Bancos</p>
+                <nav class="menu__nav">
+                    <NavLink class="menu__link" href="/caja-bancos" Match="NavLinkMatch.All">
+                        <span class="menu__icon"><i class="bi bi-bank"></i></span>
+                        <span>Resumen</span>
+                    </NavLink>
+                </nav>
+            }
+            else if (_currentModule == "contabilidad")
+            {
+                <a class="menu__back" href="/">
+                    <i class="bi bi-grid-3x3-gap-fill"></i>
+                    <span>Aplicaciones</span>
+                </a>
+                <p class="menu__section">Contabilidad</p>
+                <nav class="menu__nav">
+                    <NavLink class="menu__link" href="/contabilidad" Match="NavLinkMatch.All">
+                        <span class="menu__icon"><i class="bi bi-journal-bookmark-fill"></i></span>
+                        <span>Resumen</span>
+                    </NavLink>
+                </nav>
+            }
             else if (_currentModule == "compras")
             {
                 <a class="menu__back" href="/">
@@ -275,10 +365,20 @@
         return path switch
         {
             "" => "Aplicaciones",
+            "ventas" => "Ventas",
+            "ventas/clientes" => "Clientes",
+            "ventas/rubros" => "Rubros",
+            "ventas/familias" => "Familias",
+            "ventas/articulos" => "Artículos",
+            "stock" => "Stock",
+            "caja-bancos" => "Caja y Bancos",
+            "contabilidad" => "Contabilidad",
             "costos" => "Actualización de Costos",
             "costos/nueva" => "Nueva Importación",
             "costos/perfiles" => "Perfiles de Costos",
             "costos/historial" => "Historial de Costos",
+            "auditoria" => "Auditoría",
+            "auditoria/errores" => "Errores",
             "compras" => "Inicio",
             "compras/proveedores" => "Proveedores",
             "compras/comprobantes" => "Comprobantes",
@@ -291,6 +391,7 @@
             "ayuda" => "Ayuda",
             _ when path.StartsWith("compras/informesia/resultado/") => "Informe IA",
             _ when path.StartsWith("costos/lotes/") => "Lote de Costos",
+            _ when path.StartsWith("auditoria/error/") => "Detalle de Error",
             "consultas/nueva" => "Nueva consulta",
             _ when path.StartsWith("consultas/") && path.EndsWith("/editar") => "Editar consulta",
             _ when path.StartsWith("consultas/") => "Consulta",
@@ -301,7 +402,12 @@
     private string GetModuleTitle() => _currentModule switch
     {
         "consultas" => "Diseñador de Consultas",
+        "ventas" => "Dashboard de Ventas",
+        "stock" => "Dashboard de Stock",
+        "caja-bancos" => "Caja y Bancos",
+        "contabilidad" => "Dashboard Contable",
         "costos" => "Actualización de Costos",
+        "auditoria" => "Auditoría",
         _ => "Dashboard de Compras"
     };
 }

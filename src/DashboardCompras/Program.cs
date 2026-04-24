@@ -1,6 +1,7 @@
 using DashboardCompras.Components;
 using DashboardCompras.Configuration;
 using DashboardCompras.Models;
+using DashboardCompras.Repositories;
 using DashboardCompras.Services;
 using System.Diagnostics;
 
@@ -49,11 +50,15 @@ public class Program
         builder.Services.AddScoped<IInformesIaService, InformesIaService>();
         builder.Services.AddScoped<IConsultasService, ConsultasService>();
         builder.Services.AddScoped<ICostosService, CostosService>();
+        builder.Services.AddScoped<IAuditoriaService, AuditoriaService>();
+        builder.Services.AddScoped<IGestionDashboardService, GestionDashboardService>();
+        builder.Services.AddSingleton<IAuxErrRepository, AuxErrRepository>();
         builder.Services.AddSingleton<IAppEventService, AppEventService>();
         builder.Services.AddSingleton<ConsultasExcelExporter>();
         builder.Services.AddSingleton<InformesIaHistoryStore>();
         builder.Services.AddSingleton<InformesIaResultStore>();
         builder.Services.AddScoped<FilterStateService>();
+        builder.Services.AddScoped<GestionFilterStateService>();
         builder.Services.AddHttpClient();
         builder.Services.AddHttpContextAccessor();
         builder.Services.Configure<ServidorWebOptions>(builder.Configuration.GetSection(ServidorWebOptions.SectionName));

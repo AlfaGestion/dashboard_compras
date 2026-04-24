@@ -1,0 +1,12 @@
+ El volumen de la unidad C no tiene etiqueta.
+ El n£mero de serie del volumen es: 2214-00B1
+
+ Directorio de C:\dev\dashboard_compras
+
+24/04/2026  12:47               978 AGENTE.md
+22/04/2026  23:41            12,041 CODEX_RULES.md
+24/04/2026  12:46            12,508 DATABASE_OBJETOS_SQL_PRIORITARIOS.md
+24/04/2026  11:28           208,085 DATABASE_TABLES_SUMMARY.md
+21/04/2026  09:54             6,048 README_INSTALACION.md
+               5 archivos        239,660 bytes
+               0 dirs  253,666,107,392 bytes libres

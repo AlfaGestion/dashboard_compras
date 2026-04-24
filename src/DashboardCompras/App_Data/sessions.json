@@ -18,7 +18,7 @@
       "Usuario": "ALFANET",
       "Password": "ALFANET",
       "TrustServerCertificate": true,
-      "Activa": false
+      "Activa": true
     },
     {
       "Id": "a7860c47-5030-43e9-a6db-ee618fa9918f",
@@ -28,7 +28,7 @@
       "Usuario": "FERNANDEZF2-BCK3101",
       "Password": "FERNANDEZF2-BCK3101",
       "TrustServerCertificate": true,
-      "Activa": true
+      "Activa": false
     }
   ]
 }
