@@ -31,7 +31,7 @@ else
 
             @foreach (var gridLine in _gridLines)
             {
-                <line x1="56" y1="@gridLine.Y.ToString("F2")" x2="620" y2="@gridLine.Y.ToString("F2")" class="line-chart__grid" />
+                <line x1="70" y1="@gridLine.Y.ToString("F2")" x2="620" y2="@gridLine.Y.ToString("F2")" class="line-chart__grid" />
             }
 
             <path d="@_areaPath" fill="url(#@_gradientId)" />
@@ -80,9 +80,9 @@ else
             return;
         }
 
-        const double chartW = 564;
+        const double chartW = 550;
         const double chartH = 176;
-        const double startX = 56;
+        const double startX = 70;
         const double startY = 26;
 
         var max = Math.Max(Data.Max(x => x.Total), 1);
@@ -105,7 +105,7 @@ else
         _areaPath = $"{_linePath} L {_points[^1].X:F2},{202} L {_points[0].X:F2},{202} Z";
 
         _xLabels = string.Join("", _labelPoints.Select(p =>
-            $"<text x=\"{p.X:F2}\" y=\"278\" class=\"line-chart__label-svg\" text-anchor=\"middle\">{System.Net.WebUtility.HtmlEncode(p.Label)}</text>"));
+            $"<text x=\"{p.X:F2}\" y=\"278\" class=\"line-chart__label-svg\" text-anchor=\"middle\">{System.Net.WebUtility.HtmlEncode(FmtXLabel(p.Label))}</text>"));
 
         _gridLines = Enumerable.Range(0, 4)
             .Select(i =>
@@ -118,7 +118,7 @@ else
             .ToList();
 
         _yLabels = string.Join("", _gridLines.Select(g =>
-            $"<text x=\"52\" y=\"{g.Y + 4:F2}\" class=\"line-chart__axis-svg\" text-anchor=\"end\">{System.Net.WebUtility.HtmlEncode(FormatearValor(g.Value))}</text>"));
+            $"<text x=\"66\" y=\"{g.Y + 4:F2}\" class=\"line-chart__axis-svg\" text-anchor=\"end\">{System.Net.WebUtility.HtmlEncode(FormatearValor(g.Value))}</text>"));
     }
 
     private static string BuildSmoothPath(List<ChartPoint> points)
@@ -148,9 +148,34 @@ else
     }
 
     private string FormatearValor(decimal valor)
-        => MostrarMoneda
-            ? valor.ToString("$ #,##0", System.Globalization.CultureInfo.GetCultureInfo("es-AR"))
-            : valor.ToString("#,##0", System.Globalization.CultureInfo.GetCultureInfo("es-AR"));
+    {
+        var c = System.Globalization.CultureInfo.GetCultureInfo("es-AR");
+        var prefix = MostrarMoneda ? "$ " : "";
+        return valor switch
+        {
+            >= 1_000_000_000m => $"{prefix}{(valor / 1_000_000_000m).ToString("N1", c)}B",
+            >= 1_000_000m     => $"{prefix}{(valor / 1_000_000m).ToString("N0", c)}M",
+            >= 1_000m         => $"{prefix}{(valor / 1_000m).ToString("N0", c)}K",
+            _                 => MostrarMoneda
+                                    ? valor.ToString("$ #,##0", c)
+                                    : valor.ToString("#,##0", c)
+        };
+    }
+
+    private static string FmtXLabel(string label)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var esAr = System.Globalization.CultureInfo.GetCultureInfo("es-AR");
+        if (DateTime.TryParseExact(label, "yyyy-MM", inv, System.Globalization.DateTimeStyles.None, out var m))
+        {
+            var mes = m.ToString("MMM", esAr);
+            mes = char.ToUpper(mes[0]) + mes[1..];
+            return $"{mes} '{m:yy}";
+        }
+        if (DateTime.TryParseExact(label, "dd/MM/yyyy", esAr, System.Globalization.DateTimeStyles.None, out var d))
+            return d.ToString("dd/MM", esAr);
+        return label;
+    }
 
     private sealed record ChartPoint(double X, double Y, string Label);
     private sealed record GridLine(double Y, decimal Value);

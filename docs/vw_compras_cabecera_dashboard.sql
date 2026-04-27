@@ -43,7 +43,7 @@ WITH CpteBase AS
         SignoBase =
             CASE
                 WHEN c.TC IN ('FCC','NDC','LIQC','FPC') THEN 1
-                WHEN c.TC IN ('NCC','NCPC') THEN -1
+                WHEN c.TC IN ('NCC','NCPC','NCCP') THEN -1
                 ELSE 0
             END,
 
@@ -51,7 +51,7 @@ WITH CpteBase AS
             CASE
                 WHEN c.TC IN ('FCC','NDC','LIQC') THEN 'Compra'
                 WHEN c.TC IN ('NCC') THEN 'Nota Crédito'
-                WHEN c.TC IN ('FPC','NCPC') THEN 'Proforma'
+                WHEN c.TC IN ('FPC','NCPC','NCCP') THEN 'Proforma'
                 ELSE 'Otro'
             END,
 

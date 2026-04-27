@@ -34,9 +34,7 @@ public sealed class GestionDashboardService(
                 Usuarios = await QueryDistinctAsync("""
                     SELECT DISTINCT TOP (100) LTRIM(RTRIM(c.Usuario))
                     FROM dbo.V_MV_Cpte c
-                    INNER JOIN dbo.V_TA_Cpte tc ON tc.CODIGO = c.TC
-                    WHERE UPPER(LTRIM(RTRIM(tc.SISTEMA))) = 'VENTAS'
-                      AND (
+                    WHERE (
                           c.TC LIKE 'FC%'
                           OR c.TC LIKE 'NC%'
                           OR c.TC LIKE 'ND%'
@@ -48,9 +46,7 @@ public sealed class GestionDashboardService(
                 Sucursales = await QueryDistinctAsync("""
                     SELECT DISTINCT TOP (100) CONVERT(varchar(50), c.UNEGOCIO)
                     FROM dbo.V_MV_Cpte c
-                    INNER JOIN dbo.V_TA_Cpte tc ON tc.CODIGO = c.TC
-                    WHERE UPPER(LTRIM(RTRIM(tc.SISTEMA))) = 'VENTAS'
-                      AND (
+                    WHERE (
                           c.TC LIKE 'FC%'
                           OR c.TC LIKE 'NC%'
                           OR c.TC LIKE 'ND%'
@@ -62,9 +58,7 @@ public sealed class GestionDashboardService(
                 Depositos = await QueryDistinctAsync("""
                     SELECT DISTINCT TOP (100) CONVERT(varchar(50), c.IdDeposito)
                     FROM dbo.V_MV_Cpte c
-                    INNER JOIN dbo.V_TA_Cpte tc ON tc.CODIGO = c.TC
-                    WHERE UPPER(LTRIM(RTRIM(tc.SISTEMA))) = 'VENTAS'
-                      AND (
+                    WHERE (
                           c.TC LIKE 'FC%'
                           OR c.TC LIKE 'NC%'
                           OR c.TC LIKE 'ND%'
@@ -76,9 +70,7 @@ public sealed class GestionDashboardService(
                 TiposComprobante = await QueryDistinctAsync("""
                     SELECT DISTINCT TOP (100) c.TC
                     FROM dbo.V_MV_Cpte c
-                    INNER JOIN dbo.V_TA_Cpte tc ON tc.CODIGO = c.TC
-                    WHERE UPPER(LTRIM(RTRIM(tc.SISTEMA))) = 'VENTAS'
-                      AND (
+                    WHERE (
                           c.TC LIKE 'FC%'
                           OR c.TC LIKE 'NC%'
                           OR c.TC LIKE 'ND%'
@@ -193,8 +185,7 @@ public sealed class GestionDashboardService(
             await cn.OpenAsync(token);
 
             const string ventasWhere = """
-                WHERE UPPER(LTRIM(RTRIM(tc.SISTEMA))) = 'VENTAS'
-                  AND (
+                WHERE (
                       c.TC LIKE 'FC%'
                       OR c.TC LIKE 'NC%'
                       OR c.TC LIKE 'ND%'
@@ -209,15 +200,20 @@ public sealed class GestionDashboardService(
                   AND (@TipoComprobante IS NULL OR c.TC = @TipoComprobante)
                 """;
 
-            var kpis = await QuerySingleAsync($"""
+            var kpis = await QuerySingleAsync("""
                 SELECT
-                    ISNULL(SUM(c.IMPORTE),0) AS TotalFacturado,
-                    ISNULL(AVG(c.IMPORTE),0) AS TicketPromedio,
-                    COUNT(*) AS Comprobantes,
-                    COUNT(DISTINCT c.CUENTA) AS ClientesActivos
-                FROM dbo.V_MV_Cpte c
-                INNER JOIN dbo.V_TA_Cpte tc ON tc.CODIGO = c.TC
-                {ventasWhere}
+                    ISNULL(SUM(l.IMPORTE), 0) AS TotalFacturado,
+                    ISNULL(CASE WHEN COUNT(DISTINCT l.TC + l.IdComprobante) = 0 THEN 0
+                                ELSE SUM(l.IMPORTE) / COUNT(DISTINCT l.TC + l.IdComprobante) END, 0) AS TicketPromedio,
+                    COUNT(DISTINCT l.TC + l.IdComprobante) AS Comprobantes,
+                    COUNT(DISTINCT l.CUENTA) AS ClientesActivos
+                FROM dbo.Libro_VentasConFP l
+                WHERE (@FechaDesde IS NULL OR l.FECHA >= @FechaDesde)
+                  AND (@FechaHastaExclusive IS NULL OR l.FECHA < @FechaHastaExclusive)
+                  AND (@ClienteLike IS NULL OR l.CUENTA LIKE @ClienteLike OR l.CABNOMBRE LIKE @ClienteLike)
+                  AND (@Usuario IS NULL OR l.USUARIO_LOGEADO = @Usuario)
+                  AND (@Sucursal IS NULL OR CONVERT(varchar(50), l.UNEGOCIO) = @Sucursal)
+                  AND (@TipoComprobante IS NULL OR l.TC = @TipoComprobante)
                 """, cn, r => new VentasDashboardDto
                 {
                     TotalFacturadoMes = GetDecimal(r, 0),
@@ -236,25 +232,16 @@ public sealed class GestionDashboardService(
                 ),
                 VentasMensuales AS (
                     SELECT
-                        DATEFROMPARTS(YEAR(c.FECHA), MONTH(c.FECHA), 1) AS MesInicio,
-                        SUM(c.IMPORTE) AS Total
-                    FROM dbo.V_MV_Cpte c
-                    INNER JOIN dbo.V_TA_Cpte tc ON tc.CODIGO = c.TC
-                    WHERE UPPER(LTRIM(RTRIM(tc.SISTEMA))) = 'VENTAS'
-                      AND (
-                          c.TC LIKE 'FC%'
-                          OR c.TC LIKE 'NC%'
-                          OR c.TC LIKE 'ND%'
-                          OR c.TC LIKE 'FP%'
-                      )
-                      AND c.FECHA >= DATEADD(month, -11, DATEFROMPARTS(YEAR(DATEADD(day, -1, ISNULL(@FechaHastaExclusive, DATEADD(day, 1, GETDATE())))), MONTH(DATEADD(day, -1, ISNULL(@FechaHastaExclusive, DATEADD(day, 1, GETDATE())))), 1))
-                      AND c.FECHA < ISNULL(@FechaHastaExclusive, DATEADD(day, 1, GETDATE()))
-                      AND (@ClienteLike IS NULL OR c.CUENTA LIKE @ClienteLike OR c.NOMBRE LIKE @ClienteLike)
-                      AND (@Usuario IS NULL OR c.Usuario = @Usuario)
-                      AND (@Sucursal IS NULL OR CONVERT(varchar(50), c.UNEGOCIO) = @Sucursal)
-                      AND (@Deposito IS NULL OR CONVERT(varchar(50), c.IdDeposito) = @Deposito)
-                      AND (@TipoComprobante IS NULL OR c.TC = @TipoComprobante)
-                    GROUP BY DATEFROMPARTS(YEAR(c.FECHA), MONTH(c.FECHA), 1)
+                        DATEFROMPARTS(YEAR(l.FECHA), MONTH(l.FECHA), 1) AS MesInicio,
+                        SUM(l.IMPORTE) AS Total
+                    FROM dbo.Libro_VentasConFP l
+                    WHERE l.FECHA >= DATEADD(month, -11, DATEFROMPARTS(YEAR(DATEADD(day, -1, ISNULL(@FechaHastaExclusive, DATEADD(day, 1, GETDATE())))), MONTH(DATEADD(day, -1, ISNULL(@FechaHastaExclusive, DATEADD(day, 1, GETDATE())))), 1))
+                      AND l.FECHA < ISNULL(@FechaHastaExclusive, DATEADD(day, 1, GETDATE()))
+                      AND (@ClienteLike IS NULL OR l.CUENTA LIKE @ClienteLike OR l.CABNOMBRE LIKE @ClienteLike)
+                      AND (@Usuario IS NULL OR l.USUARIO_LOGEADO = @Usuario)
+                      AND (@Sucursal IS NULL OR CONVERT(varchar(50), l.UNEGOCIO) = @Sucursal)
+                      AND (@TipoComprobante IS NULL OR l.TC = @TipoComprobante)
+                    GROUP BY DATEFROMPARTS(YEAR(l.FECHA), MONTH(l.FECHA), 1)
                 )
                 SELECT
                     CONVERT(varchar(7), m.MesInicio, 120) AS Periodo,
@@ -265,16 +252,20 @@ public sealed class GestionDashboardService(
                 OPTION (MAXRECURSION 12)
                 """, cn, cmd => BindVentasFilters(cmd, filters), token);
 
-            var topClientes = await QueryCategoryAsync($"""
+            var topClientes = await QueryCategoryAsync("""
                 SELECT TOP (8)
-                    ISNULL(NULLIF(LTRIM(RTRIM(c.NOMBRE)), ''), c.CUENTA) AS Categoria,
-                    CONVERT(varchar(50), c.CUENTA) AS Codigo,
-                    SUM(c.IMPORTE) AS Total
-                FROM dbo.V_MV_Cpte c
-                INNER JOIN dbo.V_TA_Cpte tc ON tc.CODIGO = c.TC
-                {ventasWhere}
-                GROUP BY c.CUENTA, c.NOMBRE
-                ORDER BY SUM(c.IMPORTE) DESC
+                    ISNULL(NULLIF(LTRIM(RTRIM(l.CABNOMBRE)), ''), l.CUENTA) AS Categoria,
+                    l.CUENTA AS Codigo,
+                    SUM(l.IMPORTE) AS Total
+                FROM dbo.Libro_VentasConFP l
+                WHERE (@FechaDesde IS NULL OR l.FECHA >= @FechaDesde)
+                  AND (@FechaHastaExclusive IS NULL OR l.FECHA < @FechaHastaExclusive)
+                  AND (@ClienteLike IS NULL OR l.CUENTA LIKE @ClienteLike OR l.CABNOMBRE LIKE @ClienteLike)
+                  AND (@Usuario IS NULL OR l.USUARIO_LOGEADO = @Usuario)
+                  AND (@Sucursal IS NULL OR CONVERT(varchar(50), l.UNEGOCIO) = @Sucursal)
+                  AND (@TipoComprobante IS NULL OR l.TC = @TipoComprobante)
+                GROUP BY l.CUENTA, l.CABNOMBRE
+                ORDER BY SUM(l.IMPORTE) DESC
                 """, cn, cmd => BindVentasFilters(cmd, filters), token);
 
             var topArticulos = await QueryCategoryAsync($"""
@@ -287,7 +278,6 @@ public sealed class GestionDashboardService(
                     ON c.TC = i.TC
                    AND c.IDCOMPROBANTE = i.IDCOMPROBANTE
                    AND c.IDCOMPLEMENTO = i.IDCOMPLEMENTO
-                INNER JOIN dbo.V_TA_Cpte tc ON tc.CODIGO = c.TC
                 {ventasWhere}
                 GROUP BY i.IDARTICULO, i.DESCRIPCION
                 ORDER BY SUM(i.TOTAL) DESC
@@ -301,7 +291,6 @@ public sealed class GestionDashboardService(
                     CONVERT(varchar(50), c.IDCOMPROBANTE),
                     c.IMPORTE
                 FROM dbo.V_MV_Cpte c
-                INNER JOIN dbo.V_TA_Cpte tc ON tc.CODIGO = c.TC
                 {ventasWhere}
                 ORDER BY c.FECHA DESC, c.ID DESC
                 """, cn, cmd => BindVentasFilters(cmd, filters), token);
@@ -329,31 +318,23 @@ public sealed class GestionDashboardService(
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync(token);
 
-            const string ventasWhere = """
-                WHERE UPPER(LTRIM(RTRIM(tc.SISTEMA))) = 'VENTAS'
-                  AND (
-                      c.TC LIKE 'FC%'
-                      OR c.TC LIKE 'NC%'
-                      OR c.TC LIKE 'ND%'
-                      OR c.TC LIKE 'FP%'
-                  )
-                  AND (@FechaDesde IS NULL OR c.FECHA >= @FechaDesde)
-                  AND (@FechaHastaExclusive IS NULL OR c.FECHA < @FechaHastaExclusive)
-                  AND (@ClienteLike IS NULL OR c.CUENTA LIKE @ClienteLike OR c.NOMBRE LIKE @ClienteLike)
-                  AND (@Usuario IS NULL OR c.Usuario = @Usuario)
-                  AND (@Sucursal IS NULL OR CONVERT(varchar(50), c.UNEGOCIO) = @Sucursal)
-                  AND (@Deposito IS NULL OR CONVERT(varchar(50), c.IdDeposito) = @Deposito)
-                  AND (@TipoComprobante IS NULL OR c.TC = @TipoComprobante)
+            const string libWhere = """
+                WHERE (@FechaDesde IS NULL OR l.FECHA >= @FechaDesde)
+                  AND (@FechaHastaExclusive IS NULL OR l.FECHA < @FechaHastaExclusive)
+                  AND (@ClienteLike IS NULL OR l.CUENTA LIKE @ClienteLike OR l.CABNOMBRE LIKE @ClienteLike)
+                  AND (@Usuario IS NULL OR l.USUARIO_LOGEADO = @Usuario)
+                  AND (@Sucursal IS NULL OR CONVERT(varchar(50), l.UNEGOCIO) = @Sucursal)
+                  AND (@TipoComprobante IS NULL OR l.TC = @TipoComprobante)
                 """;
 
             var kpis = await QuerySingleAsync($"""
                 SELECT
-                    ISNULL(SUM(c.IMPORTE), 0),
-                    COUNT(DISTINCT c.CUENTA),
-                    ISNULL(AVG(c.IMPORTE), 0)
-                FROM dbo.V_MV_Cpte c
-                INNER JOIN dbo.V_TA_Cpte tc ON tc.CODIGO = c.TC
-                {ventasWhere}
+                    ISNULL(SUM(l.IMPORTE), 0),
+                    COUNT(DISTINCT l.CUENTA),
+                    ISNULL(CASE WHEN COUNT(DISTINCT l.TC + l.IdComprobante) = 0 THEN 0
+                                ELSE SUM(l.IMPORTE) / COUNT(DISTINCT l.TC + l.IdComprobante) END, 0)
+                FROM dbo.Libro_VentasConFP l
+                {libWhere}
                 """, cn, r => new VentasClientesPageDto
                 {
                     TotalFacturado = GetDecimal(r, 0),
@@ -363,29 +344,28 @@ public sealed class GestionDashboardService(
 
             var top = await QueryCategoryAsync($"""
                 SELECT TOP (10)
-                    ISNULL(NULLIF(LTRIM(RTRIM(c.NOMBRE)), ''), CONVERT(varchar(50), c.CUENTA)) AS Categoria,
-                    CONVERT(varchar(50), c.CUENTA) AS Codigo,
-                    SUM(c.IMPORTE) AS Total
-                FROM dbo.V_MV_Cpte c
-                INNER JOIN dbo.V_TA_Cpte tc ON tc.CODIGO = c.TC
-                {ventasWhere}
-                GROUP BY c.CUENTA, c.NOMBRE
-                ORDER BY SUM(c.IMPORTE) DESC
+                    ISNULL(NULLIF(LTRIM(RTRIM(l.CABNOMBRE)), ''), l.CUENTA) AS Categoria,
+                    l.CUENTA AS Codigo,
+                    SUM(l.IMPORTE) AS Total
+                FROM dbo.Libro_VentasConFP l
+                {libWhere}
+                GROUP BY l.CUENTA, l.CABNOMBRE
+                ORDER BY SUM(l.IMPORTE) DESC
                 """, cn, cmd => BindVentasFilters(cmd, filters), token);
 
             var clientes = await QueryVentasClientesAsync($"""
                 SELECT
-                    CONVERT(varchar(50), c.CUENTA) AS Cuenta,
-                    ISNULL(NULLIF(LTRIM(RTRIM(c.NOMBRE)), ''), CONVERT(varchar(50), c.CUENTA)) AS Cliente,
-                    SUM(c.IMPORTE) AS TotalFacturado,
-                    COUNT(*) AS CantidadComprobantes,
-                    ISNULL(AVG(c.IMPORTE), 0) AS TicketPromedio,
-                    MAX(c.FECHA) AS UltimaVenta
-                FROM dbo.V_MV_Cpte c
-                INNER JOIN dbo.V_TA_Cpte tc ON tc.CODIGO = c.TC
-                {ventasWhere}
-                GROUP BY c.CUENTA, c.NOMBRE
-                ORDER BY SUM(c.IMPORTE) DESC
+                    l.CUENTA AS Cuenta,
+                    ISNULL(NULLIF(LTRIM(RTRIM(l.CABNOMBRE)), ''), l.CUENTA) AS Cliente,
+                    SUM(l.IMPORTE) AS TotalFacturado,
+                    COUNT(DISTINCT l.TC + l.IdComprobante) AS CantidadComprobantes,
+                    ISNULL(CASE WHEN COUNT(DISTINCT l.TC + l.IdComprobante) = 0 THEN 0
+                                ELSE SUM(l.IMPORTE) / COUNT(DISTINCT l.TC + l.IdComprobante) END, 0) AS TicketPromedio,
+                    MAX(l.FECHA) AS UltimaVenta
+                FROM dbo.Libro_VentasConFP l
+                {libWhere}
+                GROUP BY l.CUENTA, l.CABNOMBRE
+                ORDER BY SUM(l.IMPORTE) DESC
                 """, cn, cmd => BindVentasFilters(cmd, filters), token);
 
             var total = clientes.Sum(x => x.TotalFacturado);
@@ -411,96 +391,53 @@ public sealed class GestionDashboardService(
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync(token);
 
-            var kpis = await QuerySingleAsync("""
+            const string detWhere = """
+                WHERE EXISTS (
+                    SELECT 1 FROM dbo.Libro_VentasConFP l
+                    WHERE l.TC = d.TC
+                      AND l.IdComprobante = d.IDCOMPROBANTE
+                      AND (@FechaDesde IS NULL OR l.FECHA >= @FechaDesde)
+                      AND (@FechaHastaExclusive IS NULL OR l.FECHA < @FechaHastaExclusive)
+                      AND (@ClienteLike IS NULL OR l.CUENTA LIKE @ClienteLike OR l.CABNOMBRE LIKE @ClienteLike)
+                      AND (@Usuario IS NULL OR l.USUARIO_LOGEADO = @Usuario)
+                      AND (@Sucursal IS NULL OR CONVERT(varchar(50), l.UNEGOCIO) = @Sucursal)
+                      AND (@TipoComprobante IS NULL OR l.TC = @TipoComprobante)
+                )
+                """;
+
+            var kpis = await QuerySingleAsync($"""
                 SELECT
-                    ISNULL(SUM(i.TOTAL), 0),
-                    COUNT(DISTINCT a.IDRUBRO)
-                FROM dbo.V_MV_CpteInsumos i
-                INNER JOIN dbo.V_MV_Cpte c
-                    ON c.TC = i.TC
-                   AND c.IDCOMPROBANTE = i.IDCOMPROBANTE
-                   AND c.IDCOMPLEMENTO = i.IDCOMPLEMENTO
-                INNER JOIN dbo.V_TA_Cpte tc ON tc.CODIGO = c.TC
-                INNER JOIN dbo.V_MA_ARTICULOS a ON a.IDARTICULO = i.IDARTICULO
-                WHERE UPPER(LTRIM(RTRIM(tc.SISTEMA))) = 'VENTAS'
-                  AND (
-                      c.TC LIKE 'FC%'
-                      OR c.TC LIKE 'NC%'
-                      OR c.TC LIKE 'ND%'
-                      OR c.TC LIKE 'FP%'
-                  )
-                  AND (@FechaDesde IS NULL OR c.FECHA >= @FechaDesde)
-                  AND (@FechaHastaExclusive IS NULL OR c.FECHA < @FechaHastaExclusive)
-                  AND (@ClienteLike IS NULL OR c.CUENTA LIKE @ClienteLike OR c.NOMBRE LIKE @ClienteLike)
-                  AND (@Usuario IS NULL OR c.Usuario = @Usuario)
-                  AND (@Sucursal IS NULL OR CONVERT(varchar(50), c.UNEGOCIO) = @Sucursal)
-                  AND (@Deposito IS NULL OR CONVERT(varchar(50), i.IdDeposito) = @Deposito)
-                  AND (@TipoComprobante IS NULL OR c.TC = @TipoComprobante)
+                    ISNULL(SUM(d.ValorVtaCIVA), 0),
+                    COUNT(DISTINCT d.IDRUBRO)
+                FROM dbo.VT_DETALLEIVAPROFORMA d
+                {detWhere}
                 """, cn, r => new VentasRubrosPageDto
                 {
                     TotalVendido = GetDecimal(r, 0),
                     RubrosActivos = GetInt(r, 1)
                 }, cmd => BindVentasFilters(cmd, filters), token) ?? new VentasRubrosPageDto();
 
-            var top = await QueryCategoryAsync("""
+            var top = await QueryCategoryAsync($"""
                 SELECT TOP (10)
-                    CONVERT(varchar(50), a.IDRUBRO) AS Categoria,
-                    CONVERT(varchar(50), a.IDRUBRO) AS Codigo,
-                    SUM(i.TOTAL) AS Total
-                FROM dbo.V_MV_CpteInsumos i
-                INNER JOIN dbo.V_MV_Cpte c
-                    ON c.TC = i.TC
-                   AND c.IDCOMPROBANTE = i.IDCOMPROBANTE
-                   AND c.IDCOMPLEMENTO = i.IDCOMPLEMENTO
-                INNER JOIN dbo.V_TA_Cpte tc ON tc.CODIGO = c.TC
-                INNER JOIN dbo.V_MA_ARTICULOS a ON a.IDARTICULO = i.IDARTICULO
-                WHERE UPPER(LTRIM(RTRIM(tc.SISTEMA))) = 'VENTAS'
-                  AND (
-                      c.TC LIKE 'FC%'
-                      OR c.TC LIKE 'NC%'
-                      OR c.TC LIKE 'ND%'
-                      OR c.TC LIKE 'FP%'
-                  )
-                  AND (@FechaDesde IS NULL OR c.FECHA >= @FechaDesde)
-                  AND (@FechaHastaExclusive IS NULL OR c.FECHA < @FechaHastaExclusive)
-                  AND (@ClienteLike IS NULL OR c.CUENTA LIKE @ClienteLike OR c.NOMBRE LIKE @ClienteLike)
-                  AND (@Usuario IS NULL OR c.Usuario = @Usuario)
-                  AND (@Sucursal IS NULL OR CONVERT(varchar(50), c.UNEGOCIO) = @Sucursal)
-                  AND (@Deposito IS NULL OR CONVERT(varchar(50), i.IdDeposito) = @Deposito)
-                  AND (@TipoComprobante IS NULL OR c.TC = @TipoComprobante)
-                GROUP BY a.IDRUBRO
-                ORDER BY SUM(i.TOTAL) DESC
+                    CONVERT(varchar(50), d.IDRUBRO) AS Categoria,
+                    CONVERT(varchar(50), d.IDRUBRO) AS Codigo,
+                    SUM(d.ValorVtaCIVA) AS Total
+                FROM dbo.VT_DETALLEIVAPROFORMA d
+                {detWhere}
+                GROUP BY d.IDRUBRO
+                ORDER BY SUM(d.ValorVtaCIVA) DESC
                 """, cn, cmd => BindVentasFilters(cmd, filters), token);
 
-            var rubros = await QueryVentasRubrosAsync("""
+            var rubros = await QueryVentasRubrosAsync($"""
                 SELECT
-                    CONVERT(varchar(50), a.IDRUBRO) AS Rubro,
-                    SUM(i.TOTAL) AS TotalVendido,
-                    COUNT(DISTINCT i.IDARTICULO) AS CantidadArticulos,
-                    COUNT(DISTINCT CONCAT(CONVERT(varchar(50), c.TC), '|', CONVERT(varchar(50), c.IDCOMPROBANTE), '|', CONVERT(varchar(50), c.IDCOMPLEMENTO))) AS CantidadComprobantes
-                FROM dbo.V_MV_CpteInsumos i
-                INNER JOIN dbo.V_MV_Cpte c
-                    ON c.TC = i.TC
-                   AND c.IDCOMPROBANTE = i.IDCOMPROBANTE
-                   AND c.IDCOMPLEMENTO = i.IDCOMPLEMENTO
-                INNER JOIN dbo.V_TA_Cpte tc ON tc.CODIGO = c.TC
-                INNER JOIN dbo.V_MA_ARTICULOS a ON a.IDARTICULO = i.IDARTICULO
-                WHERE UPPER(LTRIM(RTRIM(tc.SISTEMA))) = 'VENTAS'
-                  AND (
-                      c.TC LIKE 'FC%'
-                      OR c.TC LIKE 'NC%'
-                      OR c.TC LIKE 'ND%'
-                      OR c.TC LIKE 'FP%'
-                  )
-                  AND (@FechaDesde IS NULL OR c.FECHA >= @FechaDesde)
-                  AND (@FechaHastaExclusive IS NULL OR c.FECHA < @FechaHastaExclusive)
-                  AND (@ClienteLike IS NULL OR c.CUENTA LIKE @ClienteLike OR c.NOMBRE LIKE @ClienteLike)
-                  AND (@Usuario IS NULL OR c.Usuario = @Usuario)
-                  AND (@Sucursal IS NULL OR CONVERT(varchar(50), c.UNEGOCIO) = @Sucursal)
-                  AND (@Deposito IS NULL OR CONVERT(varchar(50), i.IdDeposito) = @Deposito)
-                  AND (@TipoComprobante IS NULL OR c.TC = @TipoComprobante)
-                GROUP BY a.IDRUBRO
-                ORDER BY SUM(i.TOTAL) DESC
+                    CONVERT(varchar(50), d.IDRUBRO) AS Rubro,
+                    SUM(d.ValorVtaCIVA) AS TotalVendido,
+                    COUNT(DISTINCT d.Articulo) AS CantidadArticulos,
+                    COUNT(DISTINCT d.TC + d.IDCOMPROBANTE) AS CantidadComprobantes
+                FROM dbo.VT_DETALLEIVAPROFORMA d
+                {detWhere}
+                GROUP BY d.IDRUBRO
+                ORDER BY SUM(d.ValorVtaCIVA) DESC
                 """, cn, cmd => BindVentasFilters(cmd, filters), token);
 
             var total = rubros.Sum(x => x.TotalVendido);
@@ -525,96 +462,56 @@ public sealed class GestionDashboardService(
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync(token);
 
-            var kpis = await QuerySingleAsync("""
+            const string detWhereFam = """
+                WHERE EXISTS (
+                    SELECT 1 FROM dbo.Libro_VentasConFP l
+                    WHERE l.TC = d.TC
+                      AND l.IdComprobante = d.IDCOMPROBANTE
+                      AND (@FechaDesde IS NULL OR l.FECHA >= @FechaDesde)
+                      AND (@FechaHastaExclusive IS NULL OR l.FECHA < @FechaHastaExclusive)
+                      AND (@ClienteLike IS NULL OR l.CUENTA LIKE @ClienteLike OR l.CABNOMBRE LIKE @ClienteLike)
+                      AND (@Usuario IS NULL OR l.USUARIO_LOGEADO = @Usuario)
+                      AND (@Sucursal IS NULL OR CONVERT(varchar(50), l.UNEGOCIO) = @Sucursal)
+                      AND (@TipoComprobante IS NULL OR l.TC = @TipoComprobante)
+                )
+                """;
+
+            var kpis = await QuerySingleAsync($"""
                 SELECT
-                    ISNULL(SUM(i.TOTAL), 0),
+                    ISNULL(SUM(d.ValorVtaCIVA), 0),
                     COUNT(DISTINCT a.IdFamilia)
-                FROM dbo.V_MV_CpteInsumos i
-                INNER JOIN dbo.V_MV_Cpte c
-                    ON c.TC = i.TC
-                   AND c.IDCOMPROBANTE = i.IDCOMPROBANTE
-                   AND c.IDCOMPLEMENTO = i.IDCOMPLEMENTO
-                INNER JOIN dbo.V_TA_Cpte tc ON tc.CODIGO = c.TC
-                INNER JOIN dbo.V_MA_ARTICULOS a ON a.IDARTICULO = i.IDARTICULO
-                WHERE UPPER(LTRIM(RTRIM(tc.SISTEMA))) = 'VENTAS'
-                  AND (
-                      c.TC LIKE 'FC%'
-                      OR c.TC LIKE 'NC%'
-                      OR c.TC LIKE 'ND%'
-                      OR c.TC LIKE 'FP%'
-                  )
-                  AND (@FechaDesde IS NULL OR c.FECHA >= @FechaDesde)
-                  AND (@FechaHastaExclusive IS NULL OR c.FECHA < @FechaHastaExclusive)
-                  AND (@ClienteLike IS NULL OR c.CUENTA LIKE @ClienteLike OR c.NOMBRE LIKE @ClienteLike)
-                  AND (@Usuario IS NULL OR c.Usuario = @Usuario)
-                  AND (@Sucursal IS NULL OR CONVERT(varchar(50), c.UNEGOCIO) = @Sucursal)
-                  AND (@Deposito IS NULL OR CONVERT(varchar(50), i.IdDeposito) = @Deposito)
-                  AND (@TipoComprobante IS NULL OR c.TC = @TipoComprobante)
+                FROM dbo.VT_DETALLEIVAPROFORMA d
+                INNER JOIN dbo.V_MA_ARTICULOS a ON a.IDARTICULO = d.Articulo
+                {detWhereFam}
                 """, cn, r => new VentasFamiliasPageDto
                 {
                     TotalVendido = GetDecimal(r, 0),
                     FamiliasActivas = GetInt(r, 1)
                 }, cmd => BindVentasFilters(cmd, filters), token) ?? new VentasFamiliasPageDto();
 
-            var top = await QueryCategoryAsync("""
+            var top = await QueryCategoryAsync($"""
                 SELECT TOP (10)
                     CONVERT(varchar(50), a.IdFamilia) AS Categoria,
                     CONVERT(varchar(50), a.IdFamilia) AS Codigo,
-                    SUM(i.TOTAL) AS Total
-                FROM dbo.V_MV_CpteInsumos i
-                INNER JOIN dbo.V_MV_Cpte c
-                    ON c.TC = i.TC
-                   AND c.IDCOMPROBANTE = i.IDCOMPROBANTE
-                   AND c.IDCOMPLEMENTO = i.IDCOMPLEMENTO
-                INNER JOIN dbo.V_TA_Cpte tc ON tc.CODIGO = c.TC
-                INNER JOIN dbo.V_MA_ARTICULOS a ON a.IDARTICULO = i.IDARTICULO
-                WHERE UPPER(LTRIM(RTRIM(tc.SISTEMA))) = 'VENTAS'
-                  AND (
-                      c.TC LIKE 'FC%'
-                      OR c.TC LIKE 'NC%'
-                      OR c.TC LIKE 'ND%'
-                      OR c.TC LIKE 'FP%'
-                  )
-                  AND (@FechaDesde IS NULL OR c.FECHA >= @FechaDesde)
-                  AND (@FechaHastaExclusive IS NULL OR c.FECHA < @FechaHastaExclusive)
-                  AND (@ClienteLike IS NULL OR c.CUENTA LIKE @ClienteLike OR c.NOMBRE LIKE @ClienteLike)
-                  AND (@Usuario IS NULL OR c.Usuario = @Usuario)
-                  AND (@Sucursal IS NULL OR CONVERT(varchar(50), c.UNEGOCIO) = @Sucursal)
-                  AND (@Deposito IS NULL OR CONVERT(varchar(50), i.IdDeposito) = @Deposito)
-                  AND (@TipoComprobante IS NULL OR c.TC = @TipoComprobante)
+                    SUM(d.ValorVtaCIVA) AS Total
+                FROM dbo.VT_DETALLEIVAPROFORMA d
+                INNER JOIN dbo.V_MA_ARTICULOS a ON a.IDARTICULO = d.Articulo
+                {detWhereFam}
                 GROUP BY a.IdFamilia
-                ORDER BY SUM(i.TOTAL) DESC
+                ORDER BY SUM(d.ValorVtaCIVA) DESC
                 """, cn, cmd => BindVentasFilters(cmd, filters), token);
 
-            var familias = await QueryVentasFamiliasAsync("""
+            var familias = await QueryVentasFamiliasAsync($"""
                 SELECT
                     CONVERT(varchar(50), a.IdFamilia) AS Familia,
-                    SUM(i.TOTAL) AS TotalVendido,
-                    COUNT(DISTINCT i.IDARTICULO) AS CantidadArticulos,
-                    COUNT(DISTINCT CONCAT(CONVERT(varchar(50), c.TC), '|', CONVERT(varchar(50), c.IDCOMPROBANTE), '|', CONVERT(varchar(50), c.IDCOMPLEMENTO))) AS CantidadComprobantes
-                FROM dbo.V_MV_CpteInsumos i
-                INNER JOIN dbo.V_MV_Cpte c
-                    ON c.TC = i.TC
-                   AND c.IDCOMPROBANTE = i.IDCOMPROBANTE
-                   AND c.IDCOMPLEMENTO = i.IDCOMPLEMENTO
-                INNER JOIN dbo.V_TA_Cpte tc ON tc.CODIGO = c.TC
-                INNER JOIN dbo.V_MA_ARTICULOS a ON a.IDARTICULO = i.IDARTICULO
-                WHERE UPPER(LTRIM(RTRIM(tc.SISTEMA))) = 'VENTAS'
-                  AND (
-                      c.TC LIKE 'FC%'
-                      OR c.TC LIKE 'NC%'
-                      OR c.TC LIKE 'ND%'
-                      OR c.TC LIKE 'FP%'
-                  )
-                  AND (@FechaDesde IS NULL OR c.FECHA >= @FechaDesde)
-                  AND (@FechaHastaExclusive IS NULL OR c.FECHA < @FechaHastaExclusive)
-                  AND (@ClienteLike IS NULL OR c.CUENTA LIKE @ClienteLike OR c.NOMBRE LIKE @ClienteLike)
-                  AND (@Usuario IS NULL OR c.Usuario = @Usuario)
-                  AND (@Sucursal IS NULL OR CONVERT(varchar(50), c.UNEGOCIO) = @Sucursal)
-                  AND (@Deposito IS NULL OR CONVERT(varchar(50), i.IdDeposito) = @Deposito)
-                  AND (@TipoComprobante IS NULL OR c.TC = @TipoComprobante)
+                    SUM(d.ValorVtaCIVA) AS TotalVendido,
+                    COUNT(DISTINCT d.Articulo) AS CantidadArticulos,
+                    COUNT(DISTINCT d.TC + d.IDCOMPROBANTE) AS CantidadComprobantes
+                FROM dbo.VT_DETALLEIVAPROFORMA d
+                INNER JOIN dbo.V_MA_ARTICULOS a ON a.IDARTICULO = d.Articulo
+                {detWhereFam}
                 GROUP BY a.IdFamilia
-                ORDER BY SUM(i.TOTAL) DESC
+                ORDER BY SUM(d.ValorVtaCIVA) DESC
                 """, cn, cmd => BindVentasFilters(cmd, filters), token);
 
             var total = familias.Sum(x => x.TotalVendido);
@@ -639,31 +536,27 @@ public sealed class GestionDashboardService(
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync(token);
 
-            var kpis = await QuerySingleAsync("""
+            const string detWhereArt = """
+                WHERE EXISTS (
+                    SELECT 1 FROM dbo.Libro_VentasConFP l
+                    WHERE l.TC = d.TC
+                      AND l.IdComprobante = d.IDCOMPROBANTE
+                      AND (@FechaDesde IS NULL OR l.FECHA >= @FechaDesde)
+                      AND (@FechaHastaExclusive IS NULL OR l.FECHA < @FechaHastaExclusive)
+                      AND (@ClienteLike IS NULL OR l.CUENTA LIKE @ClienteLike OR l.CABNOMBRE LIKE @ClienteLike)
+                      AND (@Usuario IS NULL OR l.USUARIO_LOGEADO = @Usuario)
+                      AND (@Sucursal IS NULL OR CONVERT(varchar(50), l.UNEGOCIO) = @Sucursal)
+                      AND (@TipoComprobante IS NULL OR l.TC = @TipoComprobante)
+                )
+                """;
+
+            var kpis = await QuerySingleAsync($"""
                 SELECT
-                    ISNULL(SUM(i.TOTAL), 0),
-                    COUNT(DISTINCT i.IDARTICULO),
-                    ISNULL(SUM(i.CANTIDAD), 0)
-                FROM dbo.V_MV_CpteInsumos i
-                INNER JOIN dbo.V_MV_Cpte c
-                    ON c.TC = i.TC
-                   AND c.IDCOMPROBANTE = i.IDCOMPROBANTE
-                   AND c.IDCOMPLEMENTO = i.IDCOMPLEMENTO
-                INNER JOIN dbo.V_TA_Cpte tc ON tc.CODIGO = c.TC
-                WHERE UPPER(LTRIM(RTRIM(tc.SISTEMA))) = 'VENTAS'
-                  AND (
-                      c.TC LIKE 'FC%'
-                      OR c.TC LIKE 'NC%'
-                      OR c.TC LIKE 'ND%'
-                      OR c.TC LIKE 'FP%'
-                  )
-                  AND (@FechaDesde IS NULL OR c.FECHA >= @FechaDesde)
-                  AND (@FechaHastaExclusive IS NULL OR c.FECHA < @FechaHastaExclusive)
-                  AND (@ClienteLike IS NULL OR c.CUENTA LIKE @ClienteLike OR c.NOMBRE LIKE @ClienteLike)
-                  AND (@Usuario IS NULL OR c.Usuario = @Usuario)
-                  AND (@Sucursal IS NULL OR CONVERT(varchar(50), c.UNEGOCIO) = @Sucursal)
-                  AND (@Deposito IS NULL OR CONVERT(varchar(50), i.IdDeposito) = @Deposito)
-                  AND (@TipoComprobante IS NULL OR c.TC = @TipoComprobante)
+                    ISNULL(SUM(d.ValorVtaCIVA), 0),
+                    COUNT(DISTINCT d.Articulo),
+                    ISNULL(SUM(d.Consumo), 0)
+                FROM dbo.VT_DETALLEIVAPROFORMA d
+                {detWhereArt}
                 """, cn, r => new VentasArticulosPageDto
                 {
                     TotalVendido = GetDecimal(r, 0),
@@ -671,94 +564,40 @@ public sealed class GestionDashboardService(
                     CantidadVendida = GetDecimal(r, 2)
                 }, cmd => BindVentasFilters(cmd, filters), token) ?? new VentasArticulosPageDto();
 
-            var topTotal = await QueryCategoryAsync("""
+            var topTotal = await QueryCategoryAsync($"""
                 SELECT TOP (10)
-                    i.DESCRIPCION AS Categoria,
-                    CONVERT(varchar(50), i.IDARTICULO) AS Codigo,
-                    SUM(i.TOTAL) AS Total
-                FROM dbo.V_MV_CpteInsumos i
-                INNER JOIN dbo.V_MV_Cpte c
-                    ON c.TC = i.TC
-                   AND c.IDCOMPROBANTE = i.IDCOMPROBANTE
-                   AND c.IDCOMPLEMENTO = i.IDCOMPLEMENTO
-                INNER JOIN dbo.V_TA_Cpte tc ON tc.CODIGO = c.TC
-                WHERE UPPER(LTRIM(RTRIM(tc.SISTEMA))) = 'VENTAS'
-                  AND (
-                      c.TC LIKE 'FC%'
-                      OR c.TC LIKE 'NC%'
-                      OR c.TC LIKE 'ND%'
-                      OR c.TC LIKE 'FP%'
-                  )
-                  AND (@FechaDesde IS NULL OR c.FECHA >= @FechaDesde)
-                  AND (@FechaHastaExclusive IS NULL OR c.FECHA < @FechaHastaExclusive)
-                  AND (@ClienteLike IS NULL OR c.CUENTA LIKE @ClienteLike OR c.NOMBRE LIKE @ClienteLike)
-                  AND (@Usuario IS NULL OR c.Usuario = @Usuario)
-                  AND (@Sucursal IS NULL OR CONVERT(varchar(50), c.UNEGOCIO) = @Sucursal)
-                  AND (@Deposito IS NULL OR CONVERT(varchar(50), i.IdDeposito) = @Deposito)
-                  AND (@TipoComprobante IS NULL OR c.TC = @TipoComprobante)
-                GROUP BY i.IDARTICULO, i.DESCRIPCION
-                ORDER BY SUM(i.TOTAL) DESC
+                    d.DESCRIPCION AS Categoria,
+                    CONVERT(varchar(50), d.Articulo) AS Codigo,
+                    SUM(d.ValorVtaCIVA) AS Total
+                FROM dbo.VT_DETALLEIVAPROFORMA d
+                {detWhereArt}
+                GROUP BY d.Articulo, d.DESCRIPCION
+                ORDER BY SUM(d.ValorVtaCIVA) DESC
                 """, cn, cmd => BindVentasFilters(cmd, filters), token);
 
-            var topCantidad = await QueryCategoryAsync("""
+            var topCantidad = await QueryCategoryAsync($"""
                 SELECT TOP (10)
-                    i.DESCRIPCION AS Categoria,
-                    CONVERT(varchar(50), i.IDARTICULO) AS Codigo,
-                    SUM(i.CANTIDAD) AS Total
-                FROM dbo.V_MV_CpteInsumos i
-                INNER JOIN dbo.V_MV_Cpte c
-                    ON c.TC = i.TC
-                   AND c.IDCOMPROBANTE = i.IDCOMPROBANTE
-                   AND c.IDCOMPLEMENTO = i.IDCOMPLEMENTO
-                INNER JOIN dbo.V_TA_Cpte tc ON tc.CODIGO = c.TC
-                WHERE UPPER(LTRIM(RTRIM(tc.SISTEMA))) = 'VENTAS'
-                  AND (
-                      c.TC LIKE 'FC%'
-                      OR c.TC LIKE 'NC%'
-                      OR c.TC LIKE 'ND%'
-                      OR c.TC LIKE 'FP%'
-                  )
-                  AND (@FechaDesde IS NULL OR c.FECHA >= @FechaDesde)
-                  AND (@FechaHastaExclusive IS NULL OR c.FECHA < @FechaHastaExclusive)
-                  AND (@ClienteLike IS NULL OR c.CUENTA LIKE @ClienteLike OR c.NOMBRE LIKE @ClienteLike)
-                  AND (@Usuario IS NULL OR c.Usuario = @Usuario)
-                  AND (@Sucursal IS NULL OR CONVERT(varchar(50), c.UNEGOCIO) = @Sucursal)
-                  AND (@Deposito IS NULL OR CONVERT(varchar(50), i.IdDeposito) = @Deposito)
-                  AND (@TipoComprobante IS NULL OR c.TC = @TipoComprobante)
-                GROUP BY i.IDARTICULO, i.DESCRIPCION
-                ORDER BY SUM(i.CANTIDAD) DESC
+                    d.DESCRIPCION AS Categoria,
+                    CONVERT(varchar(50), d.Articulo) AS Codigo,
+                    SUM(d.Consumo) AS Total
+                FROM dbo.VT_DETALLEIVAPROFORMA d
+                {detWhereArt}
+                GROUP BY d.Articulo, d.DESCRIPCION
+                ORDER BY SUM(d.Consumo) DESC
                 """, cn, cmd => BindVentasFilters(cmd, filters), token);
 
-            var articulos = await QueryVentasArticulosAsync("""
+            var articulos = await QueryVentasArticulosAsync($"""
                 SELECT
-                    CONVERT(varchar(50), i.IDARTICULO) AS IdArticulo,
-                    i.DESCRIPCION,
-                    SUM(i.CANTIDAD) AS CantidadVendida,
-                    SUM(i.TOTAL) AS TotalVendido,
-                    COUNT(DISTINCT CONCAT(CONVERT(varchar(50), c.TC), '|', CONVERT(varchar(50), c.IDCOMPROBANTE), '|', CONVERT(varchar(50), c.IDCOMPLEMENTO))) AS CantidadComprobantes,
-                    MAX(c.FECHA) AS UltimaVenta
-                FROM dbo.V_MV_CpteInsumos i
-                INNER JOIN dbo.V_MV_Cpte c
-                    ON c.TC = i.TC
-                   AND c.IDCOMPROBANTE = i.IDCOMPROBANTE
-                   AND c.IDCOMPLEMENTO = i.IDCOMPLEMENTO
-                INNER JOIN dbo.V_TA_Cpte tc ON tc.CODIGO = c.TC
-                WHERE UPPER(LTRIM(RTRIM(tc.SISTEMA))) = 'VENTAS'
-                  AND (
-                      c.TC LIKE 'FC%'
-                      OR c.TC LIKE 'NC%'
-                      OR c.TC LIKE 'ND%'
-                      OR c.TC LIKE 'FP%'
-                  )
-                  AND (@FechaDesde IS NULL OR c.FECHA >= @FechaDesde)
-                  AND (@FechaHastaExclusive IS NULL OR c.FECHA < @FechaHastaExclusive)
-                  AND (@ClienteLike IS NULL OR c.CUENTA LIKE @ClienteLike OR c.NOMBRE LIKE @ClienteLike)
-                  AND (@Usuario IS NULL OR c.Usuario = @Usuario)
-                  AND (@Sucursal IS NULL OR CONVERT(varchar(50), c.UNEGOCIO) = @Sucursal)
-                  AND (@Deposito IS NULL OR CONVERT(varchar(50), i.IdDeposito) = @Deposito)
-                  AND (@TipoComprobante IS NULL OR c.TC = @TipoComprobante)
-                GROUP BY i.IDARTICULO, i.DESCRIPCION
-                ORDER BY SUM(i.TOTAL) DESC
+                    CONVERT(varchar(50), d.Articulo) AS IdArticulo,
+                    d.DESCRIPCION,
+                    SUM(d.Consumo) AS CantidadVendida,
+                    SUM(d.ValorVtaCIVA) AS TotalVendido,
+                    COUNT(DISTINCT d.TC + d.IDCOMPROBANTE) AS CantidadComprobantes,
+                    MAX(d.FECHA) AS UltimaVenta
+                FROM dbo.VT_DETALLEIVAPROFORMA d
+                {detWhereArt}
+                GROUP BY d.Articulo, d.DESCRIPCION
+                ORDER BY SUM(d.ValorVtaCIVA) DESC
                 """, cn, cmd => BindVentasFilters(cmd, filters), token);
 
             return new VentasArticulosPageDto
@@ -772,6 +611,167 @@ public sealed class GestionDashboardService(
             };
         }, "No se pudo cargar la página de artículos de ventas.", ct);
     }
+
+    public async Task<VentasComprobantesPageDto> GetVentasComprobantesAsync(VentasDashboardFilters filters, CancellationToken ct = default)
+    {
+        filters ??= new VentasDashboardFilters();
+
+        return await ExecuteLoggedAsync("Ventas", "GetComprobantes", async token =>
+        {
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+
+            const string libWhere = """
+                WHERE (@FechaDesde IS NULL OR l.FECHA >= @FechaDesde)
+                  AND (@FechaHastaExclusive IS NULL OR l.FECHA < @FechaHastaExclusive)
+                  AND (@ClienteLike IS NULL OR l.CUENTA LIKE @ClienteLike OR l.CABNOMBRE LIKE @ClienteLike)
+                  AND (@Usuario IS NULL OR l.USUARIO_LOGEADO = @Usuario)
+                  AND (@Sucursal IS NULL OR CONVERT(varchar(50), l.UNEGOCIO) = @Sucursal)
+                  AND (@TipoComprobante IS NULL OR l.TC = @TipoComprobante)
+                """;
+
+            var kpis = await QuerySingleAsync($"""
+                SELECT
+                    ISNULL(SUM(l.IMPORTE), 0) AS TotalImporte,
+                    COUNT(DISTINCT l.TC + l.IdComprobante) AS TotalComprobantes,
+                    COUNT(DISTINCT l.CUENTA) AS ClientesActivos,
+                    ISNULL(CASE WHEN COUNT(DISTINCT l.TC + l.IdComprobante) = 0 THEN 0
+                                ELSE SUM(l.IMPORTE) / COUNT(DISTINCT l.TC + l.IdComprobante) END, 0) AS TicketPromedio
+                FROM dbo.Libro_VentasConFP l
+                {libWhere}
+                """, cn, r => new VentasComprobantesPageDto
+                {
+                    TotalImporte = GetDecimal(r, 0),
+                    TotalComprobantes = GetInt(r, 1),
+                    ClientesActivos = GetInt(r, 2),
+                    TicketPromedio = GetDecimal(r, 3)
+                }, cmd => BindVentasFilters(cmd, filters), token) ?? new VentasComprobantesPageDto();
+
+            var rows = await QueryVentasComprobantesAsync($"""
+                SELECT TOP (501)
+                    l.TC,
+                    l.IdComprobante,
+                    l.FECHA,
+                    l.CUENTA,
+                    ISNULL(NULLIF(LTRIM(RTRIM(l.CABNOMBRE)), ''), l.CUENTA) AS Cliente,
+                    l.IMPORTE,
+                    LTRIM(RTRIM(ISNULL(l.USUARIO_LOGEADO, ''))) AS Usuario
+                FROM dbo.Libro_VentasConFP l
+                {libWhere}
+                ORDER BY l.FECHA DESC, l.IdComprobante DESC
+                """, cn, cmd => BindVentasFilters(cmd, filters), token);
+
+            var hayMas = rows.Count > 500;
+
+            return new VentasComprobantesPageDto
+            {
+                TotalImporte = kpis.TotalImporte,
+                TotalComprobantes = kpis.TotalComprobantes,
+                ClientesActivos = kpis.ClientesActivos,
+                TicketPromedio = kpis.TicketPromedio,
+                HayMasResultados = hayMas,
+                Comprobantes = hayMas ? rows.Take(500).ToList() : rows
+            };
+        }, "No se pudo cargar el listado de comprobantes.", ct);
+    }
+
+    public Task<IReadOnlyList<VentasComprobanteItemDto>> GetVentasComprobanteItemsAsync(string tc, string idComprobante, CancellationToken ct = default)
+        => ExecuteLoggedAsync("Ventas", "GetComprobanteItems", async token =>
+        {
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+
+            return await QueryVentasComprobanteItemsAsync("""
+                SELECT
+                    CONVERT(varchar(50), d.Articulo) AS IdArticulo,
+                    LTRIM(RTRIM(ISNULL(d.DESCRIPCION, ''))) AS Descripcion,
+                    CAST(CASE WHEN d.TC IN ('NC', 'NCFP') THEN d.Consumo * -1 ELSE d.Consumo END AS decimal(10,2)) AS Cantidad,
+                    CAST(CASE WHEN d.TC IN ('FP', 'NCFP') THEN d.ValorVtaCIVA ELSE (d.ValorVenta + d.Impuestos) END AS decimal(10,2)) AS PrecioNeto,
+                    ISNULL(d.ValorVtaCIVA, 0) AS TotalConIVA,
+                    ISNULL(d.Costo / CASE WHEN ISNULL(d.Consumo, 0) = 0 THEN 1 ELSE d.Consumo END, 0) AS CostoUnit,
+                    ISNULL(d.DescRubro, '') AS Rubro
+                FROM dbo.VT_DETALLEIVAPROFORMA_COMPLETO d
+                WHERE d.TC = @TC
+                  AND d.IDCOMPROBANTE = @IDCOMPROBANTE
+                ORDER BY d.Articulo
+                """, cn, cmd =>
+            {
+                cmd.Parameters.AddWithValue("@TC", tc);
+                cmd.Parameters.AddWithValue("@IDCOMPROBANTE", idComprobante);
+            }, token);
+        }, "No se pudo cargar el detalle del comprobante.", ct);
+
+    public Task<VentasResumenTcPageDto> GetVentasResumenPorTcAsync(VentasDashboardFilters filters, CancellationToken ct = default)
+        => ExecuteLoggedAsync("Ventas", "GetResumenPorTc", async token =>
+        {
+            filters ??= new VentasDashboardFilters();
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+
+            const string libWhere = """
+                WHERE (@FechaDesde IS NULL OR l.FECHA >= @FechaDesde)
+                  AND (@FechaHastaExclusive IS NULL OR l.FECHA < @FechaHastaExclusive)
+                  AND (@ClienteLike IS NULL OR l.CUENTA LIKE @ClienteLike OR l.CABNOMBRE LIKE @ClienteLike)
+                  AND (@Usuario IS NULL OR l.USUARIO_LOGEADO = @Usuario)
+                  AND (@Sucursal IS NULL OR CONVERT(varchar(50), l.UNEGOCIO) = @Sucursal)
+                  AND (@TipoComprobante IS NULL OR l.TC = @TipoComprobante)
+                """;
+
+            const string ivaSlots = """
+                CASE WHEN ISNULL(l.LIVA_AlicIVA,  0) = {0} THEN ISNULL(l.LIVA_ImpIVA,  0) ELSE 0 END +
+                CASE WHEN ISNULL(l.LIVA_AlicIva2, 0) = {0} THEN ISNULL(l.LIVA_ImpIva2, 0) ELSE 0 END +
+                CASE WHEN ISNULL(l.LIVA_AlicIVA3, 0) = {0} THEN ISNULL(l.LIVA_ImpIVA3, 0) ELSE 0 END +
+                CASE WHEN ISNULL(l.LIVA_AlicIVA4, 0) = {0} THEN ISNULL(l.LIVA_ImpIVA4, 0) ELSE 0 END
+                """;
+
+            var sql = $"""
+                SELECT
+                    l.TC,
+                    COUNT(DISTINCT l.IdComprobante)                                    AS Cantidad,
+                    SUM(CASE WHEN l.TC NOT IN ('FP','NCFP') THEN ISNULL(l.LIVA_ImpNetoGrav, 0) ELSE 0 END)                                                AS NetoGravado,
+                    SUM(CASE WHEN l.TC NOT IN ('FP','NCFP') THEN ISNULL(l.LIVA_ImpNetoNGrav, 0) + ISNULL(l.LIVA_EXENTO, 0) ELSE 0 END)                    AS NetoNoGravado,
+                    SUM(CASE WHEN l.TC NOT IN ('FP','NCFP') THEN {string.Format(ivaSlots, "21")} ELSE 0 END)   AS Iva21,
+                    SUM(CASE WHEN l.TC NOT IN ('FP','NCFP') THEN {string.Format(ivaSlots, "10.5")} ELSE 0 END) AS Iva105,
+                    SUM(CASE WHEN l.TC NOT IN ('FP','NCFP') THEN ISNULL(l.LIVA_ImpIVARec, 0) ELSE 0 END)                                                  AS IvaRec,
+                    SUM(CASE WHEN l.TC NOT IN ('FP','NCFP') THEN ISNULL(l.LIVA_Ret_IBtos, 0) ELSE 0 END)                                                  AS RetIIBB,
+                    SUM(CASE WHEN l.TC NOT IN ('FP','NCFP') THEN ISNULL(l.LIVA_Ret_Ganancias, 0) ELSE 0 END)                                              AS RetGanancias,
+                    SUM(CASE WHEN l.TC NOT IN ('FP','NCFP') THEN ISNULL(l.LIVA_Ret_Perc, 0) ELSE 0 END)                                                   AS RetIVA,
+                    SUM(CASE WHEN l.TC IN ('FP','NCFP') THEN l.IMPORTE ELSE ISNULL(l.LIVA_TOTAL, 0) END)                                                  AS Total
+                FROM dbo.Libro_VentasConFP l
+                {libWhere}
+                GROUP BY l.TC
+                ORDER BY l.TC
+                """;
+
+            var filas = new List<VentasResumenTcDto>();
+            await using var cmd = new SqlCommand(sql, cn);
+            BindVentasFilters(cmd, filters);
+            await using var rd = await cmd.ExecuteReaderAsync(token);
+            while (await rd.ReadAsync(token))
+            {
+                filas.Add(new VentasResumenTcDto
+                {
+                    Tc           = GetStringValue(rd, 0),
+                    Cantidad     = GetInt(rd, 1),
+                    NetoGravado  = GetDecimal(rd, 2),
+                    NetoNoGravado= GetDecimal(rd, 3),
+                    Iva21        = GetDecimal(rd, 4),
+                    Iva105       = GetDecimal(rd, 5),
+                    IvaRec       = GetDecimal(rd, 6),
+                    RetIIBB      = GetDecimal(rd, 7),
+                    RetGanancias = GetDecimal(rd, 8),
+                    RetIVA       = GetDecimal(rd, 9),
+                    Total        = GetDecimal(rd, 10)
+                });
+            }
+
+            return new VentasResumenTcPageDto
+            {
+                TotalComprobantes = filas.Sum(x => x.Cantidad),
+                TotalGeneral      = filas.Sum(x => x.Total),
+                Filas             = filas
+            };
+        }, "No se pudo cargar el resumen por tipo de comprobante.", ct);
 
     public async Task<StockDashboardDto> GetStockAsync(StockDashboardFilters filters, CancellationToken ct = default)
     {
@@ -1299,6 +1299,50 @@ public sealed class GestionDashboardService(
             });
         }
 
+        return items;
+    }
+
+    private async Task<List<VentasComprobanteResumenDto>> QueryVentasComprobantesAsync(string sql, SqlConnection cn, Action<SqlCommand>? bind, CancellationToken ct)
+    {
+        var items = new List<VentasComprobanteResumenDto>();
+        await using var cmd = new SqlCommand(sql, cn);
+        bind?.Invoke(cmd);
+        await using var rd = await cmd.ExecuteReaderAsync(ct);
+        while (await rd.ReadAsync(ct))
+        {
+            items.Add(new VentasComprobanteResumenDto
+            {
+                Tc = GetStringValue(rd, 0),
+                IdComprobante = GetStringValue(rd, 1),
+                Fecha = rd.IsDBNull(2) ? DateTime.MinValue : rd.GetDateTime(2),
+                Cuenta = GetStringValue(rd, 3),
+                Cliente = GetStringValue(rd, 4),
+                Importe = GetDecimal(rd, 5),
+                Usuario = GetStringValue(rd, 6)
+            });
+        }
+        return items;
+    }
+
+    private async Task<IReadOnlyList<VentasComprobanteItemDto>> QueryVentasComprobanteItemsAsync(string sql, SqlConnection cn, Action<SqlCommand>? bind, CancellationToken ct)
+    {
+        var items = new List<VentasComprobanteItemDto>();
+        await using var cmd = new SqlCommand(sql, cn);
+        bind?.Invoke(cmd);
+        await using var rd = await cmd.ExecuteReaderAsync(ct);
+        while (await rd.ReadAsync(ct))
+        {
+            items.Add(new VentasComprobanteItemDto
+            {
+                IdArticulo = GetStringValue(rd, 0),
+                Descripcion = GetStringValue(rd, 1),
+                Cantidad = GetDecimal(rd, 2),
+                PrecioNeto = GetDecimal(rd, 3),
+                TotalConIVA = GetDecimal(rd, 4),
+                CostoUnit = GetDecimal(rd, 5),
+                Rubro = GetStringValue(rd, 6)
+            });
+        }
         return items;
     }
 

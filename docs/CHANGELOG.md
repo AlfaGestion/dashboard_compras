@@ -4,6 +4,34 @@ Formato: `[versión] — fecha — descripción`
 
 ---
 
+## [1.5.0] — 2026-04-27
+
+### Módulo Ventas — Correcciones de datos y nuevas páginas
+
+**Fuente de datos corregida — importes contables**
+- Todas las consultas de KPIs, clientes y comprobantes migradas de `V_MV_Cpte.IMPORTE` (campo operativo) a `Libro_VentasConFP.IMPORTE` (total contable con signo). Los valores del dashboard ahora coinciden con el libro IVA ventas.
+- Los módulos Rubros, Familias y Artículos ahora leen montos desde `VT_DETALLEIVAPROFORMA.ValorVtaCIVA` y filtran el conjunto de comprobantes válidos via `EXISTS` sobre `Libro_VentasConFP`, garantizando consistencia con el resto del módulo.
+
+**TC NCFP incluido en ventas**
+- Eliminado el `INNER JOIN dbo.V_TA_Cpte` con filtro `SISTEMA='VENTAS'` que excluía la Nota de Crédito de Factura Proforma (NCFP) por no estar registrada en esa tabla. Las 16 ocurrencias fueron removidas del servicio; `V_MV_Cpte` y `C_MV_Cpte` son tablas separadas por módulo, por lo que el filtro era innecesario.
+
+**Página Comprobantes rediseñada**
+- Reemplazado el listado de comprobantes individuales por una tabla resumen agrupada por tipo de comprobante (TC).
+- Columnas: TC · Cantidad · Neto Gravado · No Gravado · IVA 21% · IVA 10,5% · IVA Rec. · Ret. IIBB · Ret. Ganancias · Ret. IVA · **Total**.
+- Para FP y NCFP (proforma, no van al libro IVA) sólo se muestra el Total; el resto de columnas queda vacío.
+- Fila de totales al pie de la tabla.
+- Los IVA 21% e IVA 10,5% se calculan sumando los 4 slots de alícuota de `Libro_VentasConFP` (`LIVA_AlicIVA`, `LIVA_AlicIva2`, `LIVA_AlicIVA3`, `LIVA_AlicIVA4`).
+
+**Gráfico de evolución mensual mejorado**
+- Eje Y: valores abreviados con sufijo M/K/B (`$ 107M`, `$ 74K`) — ya no se desbordan ni quedan cortados.
+- Eje X: períodos formateados como `Abr '25` en lugar del formato crudo `2025-04`.
+- Margen izquierdo del SVG ampliado de 56 a 70 unidades.
+
+**Vistas SQL de compras — TC NCCP incluido**
+- `vw_compras_cabecera_dashboard` y `vw_compras_detalle_dashboard` actualizadas para incluir `NCCP` (Nota de Crédito de Compras Proforma) en los `CASE` de signo (`SignoBase = -1`) y en `TipoMovimiento = 'Proforma'`. Ejecutar los scripts en la base para aplicar el cambio.
+
+---
+
 ## [1.4.0] — 2026-04-24
 
 ### Módulo Costos — Revisión operativa, matching y auditoría

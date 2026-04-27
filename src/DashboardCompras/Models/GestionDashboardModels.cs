@@ -147,3 +147,57 @@ public sealed class VentasArticulosPageDto
     public IReadOnlyList<CategoryTotalDto> TopPorCantidad { get; init; } = [];
     public IReadOnlyList<VentasArticuloResumenDto> Articulos { get; init; } = [];
 }
+
+public sealed class VentasComprobanteResumenDto
+{
+    public string Tc { get; init; } = string.Empty;
+    public string IdComprobante { get; init; } = string.Empty;
+    public DateTime Fecha { get; init; }
+    public string Cuenta { get; init; } = string.Empty;
+    public string Cliente { get; init; } = string.Empty;
+    public decimal Importe { get; init; }
+    public string Usuario { get; init; } = string.Empty;
+}
+
+public sealed class VentasComprobanteItemDto
+{
+    public string IdArticulo { get; init; } = string.Empty;
+    public string Descripcion { get; init; } = string.Empty;
+    public decimal Cantidad { get; init; }
+    public decimal PrecioNeto { get; init; }
+    public decimal TotalConIVA { get; init; }
+    public decimal CostoUnit { get; init; }
+    public string Rubro { get; init; } = string.Empty;
+}
+
+public sealed class VentasComprobantesPageDto
+{
+    public decimal TotalImporte { get; init; }
+    public int TotalComprobantes { get; init; }
+    public int ClientesActivos { get; init; }
+    public decimal TicketPromedio { get; init; }
+    public bool HayMasResultados { get; init; }
+    public IReadOnlyList<VentasComprobanteResumenDto> Comprobantes { get; init; } = [];
+}
+
+public sealed class VentasResumenTcDto
+{
+    public string Tc { get; init; } = string.Empty;
+    public int Cantidad { get; init; }
+    public decimal NetoGravado { get; init; }
+    public decimal NetoNoGravado { get; init; }
+    public decimal Iva21 { get; init; }
+    public decimal Iva105 { get; init; }
+    public decimal IvaRec { get; init; }
+    public decimal RetIIBB { get; init; }
+    public decimal RetGanancias { get; init; }
+    public decimal RetIVA { get; init; }
+    public decimal Total { get; init; }
+}
+
+public sealed class VentasResumenTcPageDto
+{
+    public int TotalComprobantes { get; init; }
+    public decimal TotalGeneral { get; init; }
+    public IReadOnlyList<VentasResumenTcDto> Filas { get; init; } = [];
+}
