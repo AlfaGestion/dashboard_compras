@@ -1,7 +1,8 @@
 @echo off
 setlocal
 
-set "SERVICE_NAME=DashboardCompras"
+set "SERVICE_NAME=AlfaCore"
+set "LEGACY_SERVICE_NAME=DashboardCompras"
 set "SILENT="
 if /i "%~1"=="/silent" set "SILENT=1"
 
@@ -14,8 +15,19 @@ if errorlevel 1 (
 )
 
 echo ================================================
-echo Dashboard de Compras - Desinstalar servicio
+echo AlfaCore - Desinstalar servicio
 echo ================================================
+
+if /i not "%LEGACY_SERVICE_NAME%"=="%SERVICE_NAME%" (
+    sc query "%LEGACY_SERVICE_NAME%" >nul 2>&1
+    if not errorlevel 1 (
+        echo Eliminando servicio anterior %LEGACY_SERVICE_NAME%...
+        sc stop "%LEGACY_SERVICE_NAME%" >nul 2>&1
+        timeout /t 4 /nobreak >nul
+        sc delete "%LEGACY_SERVICE_NAME%" >nul 2>&1
+        timeout /t 2 /nobreak >nul
+    )
+)
 
 sc query "%SERVICE_NAME%" >nul 2>&1
 if errorlevel 1 (

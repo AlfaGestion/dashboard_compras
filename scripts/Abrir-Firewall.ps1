@@ -15,7 +15,7 @@ if (-not $appSettingsPath) {
 
 $config = Get-Content $appSettingsPath -Raw | ConvertFrom-Json
 $port = [int]$config.ServidorWeb.Puerto
-$ruleName = "DashboardComprasLAN-$port"
+$ruleName = "AlfaCoreLAN-$port"
 
 if (-not (Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue)) {
     New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Protocol TCP -LocalPort $port -Action Allow | Out-Null

@@ -45,7 +45,7 @@ internal static class StartupConnectionResolver
 
         if (string.IsNullOrWhiteSpace(builder.ApplicationName))
         {
-            builder.ApplicationName = "DashboardCompras";
+            builder.ApplicationName = "AlfaCore";
         }
 
         if (builder.IntegratedSecurity)

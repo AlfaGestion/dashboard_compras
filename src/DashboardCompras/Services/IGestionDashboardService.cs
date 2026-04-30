@@ -19,4 +19,6 @@ public interface IGestionDashboardService
     Task<CajaBancosDashboardDto> GetCajaBancosAsync(CajaBancosDashboardFilters filters, CancellationToken ct = default);
     Task<ContabilidadFilterOptionsDto> GetContabilidadFilterOptionsAsync(CancellationToken ct = default);
     Task<ContabilidadDashboardDto> GetContabilidadAsync(ContabilidadDashboardFilters filters, CancellationToken ct = default);
+    Task<PosicionIvaDto> GetPosicionIvaAsync(ContabilidadDashboardFilters filters, CancellationToken ct = default);
+    Task<BalanceSaldosDto> GetBalanceSaldosAsync(ContabilidadDashboardFilters filters, int nivel = 2, CancellationToken ct = default);
 }

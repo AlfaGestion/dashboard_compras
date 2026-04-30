@@ -1,11 +1,11 @@
-# AGENTE.md
+# AGENTS.md
 
 Este proyecto utiliza reglas obligatorias definidas en:
 
 ## Lectura obligatoria (siempre)
 
-- CODEX_RULES.md
-- DATABASE_OBJETOS_SQL_PRIORITARIOS.md
+- /docs/CODEX_RULES.md
+- /docs/DATABASE_OBJETOS_SQL_PRIORITARIOS.md
 
 Estas definen:
 - cómo trabajar
@@ -16,7 +16,7 @@ Estas definen:
 
 ## Lectura opcional (solo si es necesario)
 
-- DATABASE_TABLES_SUMMARY.md
+- /docs/DATABASE_TABLES_SUMMARY.md
 
 Usar únicamente cuando:
 - se necesite entender una tabla específica
@@ -40,7 +40,13 @@ No cargar este archivo completo si no es necesario.
 
 Antes de usar una tabla:
 
-1. Revisar DATABASE_OBJETOS_SQL_PRIORITARIOS.md
-2. Si no alcanza → consultar DATABASE_TABLES_SUMMARY.md
+1. Revisar /docs/DATABASE_OBJETOS_SQL_PRIORITARIOS.md
+2. Si no alcanza → consultar /docs/DATABASE_TABLES_SUMMARY.md
 
 
+## Verificación asistida del catálogo
+
+Antes de finalizar una tarea, ejecutar:
+
+```bash
+python tools/catalogo/check_catalogo.py

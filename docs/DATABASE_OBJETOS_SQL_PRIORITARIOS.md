@@ -94,6 +94,8 @@ No asumir tipo técnico por nombre.
 |---|---|---|
 | `Libro_VentasConFP` | Ventas / IVA / cuenta corriente | Movimientos de ventas con proformas. Proforma = afecta cuenta corriente/contabilidad pero no libro IVA. |
 | `Libro_ComprasConFP` | Compras / IVA / cuenta corriente | Movimientos de compras con proformas. |
+| `Libro_Ventas` | Ventas / IVA / libro de IVA Ventas. |
+| `Libro_Compras` | Compras / IVA / Libro de IVA Compras |
 | `VE_COBRANZAS_REALIZADAS` | Ventas / cobranzas | Consultar cobranzas realizadas. |
 | `CO_PAGOS_REALIZADOS` | Compras / pagos | Consultar pagos realizados. |
 | `CO_CPTES_IMPAGOS_2026` | Compras / deuda | Comprobantes impagos de compras. Verificar si es vista/script vigente por año. |

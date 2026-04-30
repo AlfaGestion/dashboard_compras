@@ -1,0 +1,92 @@
+@using DashboardCompras.Models
+
+@if (Data.Count == 0)
+{
+    <p class="chart-empty">Sin movimientos en el período seleccionado.</p>
+}
+else
+{
+    <div class="table-scroll">
+        <table class="data-table resumen-alicuota-table">
+            <thead>
+                <tr>
+                    <th>Condición IVA</th>
+                    <th class="col-num">Alícuota</th>
+                    <th class="col-num">@FcLabel</th>
+                    <th class="col-num">NC</th>
+                    <th class="col-num">ND</th>
+                    <th class="col-num col-total">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var grupo in _grupos)
+                {
+                    @foreach (var (fila, idx) in grupo.Filas.Select((f, i) => (f, i)))
+                    {
+                        <tr>
+                            <td class="@(idx == 0 ? "cell-cond" : "")">@(idx == 0 ? grupo.Key : "")</td>
+                            <td class="col-num">@fila.Alicuota.ToString("0.00", _esAr)</td>
+                            <td class="col-num">@FmtMoney(fila.FC)</td>
+                            <td class="col-num @(fila.NC < 0 ? "text-danger" : "")">@FmtMoney(fila.NC)</td>
+                            <td class="col-num">@FmtMoney(fila.ND)</td>
+                            <td class="col-num col-total">@FmtMoney(fila.Total)</td>
+                        </tr>
+                    }
+                    <tr class="row-subtotal">
+                        <td colspan="2"><em>Total @grupo.Key</em></td>
+                        <td class="col-num">@FmtMoney(grupo.SubFC)</td>
+                        <td class="col-num @(grupo.SubNC < 0 ? "text-danger" : "")">@FmtMoney(grupo.SubNC)</td>
+                        <td class="col-num">@FmtMoney(grupo.SubND)</td>
+                        <td class="col-num col-total">@FmtMoney(grupo.SubFC + grupo.SubNC + grupo.SubND)</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr class="row-totals">
+                    <td colspan="2"><strong>Total</strong></td>
+                    <td class="col-num"><strong>@FmtMoney(Data.Sum(f => f.FC))</strong></td>
+                    <td class="col-num @(Data.Sum(f => f.NC) < 0 ? "text-danger" : "")"><strong>@FmtMoney(Data.Sum(f => f.NC))</strong></td>
+                    <td class="col-num"><strong>@FmtMoney(Data.Sum(f => f.ND))</strong></td>
+                    <td class="col-num col-total"><strong>@FmtMoney(Data.Sum(f => f.Total))</strong></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<ResumenAlicuotaFilaDto> Data { get; set; } = [];
+    [Parameter] public string FcLabel { get; set; } = "FC";
+
+    private sealed record GrupoAlicuota(
+        string Key,
+        List<ResumenAlicuotaFilaDto> Filas,
+        decimal SubFC, decimal SubNC, decimal SubND);
+
+    private IReadOnlyList<GrupoAlicuota> _grupos = [];
+
+    protected override void OnParametersSet()
+    {
+        _grupos = Data
+            .GroupBy(f => f.CondicionIVA)
+            .OrderBy(g => CondicionOrder(g.Key))
+            .Select(g =>
+            {
+                var filas = g.OrderBy(f => f.Alicuota).ToList();
+                return new GrupoAlicuota(
+                    g.Key, filas,
+                    filas.Sum(f => f.FC),
+                    filas.Sum(f => f.NC),
+                    filas.Sum(f => f.ND));
+            })
+            .ToList();
+    }
+
+    private static int CondicionOrder(string c) =>
+        c == "C.F." ? 1 : c == "EX." ? 2 : c == "MONO." ? 3 : c == "R.I." ? 4 : 5;
+
+    private static readonly System.Globalization.CultureInfo _esAr =
+        System.Globalization.CultureInfo.GetCultureInfo("es-AR");
+
+    private static string FmtMoney(decimal v) => v.ToString("$ #,##0.00", _esAr);
+}

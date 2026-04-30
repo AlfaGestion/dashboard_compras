@@ -16,7 +16,7 @@ if defined CONFIG_FILE (
 )
 
 echo ===============================================
-echo Dashboard de Compras - Alfa Gestion
+echo AlfaCore - Alfa Gestion
 echo Carpeta de trabajo: %CD%
 if defined CONFIG_FILE (
   echo Configuracion detectada: %CONFIG_FILE%
@@ -28,8 +28,8 @@ echo Si la app escucha en LAN, otras PCs podran entrar por:
 echo http://NOMBRE-PC:%PUERTO%
 echo ===============================================
 echo Cerrando instancia anterior si existe...
-for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "$exe = Join-Path (Get-Location) 'bin\\Release\\net8.0\\DashboardCompras.exe'; $p = Get-Process DashboardCompras -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe } | Select-Object -ExpandProperty Id; foreach ($id in $p) { Write-Output $id }" 2^>nul`) do (
-  echo Deteniendo DashboardCompras PID %%I...
+for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "$exe = Join-Path (Get-Location) 'bin\\Release\\net8.0\\AlfaCore.exe'; $p = Get-Process AlfaCore -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe } | Select-Object -ExpandProperty Id; foreach ($id in $p) { Write-Output $id }" 2^>nul`) do (
+  echo Deteniendo AlfaCore PID %%I...
   powershell -NoProfile -ExecutionPolicy Bypass -Command "Stop-Process -Id %%I -Force"
 )
 echo Iniciando servidor...

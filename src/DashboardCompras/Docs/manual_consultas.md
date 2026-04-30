@@ -133,7 +133,7 @@ Se puede cambiar manualmente si se necesita una clave específica.
 
 ### SQL
 
-La consulta SQL se escribe en el área de texto. Solo se permiten instrucciones de lectura (`SELECT`). Las instrucciones de escritura (`INSERT`, `UPDATE`, `DELETE`, `DROP`, etc.) son rechazadas por el sistema.
+La consulta SQL se escribe en el área de texto. Solo se permiten bloques de lectura. Podés usar un `SELECT` directo o preparar variables locales con `DECLARE` / `SET` antes del `SELECT` final. Las instrucciones de escritura (`INSERT`, `UPDATE`, `DELETE`, `DROP`, etc.) son rechazadas por el sistema.
 
 ### Parámetros en el SQL
 
@@ -296,7 +296,7 @@ La CLAVE define la posición de cada nodo en la jerarquía del árbol. Reglas:
 
 ### ¿Qué tipos de SQL están permitidos?
 
-Solo `SELECT`. El sistema rechaza `INSERT`, `UPDATE`, `DELETE`, `DROP`, `EXEC`, `TRUNCATE` y variantes. Esto protege la integridad de los datos.
+Se aceptan consultas de lectura que devuelvan resultados con `SELECT`. También podés usar `WITH` para CTEs y preparar variables locales con `DECLARE` y `SET` antes del `SELECT`. El sistema rechaza `INSERT`, `UPDATE`, `DELETE`, `DROP`, `EXEC`, `TRUNCATE` y variantes.
 
 ### ¿La consulta tarda mucho y no termina?
 
@@ -307,7 +307,7 @@ El tiempo máximo de ejecución es de **60 segundos**. Si se supera, aparece un 
 
 ### ¿Puedo usar JOINs y subconsultas en el SQL?
 
-Sí. El validador solo verifica que no haya instrucciones de escritura. Cualquier `SELECT` válido para SQL Server es aceptado.
+Sí. El validador permite consultas de solo lectura para SQL Server, incluyendo `JOIN`, subconsultas, CTEs y variables locales (`DECLARE` / `SET`) siempre que el bloque termine resolviendo un `SELECT`.
 
 ### ¿Los cambios en las consultas afectan a otros usuarios?
 

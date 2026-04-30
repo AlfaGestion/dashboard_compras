@@ -1,6 +1,6 @@
-#define MyAppName "Dashboard de Compras - Alfa Gestion"
+#define MyAppName "AlfaCore"
 #define MyAppPublisher "Alfa Gestion"
-#define MyAppExeName "DashboardCompras.exe"
+#define MyAppExeName "AlfaCore.exe"
 #define MyAppLauncher "iniciar_dashboard.bat"
 #define MyAppShellLauncher "abrir_dashboard_shell.bat"
 #define MyReadmeName "README_INSTALACION.md"
@@ -10,11 +10,11 @@
 #endif
 
 #ifndef SourceDir
-  #define SourceDir "..\publish\DashboardComprasInstaller\Input"
+  #define SourceDir "..\publish\AlfaCoreInstaller\Input"
 #endif
 
 #ifndef OutputDir
-  #define OutputDir "..\publish\DashboardComprasInstaller\Output"
+  #define OutputDir "..\publish\AlfaCoreInstaller\Output"
 #endif
 
 [Setup]
@@ -22,14 +22,14 @@ AppId={{A3C27933-8FEA-4D63-90D0-1F334CEFC4B1}
 AppName={#MyAppName}
 AppVersion={#AppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={autopf}\Alfa Gestion\Dashboard de Compras
-DefaultGroupName=Alfa Gestion\Dashboard de Compras
+DefaultDirName={autopf}\Alfa Gestion\AlfaCore
+DefaultGroupName=Alfa Gestion\AlfaCore
 DisableProgramGroupPage=yes
 PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#OutputDir}
-OutputBaseFilename=DashboardComprasSetup_{#AppVersion}
+OutputBaseFilename=AlfaCoreSetup_{#AppVersion}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -44,7 +44,7 @@ Name: "desktopicon"; Description: "Crear acceso directo en el escritorio"; Group
 Name: "installservice"; Description: "Instalar como servicio de Windows (inicio automatico con el servidor)"; GroupDescription: "Servicio de Windows:"; Flags: checkedonce
 Name: "openreadme"; Description: "Abrir manual de instalacion al finalizar"; GroupDescription: "Acciones sugeridas:"; Flags: checkedonce
 Name: "openfirewall"; Description: "Abrir el puerto en Firewall de Windows al finalizar"; GroupDescription: "Acciones sugeridas:"; Flags: unchecked
-Name: "launchapp"; Description: "Iniciar Dashboard de Compras al finalizar"; GroupDescription: "Acciones sugeridas:"; Flags: unchecked
+Name: "launchapp"; Description: "Iniciar AlfaCore al finalizar"; GroupDescription: "Acciones sugeridas:"; Flags: unchecked
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "appsettings.Development.json,*.pdb,*.log,prereqs\*"
@@ -53,16 +53,16 @@ Source: "{#SourceDir}\prereqs\dotnet-hosting-win.exe"; DestDir: "{tmp}"; Flags: 
 #endif
 
 [Icons]
-Name: "{autoprograms}\Alfa Gestion\Dashboard de Compras\Iniciar Dashboard"; Filename: "{app}\{#MyAppLauncher}"; WorkingDir: "{app}"; IconFilename: "{app}\{#MyAppExeName}"
-Name: "{autoprograms}\Alfa Gestion\Dashboard de Compras\Abrir Dashboard Shell"; Filename: "{app}\{#MyAppShellLauncher}"; WorkingDir: "{app}"; IconFilename: "{app}\DashboardComprasShell.exe"
-Name: "{autoprograms}\Alfa Gestion\Dashboard de Compras\Manual de instalacion"; Filename: "{app}\{#MyReadmeName}"
-Name: "{autodesktop}\Dashboard de Compras"; Filename: "{app}\{#MyAppLauncher}"; WorkingDir: "{app}"; Tasks: desktopicon; IconFilename: "{app}\{#MyAppExeName}"
+Name: "{autoprograms}\Alfa Gestion\AlfaCore\Iniciar AlfaCore"; Filename: "{app}\{#MyAppLauncher}"; WorkingDir: "{app}"; IconFilename: "{app}\{#MyAppExeName}"
+Name: "{autoprograms}\Alfa Gestion\AlfaCore\Abrir AlfaCore Shell"; Filename: "{app}\{#MyAppShellLauncher}"; WorkingDir: "{app}"; IconFilename: "{app}\AlfaCoreShell.exe"
+Name: "{autoprograms}\Alfa Gestion\AlfaCore\Manual de instalacion"; Filename: "{app}\{#MyReadmeName}"
+Name: "{autodesktop}\AlfaCore"; Filename: "{app}\{#MyAppLauncher}"; WorkingDir: "{app}"; Tasks: desktopicon; IconFilename: "{app}\{#MyAppExeName}"
 
 [Run]
 Filename: "{cmd}"; Parameters: "/c ""{app}\instalar_servicio.bat"" /silent"; Flags: runhidden waituntilterminated; Tasks: installservice
 Filename: "{app}\{#MyReadmeName}"; Description: "Abrir manual de instalacion"; Flags: postinstall shellexec skipifsilent; Tasks: openreadme
 Filename: "{cmd}"; Parameters: "/c ""{app}\abrir_firewall.bat"""; Description: "Abrir el puerto en Firewall de Windows"; Flags: postinstall runhidden waituntilterminated skipifsilent; Tasks: openfirewall
-Filename: "{cmd}"; Parameters: "/c ""{app}\{#MyAppLauncher}"""; Description: "Iniciar Dashboard de Compras"; Flags: postinstall skipifsilent; Tasks: launchapp
+Filename: "{cmd}"; Parameters: "/c ""{app}\{#MyAppLauncher}"""; Description: "Iniciar AlfaCore"; Flags: postinstall skipifsilent; Tasks: launchapp
 
 [UninstallRun]
 Filename: "{cmd}"; Parameters: "/c ""{app}\desinstalar_servicio.bat"" /silent"; Flags: runhidden waituntilterminated
@@ -160,4 +160,3 @@ begin
   end;
   #endif
 end;
-

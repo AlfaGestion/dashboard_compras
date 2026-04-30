@@ -28,7 +28,7 @@ internal sealed class BackendLauncher
 
         if (!File.Exists(_options.BackendExecutablePath))
         {
-            throw new FileNotFoundException("No se encontró DashboardCompras.exe para iniciar el backend local.", _options.BackendExecutablePath);
+            throw new FileNotFoundException("No se encontró AlfaCore.exe para iniciar el backend local.", _options.BackendExecutablePath);
         }
 
         var backendDir = Path.GetDirectoryName(_options.BackendExecutablePath) ?? AppContext.BaseDirectory;

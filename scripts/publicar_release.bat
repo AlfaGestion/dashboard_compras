@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0.."
-set "PUBLISH_DIR=.\publish\DashboardComprasLAN"
+set "PUBLISH_DIR=.\publish\AlfaCoreLAN"
 for %%I in ("%PUBLISH_DIR%") do set "PUBLISH_DIR_FULL=%%~fI"
 echo Preparando carpeta de publicacion...
 if exist "%PUBLISH_DIR%" (
@@ -15,12 +15,12 @@ if exist ".\src\DashboardComprasShell\obj" (
   powershell -NoProfile -ExecutionPolicy Bypass -Command "Remove-Item -Recurse -Force '.\src\DashboardComprasShell\obj' -ErrorAction SilentlyContinue"
 )
 echo Cerrando instancia anterior si existe...
-for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "$publishDir = (Resolve-Path '%PUBLISH_DIR_FULL%' -ErrorAction SilentlyContinue).Path; $releaseDir = (Resolve-Path '.\src\DashboardCompras\bin\Release\net8.0' -ErrorAction SilentlyContinue).Path; $targets = @(); if ($publishDir) { $targets += (Join-Path $publishDir 'DashboardCompras.exe') }; if ($releaseDir) { $targets += (Join-Path $releaseDir 'DashboardCompras.exe') }; $p = Get-Process DashboardCompras -ErrorAction SilentlyContinue | Where-Object { $_.Path -and ($targets -contains $_.Path) } | Select-Object -ExpandProperty Id; foreach ($id in $p) { Write-Output $id }" 2^>nul`) do (
-  echo Deteniendo DashboardCompras PID %%I...
+for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "$publishDir = (Resolve-Path '%PUBLISH_DIR_FULL%' -ErrorAction SilentlyContinue).Path; $releaseDir = (Resolve-Path '.\src\DashboardCompras\bin\Release\net8.0' -ErrorAction SilentlyContinue).Path; $targets = @(); if ($publishDir) { $targets += (Join-Path $publishDir 'AlfaCore.exe') }; if ($releaseDir) { $targets += (Join-Path $releaseDir 'AlfaCore.exe') }; $p = Get-Process AlfaCore -ErrorAction SilentlyContinue | Where-Object { $_.Path -and ($targets -contains $_.Path) } | Select-Object -ExpandProperty Id; foreach ($id in $p) { Write-Output $id }" 2^>nul`) do (
+  echo Deteniendo proceso backend PID %%I...
   powershell -NoProfile -ExecutionPolicy Bypass -Command "Stop-Process -Id %%I -Force"
 )
-for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "$publishDir = (Resolve-Path '%PUBLISH_DIR_FULL%' -ErrorAction SilentlyContinue).Path; if (-not $publishDir) { exit 0 }; $shellExe = Join-Path $publishDir 'DashboardComprasShell.exe'; $p = Get-Process DashboardComprasShell -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $shellExe } | Select-Object -ExpandProperty Id; foreach ($id in $p) { Write-Output $id }" 2^>nul`) do (
-  echo Deteniendo DashboardComprasShell PID %%I...
+for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "$publishDir = (Resolve-Path '%PUBLISH_DIR_FULL%' -ErrorAction SilentlyContinue).Path; if (-not $publishDir) { exit 0 }; $shellExe = Join-Path $publishDir 'AlfaCoreShell.exe'; $p = Get-Process AlfaCoreShell -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $shellExe } | Select-Object -ExpandProperty Id; foreach ($id in $p) { Write-Output $id }" 2^>nul`) do (
+  echo Deteniendo proceso shell PID %%I...
   powershell -NoProfile -ExecutionPolicy Bypass -Command "Stop-Process -Id %%I -Force"
 )
 echo Publicando release en %PUBLISH_DIR% ...
@@ -46,7 +46,7 @@ echo if defined CONFIG_FILE ^(
 echo   for /f "usebackq delims=" %%%%P in ^(`powershell -NoProfile -Command "$cfg = Get-Content '%%CD%%\%%CONFIG_FILE%%' -Raw ^| ConvertFrom-Json; if ($cfg.ServidorWeb.Puerto) { $cfg.ServidorWeb.Puerto } else { 5055 }"`^) do set "PUERTO=%%%%P"
 echo ^)
 echo echo ===============================================
-echo echo Dashboard de Compras - Alfa Gestion
+echo echo AlfaCore - Alfa Gestion
 echo echo Carpeta de trabajo: %%CD%%
 echo if defined CONFIG_FILE ^(
 echo   echo Configuracion detectada: %%CONFIG_FILE%%
@@ -58,7 +58,7 @@ echo echo Si la app escucha en LAN, otras PCs podran entrar por:
 echo echo http://NOMBRE-PC:%%PUERTO%%
 echo echo ===============================================
 echo echo Iniciando servidor...
-echo DashboardCompras.exe
+echo AlfaCore.exe
 echo endlocal
 ) > %PUBLISH_DIR%\iniciar_dashboard.bat
 
@@ -66,7 +66,7 @@ echo endlocal
 echo @echo off
 echo setlocal
 echo cd /d "%%~dp0"
-echo DashboardComprasShell.exe %%*
+echo AlfaCoreShell.exe %%*
 echo endlocal
 ) > %PUBLISH_DIR%\abrir_dashboard_shell.bat
 

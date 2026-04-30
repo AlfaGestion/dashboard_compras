@@ -38,9 +38,9 @@ internal sealed class LauncherOptions
 
         return new LauncherOptions
         {
-            Title = parser.Title ?? config.ApplicationName ?? "Dashboard de Compras - Alfa Gestión",
+            Title = parser.Title ?? config.ApplicationName ?? "AlfaCore - Alfa Gestión",
             TargetUri = new Uri(urlText, UriKind.Absolute),
-            BackendExecutablePath = Path.Combine(baseDirectory, "DashboardCompras.exe"),
+            BackendExecutablePath = Path.Combine(baseDirectory, "AlfaCore.exe"),
             ForwardedBackendArgs = parser.ForwardedBackendArgs,
             StartLocalBackend = parser.LocalMode || (!parser.RemoteMode && string.IsNullOrWhiteSpace(parser.Url) && string.IsNullOrWhiteSpace(parser.Host))
         };

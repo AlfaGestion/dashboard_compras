@@ -47,7 +47,7 @@ internal sealed class MainForm : Form
         {
             MessageBox.Show(
                 $"{ex.Message}{Environment.NewLine}{Environment.NewLine}Destino: {_options.TargetUri}",
-                "Dashboard de Compras",
+                "AlfaCore",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
             Close();

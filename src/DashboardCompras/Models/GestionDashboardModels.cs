@@ -114,6 +114,7 @@ public sealed class VentasRubrosPageDto
 public sealed class VentasFamiliaResumenDto
 {
     public string Familia { get; init; } = string.Empty;
+    public string DescripcionFamilia { get; init; } = string.Empty;
     public decimal TotalVendido { get; init; }
     public decimal Participacion { get; init; }
     public int CantidadArticulos { get; init; }
@@ -200,4 +201,61 @@ public sealed class VentasResumenTcPageDto
     public int TotalComprobantes { get; init; }
     public decimal TotalGeneral { get; init; }
     public IReadOnlyList<VentasResumenTcDto> Filas { get; init; } = [];
+}
+
+public sealed class PosicionIvaFilaDto
+{
+    public string Concepto { get; init; } = string.Empty;
+    public decimal Ventas { get; init; }
+    public decimal Compras { get; init; }
+    public decimal Diferencia => Ventas - Compras;
+}
+
+public sealed class ResumenAlicuotaFilaDto
+{
+    public string CondicionIVA { get; init; } = string.Empty;
+    public decimal Alicuota { get; init; }
+    public decimal FC { get; init; }
+    public decimal NC { get; init; }
+    public decimal ND { get; init; }
+    public decimal Total => FC + NC + ND;
+}
+
+public sealed class PosicionIvaDto
+{
+    public decimal TotalIvaVentas { get; init; }
+    public decimal TotalIvaCompras { get; init; }
+    public decimal Saldo => TotalIvaVentas - TotalIvaCompras;
+    public decimal NetoGravadoVentas { get; init; }
+    public decimal NetoGravadoCompras { get; init; }
+    public IReadOnlyList<PosicionIvaFilaDto> Filas { get; init; } = [];
+    public IReadOnlyList<MonthlyPointDto> EvolucionSaldo { get; init; } = [];
+    public IReadOnlyList<ResumenAlicuotaFilaDto> ResumenVentas { get; init; } = [];
+    public IReadOnlyList<ResumenAlicuotaFilaDto> ResumenCompras { get; init; } = [];
+}
+
+public sealed class BalanceSaldoFilaDto
+{
+    public string Codigo { get; init; } = string.Empty;
+    public string Descripcion { get; init; } = string.Empty;
+    public decimal Saldo { get; init; }
+}
+
+public sealed class BalanceSaldosDto
+{
+    public IReadOnlyList<BalanceSaldoFilaDto> Filas { get; init; } = [];
+    // Nivel 1=Capítulo, 2=SubCapítulo (por defecto), 3=Rubro, 4=SubRubro
+    public int NivelAplicado { get; init; }
+    // Dígitos totales usados para la agrupación (suma acumulada desde TA_CONFIGURACION)
+    public int TdigitosAplicados { get; init; }
+    // Cantidad de dígitos del nivel Capítulo (identifica cuentas raíz en la UI)
+    public int DigitosCapitulo { get; init; } = 1;
+    // Dígitos acumulados por nivel (ej: [1, 2, 3, 5] para 4 niveles).
+    // Permite que la UI ubique cada fila en la columna correcta según longitud de código.
+    public IReadOnlyList<int> DigitosCumulativos { get; init; } = [];
+    // KPIs derivados de las cuentas de capítulo (nivel 1 del plan de cuentas)
+    public decimal TotalActivo { get; init; }
+    public decimal TotalPasivo { get; init; }
+    public decimal PatrimonioNeto { get; init; }
+    public decimal TotalResultados { get; init; }
 }

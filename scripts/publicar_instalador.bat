@@ -6,8 +6,8 @@ set "APP_VERSION=%~1"
 if not defined APP_VERSION set "APP_VERSION=1.0.0"
 
 set "RELEASE_SCRIPT=.\scripts\publicar_release.bat"
-set "SOURCE_DIR=.\publish\DashboardComprasLAN"
-set "INSTALLER_ROOT=.\publish\DashboardComprasInstaller"
+set "SOURCE_DIR=.\publish\AlfaCoreLAN"
+set "INSTALLER_ROOT=.\publish\AlfaCoreInstaller"
 set "INPUT_DIR=%INSTALLER_ROOT%\Input"
 set "OUTPUT_DIR=%INSTALLER_ROOT%\Output"
 set "ISS_FILE=.\installer\DashboardComprasServidor.iss"
@@ -17,7 +17,7 @@ set "ISCC_EXE="
 set "BUNDLE_FLAG="
 
 echo ===============================================
-echo Dashboard de Compras - Publicacion de instalador
+echo AlfaCore - Publicacion de instalador
 echo Version: %APP_VERSION%
 echo ===============================================
 
@@ -29,7 +29,7 @@ if not exist "%RELEASE_SCRIPT%" (
 echo [1/5] Generando publicacion base...
 call "%RELEASE_SCRIPT%"
 if errorlevel 1 (
-  if exist "%SOURCE_DIR%\DashboardCompras.exe" (
+  if exist "%SOURCE_DIR%\AlfaCore.exe" (
     echo La publicacion automatica fallo, pero se encontro una publicacion previa valida.
     echo Se continuara usando la carpeta existente:
     echo   %SOURCE_DIR%

@@ -1,10 +1,11 @@
 @echo off
 setlocal
 
-set "SERVICE_NAME=DashboardCompras"
-set "DISPLAY_NAME=Dashboard de Compras - Alfa Gestion"
-set "DESCRIPTION=Servidor web del Dashboard de Compras. Se inicia automaticamente con Windows."
-set "EXE_PATH=%~dp0DashboardCompras.exe"
+set "SERVICE_NAME=AlfaCore"
+set "LEGACY_SERVICE_NAME=DashboardCompras"
+set "DISPLAY_NAME=AlfaCore"
+set "DESCRIPTION=Servidor web de AlfaCore. Se inicia automaticamente con Windows."
+set "EXE_PATH=%~dp0AlfaCore.exe"
 set "SILENT="
 if /i "%~1"=="/silent" set "SILENT=1"
 
@@ -17,8 +18,19 @@ if errorlevel 1 (
 )
 
 echo ================================================
-echo Dashboard de Compras - Instalar servicio Windows
+echo AlfaCore - Instalar servicio Windows
 echo ================================================
+
+if /i not "%LEGACY_SERVICE_NAME%"=="%SERVICE_NAME%" (
+    sc query "%LEGACY_SERVICE_NAME%" >nul 2>&1
+    if not errorlevel 1 (
+        echo Detectado servicio anterior %LEGACY_SERVICE_NAME%, se migrara a %SERVICE_NAME%...
+        sc stop "%LEGACY_SERVICE_NAME%" >nul 2>&1
+        timeout /t 3 /nobreak >nul
+        sc delete "%LEGACY_SERVICE_NAME%" >nul 2>&1
+        timeout /t 2 /nobreak >nul
+    )
+)
 
 sc query "%SERVICE_NAME%" >nul 2>&1
 if not errorlevel 1 (
@@ -44,10 +56,10 @@ sc failure "%SERVICE_NAME%" reset= 86400 actions= restart/5000/restart/10000/res
 echo Iniciando servicio...
 sc start "%SERVICE_NAME%" >nul 2>&1
 if errorlevel 1 (
-    echo ADVERTENCIA: El servicio se creo pero no pudo iniciarse ahora.
-    echo Podra iniciarlo desde services.msc o reiniciando el servidor.
+    echo ERROR: El servicio se creo pero no pudo iniciarse ahora.
+    echo Revise la configuracion y el runtime instalado antes de continuar.
     if not defined SILENT pause
-    exit /b 0
+    exit /b 1
 )
 
 echo ================================================

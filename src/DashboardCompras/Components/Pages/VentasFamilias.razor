@@ -48,7 +48,13 @@
                     @foreach (var item in _page.Familias)
                     {
                         <tr>
-                            <td><strong>@item.Familia</strong></td>
+                            <td>
+                                <strong>@item.Familia</strong>
+                                @if (!string.IsNullOrWhiteSpace(item.DescripcionFamilia))
+                                {
+                                    <br /><span class="text-muted" style="font-size:0.8em;">@item.DescripcionFamilia</span>
+                                }
+                            </td>
                             <td style="text-align:right;">@Moneda(item.TotalVendido)</td>
                             <td style="text-align:right;">@Porcentaje(item.Participacion)</td>
                             <td style="text-align:right;">@item.CantidadArticulos.ToString("N0")</td>

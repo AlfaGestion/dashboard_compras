@@ -491,13 +491,14 @@ public sealed class GestionDashboardService(
 
             var top = await QueryCategoryAsync($"""
                 SELECT TOP (10)
-                    CONVERT(varchar(50), a.IdFamilia) AS Categoria,
+                    COALESCE(NULLIF(fj.Descripcion, ''), CONVERT(varchar(50), a.IdFamilia)) AS Categoria,
                     CONVERT(varchar(50), a.IdFamilia) AS Codigo,
                     SUM(d.ValorVtaCIVA) AS Total
                 FROM dbo.VT_DETALLEIVAPROFORMA d
                 INNER JOIN dbo.V_MA_ARTICULOS a ON a.IDARTICULO = d.Articulo
+                LEFT JOIN dbo.vw_familias_jerarquia fj ON fj.IdFamilia = CONVERT(varchar(50), a.IdFamilia)
                 {detWhereFam}
-                GROUP BY a.IdFamilia
+                GROUP BY a.IdFamilia, fj.Descripcion
                 ORDER BY SUM(d.ValorVtaCIVA) DESC
                 """, cn, cmd => BindVentasFilters(cmd, filters), token);
 
@@ -506,11 +507,13 @@ public sealed class GestionDashboardService(
                     CONVERT(varchar(50), a.IdFamilia) AS Familia,
                     SUM(d.ValorVtaCIVA) AS TotalVendido,
                     COUNT(DISTINCT d.Articulo) AS CantidadArticulos,
-                    COUNT(DISTINCT d.TC + d.IDCOMPROBANTE) AS CantidadComprobantes
+                    COUNT(DISTINCT d.TC + d.IDCOMPROBANTE) AS CantidadComprobantes,
+                    ISNULL(fj.Descripcion, '') AS DescripcionFamilia
                 FROM dbo.VT_DETALLEIVAPROFORMA d
                 INNER JOIN dbo.V_MA_ARTICULOS a ON a.IDARTICULO = d.Articulo
+                LEFT JOIN dbo.vw_familias_jerarquia fj ON fj.IdFamilia = CONVERT(varchar(50), a.IdFamilia)
                 {detWhereFam}
-                GROUP BY a.IdFamilia
+                GROUP BY a.IdFamilia, fj.Descripcion
                 ORDER BY SUM(d.ValorVtaCIVA) DESC
                 """, cn, cmd => BindVentasFilters(cmd, filters), token);
 
@@ -1136,6 +1139,287 @@ public sealed class GestionDashboardService(
         }, "No se pudo cargar el dashboard de contabilidad.", ct);
     }
 
+    public async Task<PosicionIvaDto> GetPosicionIvaAsync(ContabilidadDashboardFilters filters, CancellationToken ct = default)
+    {
+        filters ??= new ContabilidadDashboardFilters();
+
+        return await ExecuteLoggedAsync("Contabilidad", "GetPosicionIva", async token =>
+        {
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+
+            const string ivaWhere = """
+                WHERE (@FechaDesde IS NULL OR FECHA >= @FechaDesde)
+                  AND (@FechaHastaExclusive IS NULL OR FECHA < @FechaHastaExclusive)
+                  AND (@Sucursal IS NULL OR CONVERT(varchar(50), UNEGOCIO) = @Sucursal)
+                """;
+
+            // cols: 0=IVA_21, 1=IVA_105, 2=IVA_27, 3=IVA_1735, 4=IVA_RESP_INSC, 5=IVA_MONOTRIBUTO, 6=IVA_CONS_FINAL, 7=NETO_GRAVADO
+            const string selectIva = """
+                SELECT
+                    ISNULL(SUM(IVA_21),          0),
+                    ISNULL(SUM(IVA_105),         0),
+                    ISNULL(SUM(IVA_27),          0),
+                    ISNULL(SUM(IVA_1735),        0),
+                    ISNULL(SUM(IVA_RESP_INSC),   0),
+                    ISNULL(SUM(IVA_MONOTRIBUTO), 0),
+                    ISNULL(SUM(IVA_CONS_FINAL),  0),
+                    ISNULL(SUM(NETO_GRAVADO),    0)
+                """;
+
+            var v = new decimal[8];
+            var c = new decimal[8];
+
+            await using (var cmd = new SqlCommand($"{selectIva} FROM dbo.LibroIvaVentas_Contadores {ivaWhere}", cn))
+            {
+                BindIvaFilters(cmd, filters);
+                await using var rd = await cmd.ExecuteReaderAsync(token);
+                if (await rd.ReadAsync(token))
+                    for (var i = 0; i < 8; i++) v[i] = GetDecimal(rd, i);
+            }
+
+            await using (var cmd = new SqlCommand($"{selectIva} FROM dbo.LibroIvaCompras_Contadores {ivaWhere}", cn))
+            {
+                BindIvaFilters(cmd, filters);
+                await using var rd = await cmd.ExecuteReaderAsync(token);
+                if (await rd.ReadAsync(token))
+                    for (var i = 0; i < 8; i++) c[i] = GetDecimal(rd, i);
+            }
+
+            // Total IVA = suma por tipo de contribuyente (RI + MONO + CF).
+            // IVA_21, IVA_105, etc. son sub-detalles por alícuota para otros listados,
+            // no deben sumarse aquí porque representan el mismo IVA desde otro ángulo.
+            var totalV = v[4] + v[5] + v[6];
+            var totalC = c[4] + c[5] + c[6];
+
+            var filas = new List<PosicionIvaFilaDto>
+            {
+                new() { Concepto = "IVA Resp. Inscripto", Ventas = v[4], Compras = c[4] },
+                new() { Concepto = "IVA Monotributo",     Ventas = v[5], Compras = c[5] },
+                new() { Concepto = "IVA Cons. Final",     Ventas = v[6], Compras = c[6] },
+            };
+
+            const string monthlyWhere = """
+                WHERE FECHA >= DATEADD(MONTH, -11, DATEFROMPARTS(YEAR(GETDATE()), MONTH(GETDATE()), 1))
+                  AND (@Sucursal IS NULL OR CONVERT(varchar(50), UNEGOCIO) = @Sucursal)
+                GROUP BY FORMAT(FECHA, 'yyyy-MM')
+                ORDER BY 1
+                """;
+            const string monthlySelect = """
+                SELECT FORMAT(FECHA, 'yyyy-MM'),
+                       ISNULL(SUM(IVA_RESP_INSC + IVA_MONOTRIBUTO + IVA_CONS_FINAL), 0)
+                FROM dbo.
+                """;
+
+            var vm = new Dictionary<string, decimal>();
+            await using (var cmd = new SqlCommand(monthlySelect + "LibroIvaVentas_Contadores " + monthlyWhere, cn))
+            {
+                AddNullableString(cmd, "@Sucursal", filters.Sucursal);
+                await using var rd = await cmd.ExecuteReaderAsync(token);
+                while (await rd.ReadAsync(token))
+                    vm[GetStringValue(rd, 0)] = GetDecimal(rd, 1);
+            }
+
+            var cm2 = new Dictionary<string, decimal>();
+            await using (var cmd = new SqlCommand(monthlySelect + "LibroIvaCompras_Contadores " + monthlyWhere, cn))
+            {
+                AddNullableString(cmd, "@Sucursal", filters.Sucursal);
+                await using var rd = await cmd.ExecuteReaderAsync(token);
+                while (await rd.ReadAsync(token))
+                    cm2[GetStringValue(rd, 0)] = GetDecimal(rd, 1);
+            }
+
+            var periods = vm.Keys.Union(cm2.Keys).OrderBy(x => x).ToList();
+            var evolucionSaldo = periods
+                .Select(p => new MonthlyPointDto { Periodo = p, Total = vm.GetValueOrDefault(p) - cm2.GetValueOrDefault(p) })
+                .ToList();
+
+            // Resumen por condición IVA y alícuota
+            const string condIva =
+                "CASE WHEN IVA_RESP_INSC<>0 THEN 'R.I.' WHEN IVA_MONOTRIBUTO<>0 THEN 'MONO.' WHEN IVA_CONS_FINAL<>0 THEN 'C.F.' ELSE 'EX.' END";
+
+            async Task<List<ResumenAlicuotaFilaDto>> QueryResumenAsync(string tabla)
+            {
+                var sql = $"""
+                    WITH base AS (
+                        SELECT TC, {condIva} AS CondicionIVA,
+                            IVA_21, IVA_105, IVA_27, IVA_1735
+                        FROM dbo.{tabla}
+                        WHERE (@FechaDesde IS NULL OR FECHA >= @FechaDesde)
+                          AND (@FechaHastaExclusive IS NULL OR FECHA < @FechaHastaExclusive)
+                          AND (@Sucursal IS NULL OR CONVERT(varchar(50), UNEGOCIO) = @Sucursal)
+                    ),
+                    unpivoted AS (
+                        SELECT TC, CondicionIVA, CAST(21.00 AS decimal(5,2)) AS Alicuota, IVA_21 AS MontoIVA FROM base WHERE IVA_21<>0
+                        UNION ALL
+                        SELECT TC, CondicionIVA, CAST(10.50 AS decimal(5,2)), IVA_105 FROM base WHERE IVA_105<>0
+                        UNION ALL
+                        SELECT TC, CondicionIVA, CAST(27.00 AS decimal(5,2)), IVA_27 FROM base WHERE IVA_27<>0
+                        UNION ALL
+                        SELECT TC, CondicionIVA, CAST(17.35 AS decimal(5,2)), IVA_1735 FROM base WHERE IVA_1735<>0
+                    )
+                    SELECT CondicionIVA, Alicuota,
+                        ISNULL(SUM(CASE WHEN COALESCE(LEFT(TC,2),'FC') NOT IN ('NC','ND') THEN MontoIVA ELSE 0 END),0),
+                        ISNULL(SUM(CASE WHEN LEFT(TC,2)='NC' THEN MontoIVA ELSE 0 END),0),
+                        ISNULL(SUM(CASE WHEN LEFT(TC,2)='ND' THEN MontoIVA ELSE 0 END),0)
+                    FROM unpivoted
+                    GROUP BY CondicionIVA, Alicuota
+                    ORDER BY
+                        CASE CondicionIVA WHEN 'C.F.' THEN 1 WHEN 'EX.' THEN 2 WHEN 'MONO.' THEN 3 WHEN 'R.I.' THEN 4 ELSE 5 END,
+                        Alicuota
+                    """;
+                var result = new List<ResumenAlicuotaFilaDto>();
+                await using var cmd = new SqlCommand(sql, cn);
+                BindIvaFilters(cmd, filters);
+                await using var rd = await cmd.ExecuteReaderAsync(token);
+                while (await rd.ReadAsync(token))
+                    result.Add(new ResumenAlicuotaFilaDto
+                    {
+                        CondicionIVA = GetStringValue(rd, 0),
+                        Alicuota     = GetDecimal(rd, 1),
+                        FC           = GetDecimal(rd, 2),
+                        NC           = GetDecimal(rd, 3),
+                        ND           = GetDecimal(rd, 4),
+                    });
+                return result;
+            }
+
+            var resumenVentas  = await QueryResumenAsync("LibroIvaVentas_Contadores");
+            var resumenCompras = await QueryResumenAsync("LibroIvaCompras_Contadores");
+
+            return new PosicionIvaDto
+            {
+                TotalIvaVentas     = totalV,
+                TotalIvaCompras    = totalC,
+                NetoGravadoVentas  = v[7],
+                NetoGravadoCompras = c[7],
+                Filas              = filas,
+                EvolucionSaldo     = evolucionSaldo,
+                ResumenVentas      = resumenVentas,
+                ResumenCompras     = resumenCompras,
+            };
+        }, "No se pudo calcular la posición de IVA.", ct);
+    }
+
+    public async Task<BalanceSaldosDto> GetBalanceSaldosAsync(ContabilidadDashboardFilters filters, int nivel = 2, CancellationToken ct = default)
+    {
+        filters ??= new ContabilidadDashboardFilters();
+        nivel = Math.Clamp(nivel, 1, 4);
+
+        return await ExecuteLoggedAsync("Contabilidad", "GetBalanceSaldos", async token =>
+        {
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+
+            // La cantidad de dígitos por nivel viene de TA_CONFIGURACION, no se hardcodea
+            var digitos = await LeerDigitosPlanCuentasAsync(cn, token);
+            var tdigitos = CalcTdigitos(digitos, nivel);
+
+            // El SP espera fechas como NVARCHAR(10) en formato dd/MM/yyyy
+            var fechaD = (filters.FechaDesde ?? new DateTime(DateTime.Today.Year, 1, 1)).ToString("dd/MM/yyyy");
+            var fechaH = (filters.FechaHasta ?? DateTime.Today).ToString("dd/MM/yyyy");
+            var whereClause = BuildSaldosWhereClause(filters);
+
+            var filas = new List<BalanceSaldoFilaDto>();
+            await using var cmd = new SqlCommand("dbo.NW_SALDOSCUENTAS", cn);
+            cmd.CommandType = System.Data.CommandType.StoredProcedure;
+            cmd.CommandTimeout = 60;
+            cmd.Parameters.AddWithValue("@FECHAD",   fechaD);
+            cmd.Parameters.AddWithValue("@FECHAH",   fechaH);
+            cmd.Parameters.AddWithValue("@TDIGITOS", tdigitos.ToString());
+            cmd.Parameters.AddWithValue("@WHERE",    whereClause);
+
+            await using var rd = await cmd.ExecuteReaderAsync(token);
+            while (await rd.ReadAsync(token))
+                filas.Add(new BalanceSaldoFilaDto
+                {
+                    Codigo      = GetStringValue(rd, 0),
+                    Descripcion = GetStringValue(rd, 1),
+                    Saldo       = GetDecimal(rd, 2),
+                });
+
+            // Ordenar por código alfabético: da el orden jerárquico correcto del plan de cuentas
+            // ("1" < "11" < "12" < "2" < "21" ...)
+            filas.Sort((a, b) => string.Compare(a.Codigo, b.Codigo, StringComparison.Ordinal));
+
+            // Dígitos acumulados por nivel; la UI los usa para mapear cada fila a su columna
+            var cumulativos = new List<int>
+            {
+                digitos.Capitulo,
+                digitos.Capitulo + digitos.Subcapitulo,
+                digitos.Capitulo + digitos.Subcapitulo + digitos.Rubro,
+                digitos.Capitulo + digitos.Subcapitulo + digitos.Rubro + digitos.Subrubro,
+            };
+
+            // KPIs: busca las cuentas de capítulo (código de longitud exactamente DIGITOS_CAPITULO)
+            decimal SaldoCap(string codigo) =>
+                filas.FirstOrDefault(f => f.Codigo.Length == digitos.Capitulo && f.Codigo == codigo)?.Saldo ?? 0m;
+
+            return new BalanceSaldosDto
+            {
+                Filas              = filas,
+                NivelAplicado      = nivel,
+                TdigitosAplicados  = tdigitos,
+                DigitosCapitulo    = digitos.Capitulo,
+                DigitosCumulativos = cumulativos,
+                TotalActivo        = SaldoCap("1"),
+                TotalPasivo        = SaldoCap("2"),
+                PatrimonioNeto     = SaldoCap("3"),
+                TotalResultados    = SaldoCap("4"),
+            };
+        }, "No se pudo obtener el balance de saldos.", ct);
+    }
+
+    // Lee los dígitos de cada nivel del plan de cuentas desde TA_CONFIGURACION
+    private static async Task<DigitosPlanCuentas> LeerDigitosPlanCuentasAsync(SqlConnection cn, CancellationToken ct)
+    {
+        var result = new DigitosPlanCuentas();
+        await using var cmd = new SqlCommand("""
+            SELECT UPPER(LTRIM(RTRIM(clave))), TRY_CAST(valor AS int)
+            FROM dbo.TA_CONFIGURACION
+            WHERE UPPER(LTRIM(RTRIM(clave))) LIKE 'DIGITOS_%'
+            """, cn);
+        await using var rd = await cmd.ExecuteReaderAsync(ct);
+        while (await rd.ReadAsync(ct))
+        {
+            var clave = GetStringValue(rd, 0);
+            var valor = GetInt(rd, 1);
+            switch (clave)
+            {
+                case "DIGITOS_CAPITULO":    result.Capitulo    = valor; break;
+                case "DIGITOS_SUBCAPITULO": result.Subcapitulo = valor; break;
+                case "DIGITOS_RUBRO":       result.Rubro       = valor; break;
+                case "DIGITOS_SUBRUBRO":    result.Subrubro    = valor; break;
+            }
+        }
+        return result;
+    }
+
+    // Calcula dígitos acumulados hasta el nivel solicitado (1=capítulo, 2=subcapítulo, 3=rubro, 4=subrubro)
+    private static int CalcTdigitos(DigitosPlanCuentas d, int nivel) => nivel switch
+    {
+        1 => d.Capitulo,
+        2 => d.Capitulo + d.Subcapitulo,
+        3 => d.Capitulo + d.Subcapitulo + d.Rubro,
+        _ => d.Capitulo + d.Subcapitulo + d.Rubro + d.Subrubro,
+    };
+
+    // Construye fragmento WHERE para el SP; UNEGOCIO es numérico, solo se acepta valor entero
+    private static string BuildSaldosWhereClause(ContabilidadDashboardFilters filters)
+    {
+        if (string.IsNullOrWhiteSpace(filters.Sucursal)) return string.Empty;
+        var suc = filters.Sucursal.Trim();
+        return int.TryParse(suc, out var sucInt) ? $" AND UNEGOCIO = {sucInt}" : string.Empty;
+    }
+
+    private sealed class DigitosPlanCuentas
+    {
+        public int Capitulo    { get; set; } = 1;
+        public int Subcapitulo { get; set; } = 1;
+        public int Rubro       { get; set; } = 1;
+        public int Subrubro    { get; set; } = 2;
+    }
+
     private async Task<IReadOnlyList<string>> QueryDistinctAsync(string sql, SqlConnection cn, CancellationToken ct)
     {
         var items = new List<string>();
@@ -1273,7 +1557,8 @@ public sealed class GestionDashboardService(
                 Familia = GetStringValue(rd, 0),
                 TotalVendido = GetDecimal(rd, 1),
                 CantidadArticulos = GetInt(rd, 2),
-                CantidadComprobantes = GetInt(rd, 3)
+                CantidadComprobantes = GetInt(rd, 3),
+                DescripcionFamilia = GetStringValue(rd, 4)
             });
         }
 
@@ -1462,6 +1747,12 @@ public sealed class GestionDashboardService(
         AddNullableString(cmd, "@Tipo", filters.Tipo);
     }
 
+    private static void BindIvaFilters(SqlCommand cmd, ContabilidadDashboardFilters filters)
+    {
+        BindDateRange(cmd, filters.FechaDesde, filters.FechaHasta);
+        AddNullableString(cmd, "@Sucursal", filters.Sucursal);
+    }
+
     private static void BindDateRange(SqlCommand cmd, DateTime? fechaDesde, DateTime? fechaHasta)
     {
         cmd.Parameters.AddWithValue("@FechaDesde", (object?)fechaDesde ?? DBNull.Value);
@@ -1526,6 +1817,7 @@ public sealed class GestionDashboardService(
         => new()
         {
             Familia = item.Familia,
+            DescripcionFamilia = item.DescripcionFamilia,
             TotalVendido = item.TotalVendido,
             Participacion = total == 0 ? 0 : item.TotalVendido / total,
             CantidadArticulos = item.CantidadArticulos,

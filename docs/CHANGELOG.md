@@ -4,6 +4,64 @@ Formato: `[versión] — fecha — descripción`
 
 ---
 
+## [1.6.1] — 2026-04-30
+
+### Renombrado técnico y de instalación a AlfaCore
+
+**Branding y artefactos**
+- El nombre visible del producto en instalador, accesos directos, textos de arranque y shell pasó de `Dashboard de Compras` a `AlfaCore`.
+- Los binarios publicados ahora se generan como `AlfaCore` y `AlfaCoreShell` mediante `AssemblyName`, sin rehacer namespaces ni mover la estructura fuente existente.
+- La hoja de estilos aislada referenciada por la app pasó a `AlfaCore.styles.css`.
+
+**Servicio Windows y publicación**
+- El servicio Windows ahora se registra como `AlfaCore`.
+- Se mantiene compatibilidad de migración: los scripts de instalación y desinstalación detectan y eliminan el servicio anterior `DashboardCompras` si existe.
+- Las carpetas de salida de publicación e instalador fueron renombradas a `publish\AlfaCoreLAN` y `publish\AlfaCoreInstaller`.
+- El instalador genera ahora `AlfaCoreSetup_<versión>.exe`.
+
+**Shell, launcher y utilitarios**
+- `LauncherOptions` y `BackendLauncher` fueron ajustados para iniciar `AlfaCore.exe` y `AlfaCoreShell.exe`.
+- La regla de Firewall pasó a nombrarse `AlfaCoreLAN-<puerto>`.
+- `ApplicationName` de SQL Server pasó a `AlfaCore` en la conexión inicial y en las sesiones persistidas.
+
+---
+
+## [1.6.0] — 2026-04-30
+
+### Módulo Contabilidad — Balance General de Saldos y Posición de IVA
+
+**Balance General de Saldos (`/contabilidad`)**
+- La página de Contabilidad fue reemplazada: el contenido anterior basado en `MV_ASIENTOS` (KPIs de debe/haber, gráficos de evolución, tabla de últimos asientos) fue removido.
+- Nuevo bloque principal: Balance General de Saldos ejecutando el SP `NW_SALDOSCUENTAS`.
+- El nivel de agrupación del plan de cuentas **no está hardcodeado**: se lee dinámicamente desde `TA_CONFIGURACION` (claves `DIGITOS_CAPITULO`, `DIGITOS_SUBCAPITULO`, `DIGITOS_RUBRO`, `DIGITOS_SUBRUBRO`) y se suma según el nivel elegido.
+- Selector de nivel en la UI: 1 (Capítulo), 2 (Sub-capítulo, default), 3 (Rubro), 4 (Sub-rubro). El botón "Actualizar" recarga solo el balance sin afectar el resto de la página.
+- Tabla con **una columna por nivel**: el saldo de cada cuenta aparece en la columna correspondiente a su profundidad en el plan (el nivel más detallado queda a la izquierda, el Capítulo a la derecha), igual que en el reporte impreso del sistema.
+- Filas ordenadas por código alfabético, lo que preserva el orden jerárquico correcto del plan de cuentas (`"1" < "11" < "12" < "2" < "21"...`).
+- Cuentas de capítulo destacadas en negrita; cuentas hijo con color secundario.
+- Saldos negativos en rojo entre paréntesis (ej.: `($ 176.578.335,49)`).
+- KPI cards: Total Activo, Total Pasivo, Patrimonio Neto, Resultados — derivados de las cuentas de capítulo (código de `DIGITOS_CAPITULO` dígitos).
+- Filtros simplificados: fecha desde/hasta, accesos rápidos de período, y sucursal (mapeada a `UNEGOCIO` numérico en el `@WHERE` del SP). El filtro de sucursal solo se aplica si el valor es un entero válido (prevención de inyección SQL en parámetro dinámico).
+- Nuevos modelos: `BalanceSaldoFilaDto`, `BalanceSaldosDto` (incluye `DigitosCumulativos` para que la UI calcule el índice de columna sin lógica adicional).
+- Nuevo método de servicio: `GetBalanceSaldosAsync` + helpers privados `LeerDigitosPlanCuentasAsync`, `CalcTdigitos`, `BuildSaldosWhereClause`, `DigitosPlanCuentas`.
+
+**Nueva página: Posición de IVA (`/contabilidad/posicion-iva`)**
+- Comparativa débito fiscal (ventas) vs. crédito fiscal (compras) con saldo a pagar o a favor.
+- KPI cards: IVA Ventas, IVA Compras, Saldo (colorea según si es a pagar o a favor).
+- Gráfico de barras horizontal con la comparativa del período y gráfico de líneas con evolución del saldo en los últimos 12 meses (independiente del filtro de fechas).
+- Tabla de detalle por concepto: IVA Resp. Inscripto, IVA Monotributo, IVA Cons. Final.
+- **Resumen por alícuota IVA** (ventas y compras por separado): tabla agrupada por condición IVA (C.F. → EX. → MONO. → R.I.) y alícuota (10,50 / 21,00 / 27,00 / 17,35), con columnas FC / NC / ND / Total y subtotales por grupo.
+- Nuevo componente reutilizable `ResumenIvaTable.razor`.
+
+**Correcciones en el cálculo del IVA**
+- El total de IVA fiscal (TotalIvaVentas / TotalIvaCompras) ahora suma solo los campos fiscales: `IVA_RESP_INSC + IVA_MONOTRIBUTO + IVA_CONS_FINAL`. Los campos `IVA_21`, `IVA_105`, `IVA_27`, `IVA_1735` son informativos para el resumen por alícuota y **no** se incluyen en el total de posición (evita doble conteo).
+- La misma corrección aplica a la consulta de evolución mensual del saldo.
+
+**Corrección en la consulta de resumen por alícuota**
+- La SQL que genera el resumen por alícuota fue reescrita con un CTE (`WITH base AS (...)`): los parámetros `@FechaDesde`, `@FechaHastaExclusive`, `@Sucursal` se referencian una sola vez. La versión anterior con `UNION ALL` repetía cada parámetro 4 veces causando errores de conexión (Error 64, Class 20) en SQL Server.
+- La clasificación por tipo de comprobante en el pivot fue corregida: la columna FC captura ahora todos los TC que **no** sean NC ni ND (`NOT IN ('NC','ND')`). Antes se usaba `LEFT(TC,2)='FC'`, lo que excluía `LIQC` y `LT` (sus importes se perdían silenciosamente en las tres columnas).
+
+---
+
 ## [1.5.0] — 2026-04-27
 
 ### Módulo Ventas — Correcciones de datos y nuevas páginas

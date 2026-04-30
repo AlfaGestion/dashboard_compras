@@ -27,7 +27,7 @@ public class Program
 
         builder.Host.UseWindowsService(options =>
         {
-            options.ServiceName = "DashboardCompras";
+            options.ServiceName = "AlfaCore";
         });
 
         builder.WebHost.ConfigureKestrel(options =>
@@ -158,7 +158,7 @@ public class Program
         catch (IOException ex)
         {
             WriteStartupError(
-                $"No se pudo iniciar Dashboard de Compras en el puerto {serverOptions.Puerto}. Verificá si el puerto está ocupado o bloqueado.",
+                $"No se pudo iniciar AlfaCore en el puerto {serverOptions.Puerto}. Verificá si el puerto está ocupado o bloqueado.",
                 ex);
             throw;
         }

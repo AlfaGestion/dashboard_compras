@@ -148,7 +148,7 @@ public sealed class SessionService : ISessionService
             UserID = s.Usuario,
             Password = s.Password,
             TrustServerCertificate = s.TrustServerCertificate,
-            ApplicationName = "DashboardCompras"
+            ApplicationName = "AlfaCore"
         }.ConnectionString;
 
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
