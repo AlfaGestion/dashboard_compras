@@ -4,6 +4,7 @@ using AlfaCore.Models;
 using AlfaCore.Repositories;
 using AlfaCore.Services;
 using System.Diagnostics;
+using System.Text.Json;
 
 namespace AlfaCore;
 
@@ -50,6 +51,7 @@ public class Program
         builder.Services.AddScoped<IInformesIaService, InformesIaService>();
         builder.Services.AddScoped<IConsultasService, ConsultasService>();
         builder.Services.AddScoped<ICostosService, CostosService>();
+        builder.Services.AddScoped<IConversacionesService, ConversacionesService>();
         builder.Services.AddScoped<IAuditoriaService, AuditoriaService>();
         builder.Services.AddScoped<IGestionDashboardService, GestionDashboardService>();
         builder.Services.AddSingleton<IAuxErrRepository, AuxErrRepository>();
@@ -63,6 +65,7 @@ public class Program
         builder.Services.AddHttpContextAccessor();
         builder.Services.Configure<ServidorWebOptions>(builder.Configuration.GetSection(ServidorWebOptions.SectionName));
         builder.Services.Configure<DatosSqlOptions>(builder.Configuration.GetSection(DatosSqlOptions.SectionName));
+        builder.Services.Configure<WhatsAppOptions>(builder.Configuration.GetSection(WhatsAppOptions.SectionName));
         builder.Services.AddHostedService<ServerStartupHostedService>();
 
         var app = builder.Build();
@@ -149,6 +152,131 @@ public class Program
             return Results.File(bytes,
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 filename);
+        });
+
+        app.MapGet("/api/conversaciones", async (
+            string? modo,
+            string? search,
+            string? idTecnicoActual,
+            string? codigoEstado,
+            int? limit,
+            int? offset,
+            IConversacionesService svc,
+            CancellationToken ct) =>
+        {
+            var filters = new ConversacionesInboxFilters
+            {
+                Modo = modo ?? "todas",
+                Search = search ?? string.Empty,
+                IdTecnicoActual = idTecnicoActual,
+                CodigoEstado = codigoEstado,
+                Limit = limit ?? 50,
+                Offset = offset ?? 0
+            };
+
+            return Results.Ok(await svc.GetInboxAsync(filters, ct));
+        });
+
+        app.MapGet("/api/conversaciones/{id:long}", async (
+            long id,
+            IConversacionesService svc,
+            CancellationToken ct) =>
+        {
+            var item = await svc.GetConversationAsync(id, ct);
+            return item is null ? Results.NotFound() : Results.Ok(item);
+        });
+
+        app.MapGet("/api/conversaciones/{id:long}/mensajes", async (
+            long id,
+            IConversacionesService svc,
+            CancellationToken ct) =>
+        {
+            var items = await svc.GetMessagesAsync(id, ct);
+            return Results.Ok(items);
+        });
+
+        app.MapPost("/api/conversaciones/{id:long}/mensajes", async (
+            long id,
+            ConversacionSendMessageRequest request,
+            IConversacionesService svc,
+            CancellationToken ct) =>
+        {
+            request.IdConversacion = id;
+            var result = await svc.SendMessageAsync(request, ct);
+            return Results.Ok(result);
+        });
+
+        app.MapPost("/api/conversaciones/{id:long}/notas", async (
+            long id,
+            ConversacionNotaInternaRequest request,
+            IConversacionesService svc,
+            CancellationToken ct) =>
+        {
+            request.IdConversacion = id;
+            var noteId = await svc.AddInternalNoteAsync(request, ct);
+            return Results.Ok(new { IdMensaje = noteId });
+        });
+
+        app.MapPost("/api/conversaciones/{id:long}/asignacion", async (
+            long id,
+            ConversacionAsignacionRequest request,
+            IConversacionesService svc,
+            CancellationToken ct) =>
+        {
+            request.IdConversacion = id;
+            await svc.AssignConversationAsync(request, ct);
+            return Results.Ok();
+        });
+
+        app.MapPost("/api/conversaciones/{id:long}/estado", async (
+            long id,
+            ConversacionEstadoRequest request,
+            IConversacionesService svc,
+            CancellationToken ct) =>
+        {
+            request.IdConversacion = id;
+            await svc.ChangeStatusAsync(request, ct);
+            return Results.Ok();
+        });
+
+        app.MapGet("/api/conversaciones/whatsapp/webhook", (
+            HttpRequest request,
+            IConfiguration configuration) =>
+        {
+            var options = configuration.GetSection(WhatsAppOptions.SectionName).Get<WhatsAppOptions>() ?? new();
+            var mode = request.Query["hub.mode"].ToString();
+            var verifyToken = request.Query["hub.verify_token"].ToString();
+            var challenge = request.Query["hub.challenge"].ToString();
+
+            if (!string.Equals(mode, "subscribe", StringComparison.OrdinalIgnoreCase))
+                return Results.BadRequest("Modo de verificación inválido.");
+
+            if (!options.IsConfiguredForVerify)
+                return Results.Problem("WhatsApp VerifyToken no está configurado.", statusCode: StatusCodes.Status500InternalServerError);
+
+            return string.Equals(verifyToken, options.VerifyToken, StringComparison.Ordinal)
+                ? Results.Text(challenge)
+                : Results.Unauthorized();
+        });
+
+        app.MapPost("/api/conversaciones/whatsapp/webhook", async (
+            HttpRequest request,
+            IConversacionesService svc,
+            CancellationToken ct) =>
+        {
+            using var payload = await JsonDocument.ParseAsync(request.Body, cancellationToken: ct);
+            var headers = request.Headers.ToDictionary(
+                pair => pair.Key,
+                pair => pair.Value.ToString(),
+                StringComparer.OrdinalIgnoreCase);
+
+            var result = await svc.RegisterIncomingWebhookAsync(new ConversacionWebhookRequest
+            {
+                Payload = payload,
+                Headers = headers
+            }, ct);
+
+            return Results.Ok(result);
         });
 
         try
