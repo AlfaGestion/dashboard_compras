@@ -1,0 +1,917 @@
+@page "/consultas/nueva"
+@page "/consultas/{Id:int}/editar"
+@using AlfaCore.Services
+@inject IConsultasService ConsultasSvc
+@inject NavigationManager Nav
+
+<PageTitle>@_titulo | Alfa Gestión</PageTitle>
+
+@if (_cargando)
+{
+    <div class="consultas-loading">
+        <i class="bi bi-hourglass-split"></i> Cargando…
+    </div>
+}
+else
+{
+    <div class="editor">
+
+        <div class="editor__top">
+            <a class="consulta-detalle__back" href="@(_id.HasValue ? $"/consultas/{_id}" : "/consultas")">
+                <i class="bi bi-arrow-left"></i>
+                @(_id.HasValue ? "Volver a la consulta" : "Volver a consultas")
+            </a>
+            <h2 class="editor__title">@_titulo</h2>
+        </div>
+
+        <!-- Datos básicos -->
+        <div class="editor-section">
+            <p class="editor-section__title">Datos básicos</p>
+            <div class="editor-fields">
+
+                @if (!_id.HasValue)
+                {
+                    <!-- Modo crear: selector de ubicación en el árbol -->
+                    <div class="editor-field">
+                        <label class="editor-field__label">Ubicación en el árbol</label>
+                        <select class="editor-field__input" @onchange="OnPadreChangedAsync">
+                            <option value="">— Primer nivel (raíz) —</option>
+                            @foreach (var op in _opcionesArbol)
+                            {
+                                <option value="@op.Clave" selected="@(_parentClave == op.Clave)">
+                                    @op.Label
+                                </option>
+                            }
+                        </select>
+                    </div>
+                }
+
+                <div class="editor-field">
+                    <label class="editor-field__label">Clave @(_sugirendoClave ? "…" : "")</label>
+                    <input class="editor-field__input"
+                           @bind="_clave"
+                           placeholder="Se asigna al elegir ubicación"
+                           maxlength="20"
+                           disabled="@_sugirendoClave" />
+                </div>
+
+                <div class="editor-field editor-field--full">
+                    <label class="editor-field__label">Nombre</label>
+                    <input class="editor-field__input"
+                           @bind="_nombre"
+                           placeholder="Nombre visible de la consulta"
+                           maxlength="255" />
+                </div>
+
+                <div class="editor-field editor-field--full">
+                    <label class="editor-field__label">Descripción / Ayuda <span class="editor-field__optional">(opcional)</span></label>
+                    <input class="editor-field__input"
+                           @bind="_descripcion"
+                           placeholder="Texto de ayuda para el usuario final"
+                           maxlength="255" />
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Constructor visual -->
+        <details class="editor-section editor-section--builder">
+            <summary class="editor-section__summary">
+                <i class="bi bi-tools"></i>
+                Constructor visual
+                <span class="editor-section__summary-hint">Genera el SELECT eligiendo tabla, columnas y filtros</span>
+            </summary>
+
+            <div class="editor-builder">
+                <div class="editor-builder__source">
+                    <label class="editor-field__label">Buscar tabla o vista</label>
+                    <div class="editor-builder__search-row">
+                        <input class="editor-field__input"
+                               @bind="_filtroTabla"
+                               @bind:event="oninput"
+                               @onkeydown="OnFiltroKeyDownAsync"
+                               placeholder="Ej: V_CM, COMPRAS… (Enter para buscar)" />
+                        <button class="btn btn--ghost btn--sm" type="button" @onclick="BuscarTablasAsync"
+                                disabled="@_buscandoTablas">
+                            @if (_buscandoTablas)
+                            {
+                                <i class="bi bi-hourglass-split"></i>
+                            }
+                            else
+                            {
+                                <i class="bi bi-search"></i>
+                                <span>Buscar</span>
+                            }
+                        </button>
+                    </div>
+
+                    @if (_vistasDisponibles.Count > 0)
+                    {
+                        <select class="editor-field__input" style="margin-top:.5rem;" @onchange="OnTablaChangedAsync">
+                            <option value="">— Seleccioná una fuente —</option>
+                            @foreach (var v in _vistasDisponibles)
+                            {
+                                <option value="@v" selected="@(_tablaBuilder == v)">@v</option>
+                            }
+                        </select>
+                    }
+                </div>
+
+                @if (_cargandoColumnas)
+                    {
+                        <p class="editor-builder__loading"><i class="bi bi-hourglass-split"></i> Cargando columnas…</p>
+                    }
+                    else if (_columnasBuilder.Count > 0)
+                    {
+                        <div class="editor-builder__cols">
+                            <div class="editor-builder__cols-header">
+                                <p class="editor-builder__subtitle" style="margin:0;">
+                                    Columnas
+                                    <button type="button" class="btn-link" @onclick="ToggleTodasColumnas">
+                                        @(_columnasBuilder.All(c => c.Seleccionada) ? "Deseleccionar todas" : "Seleccionar todas")
+                                    </button>
+                                </p>
+                                <input class="editor-builder__col-search"
+                                       @bind="_busquedaColumna"
+                                       @bind:event="oninput"
+                                       placeholder="Buscar columna…" />
+                            </div>
+                            <div class="editor-builder__col-grid">
+                                @foreach (var col in _columnasBuilder)
+                                {
+                                    bool hayBusqueda = !string.IsNullOrWhiteSpace(_busquedaColumna);
+                                    bool match = !hayBusqueda || col.Nombre.Contains(_busquedaColumna, StringComparison.OrdinalIgnoreCase);
+                                    <label class="editor-builder__col-item @(hayBusqueda && match ? "col-item--match" : "") @(hayBusqueda && !match ? "col-item--dim" : "")">
+                                        <input type="checkbox"
+                                               checked="@col.Seleccionada"
+                                               @onchange="e => OnColumnaSeleccionadaChanged(col, (bool)e.Value!)" />
+                                        <span class="editor-builder__col-name">@col.Nombre</span>
+                                        <span class="editor-builder__col-type">@col.Tipo</span>
+                                    </label>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="editor-builder__filters">
+                            <p class="editor-builder__subtitle">
+                                Filtros (WHERE)
+                                <button type="button" class="btn-link" @onclick="AgregarFiltro">
+                                    <i class="bi bi-plus-circle"></i> Agregar filtro
+                                </button>
+                            </p>
+                            @foreach (var (filtro, idx) in _filtrosBuilder.Select((f, i) => (f, i)))
+                            {
+                                <div class="editor-builder__filter-row">
+                                    <select class="editor-field__input editor-field__input--sm" @bind="filtro.Campo">
+                                        <option value="">Campo…</option>
+                                        @foreach (var col in _columnasBuilder)
+                                        {
+                                            <option value="@col.Nombre">@col.Nombre</option>
+                                        }
+                                    </select>
+                                    <select class="editor-field__input editor-field__input--sm" @bind="filtro.Operador">
+                                        <option>=</option>
+                                        <option value="&lt;&gt;">&lt;&gt;</option>
+                                        <option value="&gt;">&gt;</option>
+                                        <option value="&lt;">&lt;</option>
+                                        <option value="&gt;=">&gt;=</option>
+                                        <option value="&lt;=">&lt;=</option>
+                                        <option>LIKE</option>
+                                        <option>IN</option>
+                                    </select>
+                                    <label class="editor-builder__param-toggle">
+                                        <input type="checkbox" @bind="filtro.EsParametro" />
+                                        <span>Parámetro &lt;P&gt;</span>
+                                    </label>
+                                    @if (!filtro.EsParametro)
+                                    {
+                                        <input class="editor-field__input editor-field__input--sm"
+                                               @bind="filtro.ValorFijo"
+                                               placeholder="valor fijo" />
+                                    }
+                                    <button type="button" class="btn-link btn-link--danger" @onclick="() => EliminarFiltro(idx)">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="editor-builder__orders">
+                            <p class="editor-builder__subtitle">
+                                Ordenar por (ORDER BY)
+                                <button type="button" class="btn-link" @onclick="AgregarOrden">
+                                    <i class="bi bi-plus-circle"></i> Agregar
+                                </button>
+                            </p>
+                            @foreach (var (orden, idx) in _ordenesBuilder.Select((o, i) => (o, i)))
+                            {
+                                <div class="editor-builder__filter-row">
+                                    <select class="editor-field__input editor-field__input--sm" @bind="orden.Campo">
+                                        <option value="">Campo…</option>
+                                        @foreach (var col in _columnasBuilder)
+                                        {
+                                            <option value="@col.Nombre">@col.Nombre</option>
+                                        }
+                                    </select>
+                                    <select class="editor-field__input editor-field__input--sm" @bind="orden.Direccion">
+                                        <option>ASC</option>
+                                        <option>DESC</option>
+                                    </select>
+                                    <button type="button" class="btn-link btn-link--danger" @onclick="() => EliminarOrden(idx)">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="editor-builder__orders">
+                            <p class="editor-builder__subtitle">Agrupacion del resultado</p>
+                            <div class="editor-builder__filter-row">
+                                <select class="editor-field__input editor-field__input--sm"
+                                        value="@_campoAgrupadorBuilder"
+                                        @onchange="OnCampoAgrupadorChanged">
+                                    <option value="">Sin agrupacion</option>
+                                    @foreach (var col in _columnasBuilder.Where(c => c.Seleccionada))
+                                    {
+                                        <option value="@col.Nombre">@col.Nombre</option>
+                                    }
+                                </select>
+                            </div>
+
+                        </div>
+
+                        <div class="editor-builder__orders">
+                            <p class="editor-builder__subtitle">Totales y operaciones del resultado</p>
+                            <div class="result-group-cols" style="padding-top:0; border-top:none;">
+                                @foreach (var col in ColumnasDisponiblesParaOperaciones())
+                                {
+                                    var nombreColumna = col.Nombre;
+                                    <div class="result-group-col">
+                                        <span class="result-group-col__name" title="@nombreColumna">@nombreColumna</span>
+                                        <select class="result-group-col__op"
+                                                value="@GetOperacionAgrupacionBuilder(nombreColumna)"
+                                                @onchange="e => OnOperacionAgrupacionBuilderChanged(nombreColumna, e.Value?.ToString() ?? string.Empty)">
+                                            <option value="">excluir</option>
+                                            <option value="SUM">Suma</option>
+                                            <option value="COUNT">Conteo</option>
+                                            <option value="AVG">Promedio</option>
+                                            <option value="MIN">Mínimo</option>
+                                            <option value="MAX">Máximo</option>
+                                        </select>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <button class="btn btn--secondary" type="button" @onclick="GenerarSQL">
+                            <i class="bi bi-code-slash"></i> Generar SQL
+                        </button>
+                    }
+            </div>
+        </details>
+
+        <!-- SQL -->
+        <div class="editor-section">
+            <p class="editor-section__title">SQL</p>
+            <p class="editor-section__hint">
+                Usá <code>&lt;P&gt;</code> como token para cada parámetro que el usuario debe completar al ejecutar.
+            </p>
+            <textarea class="editor-sql"
+                      rows="12"
+                      spellcheck="false"
+                      value="@_sql"
+                      @oninput="OnSqlInput"
+                      placeholder="SELECT columna1, columna2&#10;FROM MiTabla&#10;WHERE Fecha >= &lt;P&gt;"></textarea>
+
+            @if (_etiquetasParams.Count > 0)
+            {
+                <div class="editor-params">
+                    <p class="editor-params__title">
+                        <i class="bi bi-sliders2"></i>
+                        @_etiquetasParams.Count parámetro@(_etiquetasParams.Count != 1 ? "s" : "") detectado@(_etiquetasParams.Count != 1 ? "s" : "")
+                        — asigná una etiqueta a cada uno:
+                    </p>
+                    <div class="editor-params__grid">
+                        @for (int i = 0; i < _etiquetasParams.Count; i++)
+                        {
+                            var idx = i;
+                            <div class="editor-params__field">
+                                <label class="editor-params__label">Parámetro @(idx + 1)</label>
+                                <input class="editor-params__input"
+                                       @bind="_etiquetasParams[idx]"
+                                       placeholder="Ej: Fecha desde" />
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Metadatos adicionales -->
+        <details class="editor-section">
+            <summary class="editor-section__summary">
+                <i class="bi bi-tags"></i>
+                Metadatos adicionales
+                <span class="editor-section__summary-hint">Tabla principal, agrupar, totalizar, orden por defecto</span>
+            </summary>
+            <div class="editor-fields" style="margin-top: 1rem;">
+                <div class="editor-field">
+                    <label class="editor-field__label">Tabla principal <span class="editor-field__optional">(opcional)</span></label>
+                    <input class="editor-field__input" @bind="_tabla" placeholder="Ej: V_CM_COMPRAS" maxlength="100" />
+                </div>
+                <div class="editor-field">
+                    <label class="editor-field__label">Campos para agrupar <span class="editor-field__optional">(opcional)</span></label>
+                    <input class="editor-field__input" @bind="_camposGrupo" placeholder="Ej: RUBRO,PROVEEDOR" maxlength="255" />
+                </div>
+                <div class="editor-field">
+                    <label class="editor-field__label">Campos a totalizar <span class="editor-field__optional">(opcional)</span></label>
+                    <input class="editor-field__input" @bind="_camposTotaliza" placeholder="Ej: IMPORTE,CANTIDAD" maxlength="255" />
+                </div>
+                <div class="editor-field">
+                    <label class="editor-field__label">Orden por defecto <span class="editor-field__optional">(opcional)</span></label>
+                    <input class="editor-field__input" @bind="_camposOrdenar" placeholder="Ej: FECHA DESC" maxlength="255" />
+                </div>
+            </div>
+        </details>
+
+        <!-- Mensajes -->
+        @if (_mensajeError is not null)
+        {
+            <div class="editor-msg editor-msg--error">
+                <i class="bi bi-exclamation-circle"></i> @_mensajeError
+            </div>
+        }
+        @if (_mensajeExito is not null)
+        {
+            <div class="editor-msg editor-msg--ok">
+                <i class="bi bi-check-circle"></i> @_mensajeExito
+            </div>
+        }
+
+        <!-- Acciones -->
+        <div class="editor-actions">
+            <button class="btn btn--primary" @onclick="GuardarAsync" disabled="@_guardando">
+                @if (_guardando)
+                {
+                    <i class="bi bi-hourglass-split"></i>
+                    <span>Guardando…</span>
+                }
+                else
+                {
+                    <i class="bi bi-floppy"></i>
+                    <span>Guardar consulta</span>
+                }
+            </button>
+
+            @if (_id.HasValue)
+            {
+                @if (!_mostrarConfirmarEliminar)
+                {
+                    <button class="btn btn--ghost btn--danger" type="button"
+                            @onclick="() => _mostrarConfirmarEliminar = true">
+                        <i class="bi bi-trash"></i> Eliminar
+                    </button>
+                }
+                else
+                {
+                    <span class="editor-actions__confirm">¿Eliminar esta consulta definitivamente?</span>
+                    <button class="btn btn--danger" type="button" @onclick="EliminarAsync" disabled="@_eliminando">
+                        @(_eliminando ? "Eliminando…" : "Sí, eliminar")
+                    </button>
+                    <button class="btn btn--ghost" type="button" @onclick="() => _mostrarConfirmarEliminar = false">
+                        Cancelar
+                    </button>
+                }
+            }
+        </div>
+
+    </div>
+}
+
+@code {
+    [Parameter] public int? Id { get; set; }
+    [SupplyParameterFromQuery] public int? From { get; set; }
+
+    private int? _id;
+    private string _titulo = "Nueva consulta";
+    private string _parentClave = string.Empty;
+    private string _clave = string.Empty;
+    private string _nombre = string.Empty;
+    private string _descripcion = string.Empty;
+    private string _sql = string.Empty;
+    private string _tabla = string.Empty;
+    private string _camposGrupo = string.Empty;
+    private string _camposTotaliza = string.Empty;
+    private string _camposOrdenar = string.Empty;
+    private List<string> _etiquetasParams = [];
+
+    private List<OpcionArbol> _opcionesArbol = [];
+    private string _filtroTabla = string.Empty;
+    private List<string> _vistasDisponibles = [];
+    private bool _buscandoTablas;
+
+    private string _tablaBuilder = string.Empty;
+    private string _busquedaColumna = string.Empty;
+    private List<ColumnaBuilder> _columnasBuilder = [];
+    private List<FiltroBuilder> _filtrosBuilder = [];
+    private List<OrdenBuilder> _ordenesBuilder = [];
+    private string _campoAgrupadorBuilder = string.Empty;
+    private Dictionary<string, string> _operacionesAgrupacionBuilder = new(StringComparer.OrdinalIgnoreCase);
+    private bool _cargandoColumnas;
+
+    private bool _cargando = true;
+    private bool _guardando;
+    private bool _eliminando;
+    private bool _sugirendoClave;
+    private string? _mensajeError;
+    private string? _mensajeExito;
+    private bool _mostrarConfirmarEliminar;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _id = Id;
+        if (_id.HasValue) _titulo = "Editar consulta";
+
+        var tareas = new List<Task> { CargarArbolAsync() };
+        if (_id.HasValue) tareas.Add(CargarConsultaAsync(_id.Value));
+        else if (From.HasValue) tareas.Add(CargarPlantillaAsync(From.Value));
+        await Task.WhenAll(tareas);
+        _cargando = false;
+    }
+
+    private async Task CargarConsultaAsync(int id)
+    {
+        var c = await ConsultasSvc.GetConsultaAsync(id);
+        if (c is null) { Nav.NavigateTo("/consultas"); return; }
+        _clave = c.Clave;
+        _nombre = c.Grupo;
+        _descripcion = c.Descripcion;
+        _sql = c.Sql;
+        _tabla = c.Tabla;
+        _camposGrupo = c.CamposGrupo;
+        _camposTotaliza = c.CamposTotaliza;
+        _camposOrdenar = c.CamposOrdenar;
+        _etiquetasParams = c.Parametros.Select(p => p.Campo).ToList();
+        _parentClave = _clave.Length > 2 ? _clave[..^2] : string.Empty;
+        await PrecargarBuilderDesdeConsultaAsync(c);
+    }
+
+    private async Task CargarPlantillaAsync(int fromId)
+    {
+        var c = await ConsultasSvc.GetConsultaAsync(fromId);
+        if (c is null) return;
+        _nombre = $"Copia de {c.Grupo}";
+        _descripcion = c.Descripcion;
+        _sql = c.Sql;
+        _tabla = c.Tabla;
+        _camposGrupo = c.CamposGrupo;
+        _camposTotaliza = c.CamposTotaliza;
+        _camposOrdenar = c.CamposOrdenar;
+        _etiquetasParams = c.Parametros.Select(p => p.Campo).ToList();
+        await PrecargarBuilderDesdeConsultaAsync(c);
+    }
+
+    private async Task CargarArbolAsync()
+    {
+        var raiz = await ConsultasSvc.GetArbolAsync();
+        _opcionesArbol = [];
+        AplanarParaSelector(raiz, _opcionesArbol, 0);
+    }
+
+    private async Task PrecargarBuilderDesdeConsultaAsync(ConsultaGuardadaDto consulta)
+    {
+        var tablaFuente = !string.IsNullOrWhiteSpace(consulta.Tabla)
+            ? consulta.Tabla
+            : ExtraerTablaPrincipal(consulta.Sql);
+
+        if (string.IsNullOrWhiteSpace(tablaFuente))
+            return;
+
+        _tablaBuilder = tablaFuente;
+        _filtroTabla = tablaFuente;
+        _tabla = string.IsNullOrWhiteSpace(_tabla) ? tablaFuente : _tabla;
+
+        var columnas = await ConsultasSvc.GetColumnasAsync(tablaFuente);
+        _columnasBuilder = columnas
+            .Select(c => new ColumnaBuilder { Nombre = c.Nombre, Tipo = c.Tipo, Seleccionada = true })
+            .ToList();
+
+        AplicarSeleccionColumnasDesdeSql(consulta.Sql);
+        InicializarAgrupacionBuilderDesdeMetadatos();
+
+        if (!_vistasDisponibles.Contains(tablaFuente, StringComparer.OrdinalIgnoreCase))
+            _vistasDisponibles.Insert(0, tablaFuente);
+    }
+
+    private static string ExtraerTablaPrincipal(string sql)
+    {
+        if (string.IsNullOrWhiteSpace(sql))
+            return string.Empty;
+
+        var match = System.Text.RegularExpressions.Regex.Match(
+            sql,
+            @"\bFROM\s+([A-Za-z0-9_\.\[\]]+)",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        return match.Success ? match.Groups[1].Value.Trim() : string.Empty;
+    }
+
+    private static void AplanarParaSelector(
+        IEnumerable<AlfaCore.Models.NodoArbolDto> nodos,
+        List<OpcionArbol> lista, int nivel)
+    {
+        foreach (var nodo in nodos)
+        {
+            var indent = new string(' ', nivel * 4);
+            lista.Add(new OpcionArbol(nodo.Clave, $"{indent}{nodo.Clave} · {nodo.Nombre}"));
+            AplanarParaSelector(nodo.Hijos, lista, nivel + 1);
+        }
+    }
+
+    private async Task BuscarTablasAsync()
+    {
+        _buscandoTablas = true;
+        StateHasChanged();
+        _vistasDisponibles = (await ConsultasSvc.GetVistasDisponiblesAsync(_filtroTabla)).ToList();
+        _buscandoTablas = false;
+    }
+
+    private async Task OnFiltroKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await BuscarTablasAsync();
+    }
+
+    private async Task OnPadreChangedAsync(ChangeEventArgs e)
+    {
+        _parentClave = e.Value?.ToString() ?? string.Empty;
+        _sugirendoClave = true;
+        _clave = await ConsultasSvc.GetSiguienteClaveAsync(
+            string.IsNullOrEmpty(_parentClave) ? null : _parentClave);
+        _sugirendoClave = false;
+    }
+
+    private async Task OnTablaChangedAsync(ChangeEventArgs e)
+    {
+        _tablaBuilder = e.Value?.ToString() ?? string.Empty;
+        _columnasBuilder.Clear();
+        _filtrosBuilder.Clear();
+        _ordenesBuilder.Clear();
+        _campoAgrupadorBuilder = string.Empty;
+        _operacionesAgrupacionBuilder.Clear();
+        if (string.IsNullOrWhiteSpace(_tablaBuilder)) return;
+
+        _cargandoColumnas = true;
+        StateHasChanged();
+        var cols = await ConsultasSvc.GetColumnasAsync(_tablaBuilder);
+        _columnasBuilder = cols.Select(c => new ColumnaBuilder { Nombre = c.Nombre, Tipo = c.Tipo, Seleccionada = true }).ToList();
+        _cargandoColumnas = false;
+        SincronizarMetadatosAgrupacion();
+    }
+
+    private void ToggleTodasColumnas()
+    {
+        bool todas = _columnasBuilder.All(c => c.Seleccionada);
+        foreach (var c in _columnasBuilder) c.Seleccionada = !todas;
+        ValidarAgrupacionBuilder();
+        SincronizarMetadatosAgrupacion();
+    }
+
+    private void OnColumnaSeleccionadaChanged(ColumnaBuilder columna, bool seleccionada)
+    {
+        columna.Seleccionada = seleccionada;
+        ValidarAgrupacionBuilder();
+        SincronizarMetadatosAgrupacion();
+    }
+
+    private void AgregarFiltro() => _filtrosBuilder.Add(new FiltroBuilder());
+    private void EliminarFiltro(int idx) => _filtrosBuilder.RemoveAt(idx);
+    private void AgregarOrden() => _ordenesBuilder.Add(new OrdenBuilder());
+    private void EliminarOrden(int idx) => _ordenesBuilder.RemoveAt(idx);
+
+    private void OnCampoAgrupadorChanged(ChangeEventArgs e)
+    {
+        _campoAgrupadorBuilder = e.Value?.ToString() ?? string.Empty;
+        ValidarAgrupacionBuilder();
+        SincronizarMetadatosAgrupacion();
+    }
+
+    private string GetOperacionAgrupacionBuilder(string nombreColumna) =>
+        _operacionesAgrupacionBuilder.GetValueOrDefault(nombreColumna, string.Empty);
+
+    private void OnOperacionAgrupacionBuilderChanged(string nombreColumna, string operacion)
+    {
+        if (string.IsNullOrWhiteSpace(operacion))
+            _operacionesAgrupacionBuilder.Remove(nombreColumna);
+        else
+            _operacionesAgrupacionBuilder[nombreColumna] = operacion;
+
+        SincronizarMetadatosAgrupacion();
+    }
+
+    private IEnumerable<ColumnaBuilder> ColumnasDisponiblesParaOperaciones() =>
+        _columnasBuilder.Where(c => c.Seleccionada);
+
+    private void ValidarAgrupacionBuilder()
+    {
+        var seleccionadas = _columnasBuilder
+            .Where(c => c.Seleccionada)
+            .Select(c => c.Nombre)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (!string.IsNullOrWhiteSpace(_campoAgrupadorBuilder) && !seleccionadas.Contains(_campoAgrupadorBuilder))
+            _campoAgrupadorBuilder = string.Empty;
+
+        foreach (var nombre in _operacionesAgrupacionBuilder.Keys.ToList())
+        {
+            if (!seleccionadas.Contains(nombre))
+                _operacionesAgrupacionBuilder.Remove(nombre);
+        }
+    }
+
+    private void InicializarAgrupacionBuilderDesdeMetadatos()
+    {
+        _campoAgrupadorBuilder = _camposGrupo
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault() ?? string.Empty;
+
+        _operacionesAgrupacionBuilder = ParseCamposTotaliza(_camposTotaliza);
+        ValidarAgrupacionBuilder();
+        SincronizarMetadatosAgrupacion();
+    }
+
+    private void SincronizarMetadatosAgrupacion()
+    {
+        _camposGrupo = string.IsNullOrWhiteSpace(_campoAgrupadorBuilder) ? string.Empty : _campoAgrupadorBuilder;
+        _camposTotaliza = string.Join(",",
+            _operacionesAgrupacionBuilder
+                .OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(kv => kv.Value == "SUM"
+                    ? kv.Key
+                    : $"{kv.Value}({kv.Key})"));
+    }
+
+    private void AplicarSeleccionColumnasDesdeSql(string sql)
+    {
+        if (_columnasBuilder.Count == 0)
+            return;
+
+        var columnasSeleccionadas = ParseColumnasSelect(sql);
+        if (columnasSeleccionadas.Count == 0)
+            return;
+
+        var seleccionarTodas = columnasSeleccionadas.Contains("*");
+        foreach (var columna in _columnasBuilder)
+        {
+            columna.Seleccionada = seleccionarTodas || columnasSeleccionadas.Contains(columna.Nombre);
+        }
+    }
+
+    private static HashSet<string> ParseColumnasSelect(string sql)
+    {
+        var resultado = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(sql))
+            return resultado;
+
+        var match = System.Text.RegularExpressions.Regex.Match(
+            sql,
+            @"(?is)\bSELECT\b\s+(?<cols>.*?)\s+\bFROM\b");
+
+        if (!match.Success)
+            return resultado;
+
+        var columnas = SplitSqlList(match.Groups["cols"].Value);
+        foreach (var columna in columnas)
+        {
+            var normalizada = NormalizarExpresionColumna(columna);
+            if (!string.IsNullOrWhiteSpace(normalizada))
+                resultado.Add(normalizada);
+        }
+
+        return resultado;
+    }
+
+    private static string NormalizarExpresionColumna(string expresion)
+    {
+        if (string.IsNullOrWhiteSpace(expresion))
+            return string.Empty;
+
+        var texto = expresion.Trim();
+        if (texto == "*")
+            return "*";
+
+        texto = System.Text.RegularExpressions.Regex.Replace(
+            texto,
+            @"(?is)^\s*DISTINCT\s+",
+            string.Empty);
+        texto = System.Text.RegularExpressions.Regex.Replace(
+            texto,
+            @"(?is)^\s*TOP\s*\(?\s*\d+\s*\)?\s+",
+            string.Empty);
+
+        var aliasMatch = System.Text.RegularExpressions.Regex.Match(
+            texto,
+            @"(?is)^(?<expr>.+?)\s+AS\s+(?<alias>\[[^\]]+\]|[A-Za-z0-9_]+)\s*$");
+        if (aliasMatch.Success)
+            texto = aliasMatch.Groups["expr"].Value.Trim();
+
+        var simpleMatch = System.Text.RegularExpressions.Regex.Match(
+            texto,
+            @"(?is)(?:\[[^\]]+\]|[A-Za-z0-9_]+)(?:\.(?:\[[^\]]+\]|[A-Za-z0-9_]+))*$");
+        if (!simpleMatch.Success)
+            return string.Empty;
+
+        var partes = simpleMatch.Value.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return partes.Length == 0 ? string.Empty : partes[^1].Trim('[', ']');
+    }
+
+    private static List<string> SplitSqlList(string texto)
+    {
+        var resultado = new List<string>();
+        if (string.IsNullOrWhiteSpace(texto))
+            return resultado;
+
+        var sb = new System.Text.StringBuilder();
+        int profundidad = 0;
+        bool enComillas = false;
+
+        foreach (var ch in texto)
+        {
+            if (ch == '\'')
+                enComillas = !enComillas;
+
+            if (!enComillas)
+            {
+                if (ch == '(') profundidad++;
+                else if (ch == ')' && profundidad > 0) profundidad--;
+                else if (ch == ',' && profundidad == 0)
+                {
+                    resultado.Add(sb.ToString().Trim());
+                    sb.Clear();
+                    continue;
+                }
+            }
+
+            sb.Append(ch);
+        }
+
+        if (sb.Length > 0)
+            resultado.Add(sb.ToString().Trim());
+
+        return resultado;
+    }
+
+    private static Dictionary<string, string> ParseCamposTotaliza(string valor)
+    {
+        var resultado = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var token in valor.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(
+                token,
+                @"^(?<op>SUM|COUNT|AVG|MIN|MAX)\((?<campo>.+)\)$",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            if (match.Success)
+            {
+                resultado[match.Groups["campo"].Value.Trim()] = match.Groups["op"].Value.ToUpperInvariant();
+            }
+            else
+            {
+                resultado[token.Trim()] = "SUM";
+            }
+        }
+
+        return resultado;
+    }
+
+    private void GenerarSQL()
+    {
+        var seleccionadas = _columnasBuilder.Where(c => c.Seleccionada).Select(c => c.Nombre).ToList();
+        var select = seleccionadas.Count > 0 ? string.Join(", ", seleccionadas) : "*";
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"SELECT {select}");
+        sb.AppendLine($"FROM {_tablaBuilder}");
+
+        var filtrosValidos = _filtrosBuilder.Where(f => !string.IsNullOrWhiteSpace(f.Campo)).ToList();
+        if (filtrosValidos.Count > 0)
+        {
+            for (int i = 0; i < filtrosValidos.Count; i++)
+            {
+                var f = filtrosValidos[i];
+                sb.Append(i == 0 ? "WHERE " : "  AND ");
+                var valorEscapado = f.ValorFijo.Replace("'", "''");
+                var valor = f.EsParametro
+                    ? "<P>"
+                    : (decimal.TryParse(f.ValorFijo, out _) ? f.ValorFijo : $"'{valorEscapado}'");
+                sb.AppendLine($"{f.Campo} {f.Operador} {valor}");
+            }
+        }
+
+        var ordenesValidos = _ordenesBuilder.Where(o => !string.IsNullOrWhiteSpace(o.Campo)).ToList();
+        if (ordenesValidos.Count > 0)
+            sb.AppendLine("ORDER BY " + string.Join(", ", ordenesValidos.Select(o => $"{o.Campo} {o.Direccion}")));
+
+        _sql = sb.ToString().TrimEnd();
+        ActualizarParametros();
+    }
+
+    private void OnSqlInput(ChangeEventArgs e)
+    {
+        _sql = e.Value?.ToString() ?? string.Empty;
+        ActualizarParametros();
+    }
+
+    private void ActualizarParametros()
+    {
+        int count = ContarTokens(_sql);
+        while (_etiquetasParams.Count < count) _etiquetasParams.Add($"Parámetro {_etiquetasParams.Count + 1}");
+        while (_etiquetasParams.Count > count) _etiquetasParams.RemoveAt(_etiquetasParams.Count - 1);
+    }
+
+    private static int ContarTokens(string sql)
+    {
+        int count = 0, idx = 0;
+        while ((idx = sql.IndexOf("<P>", idx, StringComparison.OrdinalIgnoreCase)) >= 0) { count++; idx += 3; }
+        return count;
+    }
+
+    private async Task GuardarAsync()
+    {
+        _mensajeError = null;
+        _mensajeExito = null;
+
+        if (string.IsNullOrWhiteSpace(_clave))        { _mensajeError = "La clave es obligatoria."; return; }
+        if (string.IsNullOrWhiteSpace(_nombre))       { _mensajeError = "El nombre es obligatorio."; return; }
+        if (string.IsNullOrWhiteSpace(_sql))          { _mensajeError = "El SQL es obligatorio."; return; }
+        if (!ConsultasSqlValidator.TryValidate(_sql, out var validMsg)) { _mensajeError = validMsg; return; }
+
+        _guardando = true;
+        try
+        {
+            int nuevoId = await ConsultasSvc.GuardarConsultaAsync(new GuardarConsultaRequest
+            {
+                Id = _id,
+                Grupo = _nombre.Trim(),
+                Clave = _clave.Trim(),
+                Descripcion = _descripcion.Trim(),
+                Sql = _sql.Trim(),
+                Tabla = _tabla.Trim(),
+                CamposGrupo = _camposGrupo.Trim(),
+                CamposTotaliza = _camposTotaliza.Trim(),
+                CamposOrdenar = _camposOrdenar.Trim(),
+                EtiquetasParametros = [.. _etiquetasParams]
+            });
+            Nav.NavigateTo($"/consultas/{nuevoId}");
+        }
+        catch (Exception ex)
+        {
+            _mensajeError = $"Error al guardar: {ex.Message}";
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+
+    private async Task EliminarAsync()
+    {
+        _eliminando = true;
+        try
+        {
+            await ConsultasSvc.EliminarConsultaAsync(_id!.Value);
+            Nav.NavigateTo("/consultas");
+        }
+        catch (Exception ex)
+        {
+            _mensajeError = $"Error al eliminar: {ex.Message}";
+            _mostrarConfirmarEliminar = false;
+        }
+        finally
+        {
+            _eliminando = false;
+        }
+    }
+
+    private sealed record OpcionArbol(string Clave, string Label);
+
+    private sealed class ColumnaBuilder
+    {
+        public string Nombre { get; set; } = string.Empty;
+        public string Tipo { get; set; } = string.Empty;
+        public bool Seleccionada { get; set; } = true;
+    }
+
+    private sealed class FiltroBuilder
+    {
+        public string Campo { get; set; } = string.Empty;
+        public string Operador { get; set; } = "=";
+        public bool EsParametro { get; set; } = true;
+        public string ValorFijo { get; set; } = string.Empty;
+    }
+
+    private sealed class OrdenBuilder
+    {
+        public string Campo { get; set; } = string.Empty;
+        public string Direccion { get; set; } = "ASC";
+    }
+}

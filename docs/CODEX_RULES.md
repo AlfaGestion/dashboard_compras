@@ -151,7 +151,7 @@ Evitar nombres genéricos como:
 Preferir nombres concretos como:
 
 - `ComprasRepository`
-- `DashboardComprasService`
+- `AlfaCoreService`
 - `FiltrosComprasDto`
 - `ComprobantesPageState`
 

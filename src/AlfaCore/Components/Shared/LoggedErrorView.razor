@@ -1,0 +1,32 @@
+@inject AlfaCore.Services.IAppEventService AppEvents
+
+<div class="panel-card empty-state">
+    <span class="empty-state__eyebrow">Aplicación</span>
+    <h1>Se produjo un error</h1>
+    <p>@_userMessage</p>
+    @if (!string.IsNullOrWhiteSpace(_incidentId))
+    {
+        <p><strong>Código de incidente:</strong> @_incidentId</p>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Exception Exception { get; set; } = default!;
+    [Parameter] public string Module { get; set; } = "UI";
+    [Parameter] public string Action { get; set; } = "UnhandledComponent";
+
+    private string _incidentId = string.Empty;
+    private string _userMessage = "La pantalla encontró un error inesperado. Si vuelve a ocurrir, pasanos el código para revisarlo.";
+    private string _lastSignature = string.Empty;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var signature = $"{Exception.GetType().FullName}:{Exception.Message}";
+        if (signature == _lastSignature)
+            return;
+
+        _lastSignature = signature;
+        _incidentId = await AppEvents.LogErrorAsync(Module, Action, Exception, _userMessage);
+        _userMessage = $"{_userMessage}";
+    }
+}

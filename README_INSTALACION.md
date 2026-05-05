@@ -1,8 +1,8 @@
-# Dashboard de Compras - Alfa Gestión
+# AlfaCore - Alfa Gestión
 
 ## Instalación desde el Setup.exe (recomendado)
 
-1. Ejecutá `DashboardComprasSetup_X.X.X.exe` como administrador.
+1. Ejecutá `AlfaCoreSetup_X.X.X.exe` como administrador.
 2. El instalador verifica si falta el .NET 8 Hosting Bundle y lo instala automáticamente.
 3. Durante la instalación podés elegir:
    - ✅ **Instalar como servicio de Windows** — la app arranca sola con el servidor (recomendado).
@@ -10,6 +10,7 @@
    - Abrir el manual al finalizar.
 4. La primera vez que la app arranca pedirá los datos de conexión SQL Server por consola.
 5. Esos datos se guardan en `appsettings.Production.json` y no se vuelven a pedir.
+6. El instalador no incluye configuraciones reales de base de datos ni el contenido de `App_Data` del entorno de desarrollo.
 
 ---
 
@@ -31,7 +32,7 @@ Si necesitás cambiarlos, editá ese archivo directamente o eliminalo para que l
 
 ## Servicio de Windows
 
-El setup instala la app como servicio de Windows (`DashboardCompras`). Esto significa que:
+El setup instala la app como servicio de Windows (`AlfaCore`). Esto significa que:
 - Arranca automáticamente con el servidor.
 - Se reinicia solo si falla (hasta 3 reintentos).
 - No requiere que nadie inicie sesión para que funcione.
@@ -39,11 +40,11 @@ El setup instala la app como servicio de Windows (`DashboardCompras`). Esto sign
 **Gestionar el servicio:**
 ```batch
 # Ver estado
-sc query DashboardCompras
+sc query AlfaCore
 
 # Iniciar / detener
-sc start DashboardCompras
-sc stop DashboardCompras
+sc start AlfaCore
+sc stop AlfaCore
 
 # O desde el buscador de Windows: services.msc
 ```
@@ -71,7 +72,7 @@ Sugerencia: crear un acceso directo en cada cliente apuntando a `http://NOMBRE-P
 
 ## Instalación manual (sin Setup.exe)
 
-1. Ejecutá `scripts\publicar_release.bat` para generar `publish\DashboardComprasLAN`.
+1. Ejecutá `scripts\publicar_release.bat` para generar `publish\AlfaCoreLAN`.
 2. Copiá esa carpeta a la PC servidor.
 3. Editá `appsettings.Production.json` con los datos de conexión y puerto.
 4. Ejecutá `abrir_firewall.bat` como administrador.
@@ -87,10 +88,10 @@ scripts\publicar_instalador.bat 1.0.0
 ```
 
 El script hace todo en orden:
-1. Publica la app en `publish\DashboardComprasLAN`.
-2. Copia los archivos a `publish\DashboardComprasInstaller\Input` (connection string vacío).
+1. Publica la app en `publish\AlfaCoreLAN`.
+2. Copia los archivos a `publish\AlfaCoreInstaller\Input` (connection string vacío).
 3. Descarga o usa el .NET 8 Hosting Bundle cacheado en `installer\prereqs\`.
-4. Compila el instalador con Inno Setup 6 o 7 → `publish\DashboardComprasInstaller\Output\`.
+4. Compila el instalador con Inno Setup 6 o 7 → `publish\AlfaCoreInstaller\Output\`.
 
 Requisito: tener [Inno Setup](https://jrsoftware.org/isinfo.php) instalado (v6 o v7).  
 Si no está instalado, igual queda preparada la carpeta Input para compilar manualmente.
@@ -99,15 +100,15 @@ Si no está instalado, igual queda preparada la carpeta Input para compilar manu
 
 ## Actualizar una instalación existente
 
-Copiá el contenido de `publish\DashboardComprasLAN\` al directorio de instalación, **sin pisar `appsettings.Production.json`**:
+Copiá el contenido de `publish\AlfaCoreLAN\` al directorio de instalación, **sin pisar `appsettings.Production.json`**:
 
 ```batch
-robocopy publish\DashboardComprasLAN "C:\ruta\instalacion" /MIR /XF appsettings.Production.json *.log
+robocopy publish\AlfaCoreLAN "C:\ruta\instalacion" /MIR /XF appsettings.Production.json *.log
 ```
 
 Después reiniciá el servicio:
 ```batch
-sc stop DashboardCompras && sc start DashboardCompras
+sc stop AlfaCore && sc start AlfaCore
 ```
 
 ---

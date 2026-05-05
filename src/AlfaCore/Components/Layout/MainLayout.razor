@@ -1,0 +1,423 @@
+@inherits LayoutComponentBase
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@inject AlfaCore.Services.ISessionService SessionSvc
+@implements IDisposable
+
+<div class="shell @(_sidebarCollapsed ? "shell--collapsed" : string.Empty)">
+    <aside class="shell__sidebar">
+        <div class="brand">
+            <img class="brand__logo" src="logo.png" alt="Alfa Gestión" />
+            <div class="brand__content">
+                <p class="brand__eyebrow">Business Intelligence</p>
+                <a class="brand__title" href="/">Alfa Gestión</a>
+            </div>
+            <button type="button"
+                    class="sidebar-toggle"
+                    @onclick="ToggleSidebar"
+                    title="@(_sidebarCollapsed ? "Mostrar menú" : "Ocultar menú")"
+                    aria-label="@(_sidebarCollapsed ? "Mostrar menú lateral" : "Ocultar menú lateral")">
+                <i class="bi @(_sidebarCollapsed ? "bi-layout-sidebar-inset" : "bi-layout-sidebar")"></i>
+            </button>
+        </div>
+
+        <div class="menu">
+            @if (_currentModule == "consultas")
+            {
+                <a class="menu__back" href="/">
+                    <i class="bi bi-grid-3x3-gap-fill"></i>
+                    <span>Aplicaciones</span>
+                </a>
+                <p class="menu__section">Consultas</p>
+                <nav class="menu__nav">
+                    <NavLink class="menu__link" href="/consultas" Match="NavLinkMatch.All">
+                        <span class="menu__icon"><i class="bi bi-table"></i></span>
+                        <span>Mis consultas</span>
+                    </NavLink>
+                    <NavLink class="menu__link" href="/consultas/nueva" Match="NavLinkMatch.All">
+                        <span class="menu__icon"><i class="bi bi-plus-circle"></i></span>
+                        <span>Nueva consulta</span>
+                    </NavLink>
+                </nav>
+            }
+            else if (_currentModule == "costos")
+            {
+                <a class="menu__back" href="/">
+                    <i class="bi bi-grid-3x3-gap-fill"></i>
+                    <span>Aplicaciones</span>
+                </a>
+                <p class="menu__section">Actualización de Costos</p>
+                <nav class="menu__nav">
+                    <NavLink class="menu__link" href="/costos" Match="NavLinkMatch.All">
+                        <span class="menu__icon"><i class="bi bi-currency-dollar"></i></span>
+                        <span>Inicio</span>
+                    </NavLink>
+                    <NavLink class="menu__link" href="/costos/nueva" Match="NavLinkMatch.All">
+                        <span class="menu__icon"><i class="bi bi-upload"></i></span>
+                        <span>Nueva importación</span>
+                    </NavLink>
+                    <NavLink class="menu__link" href="/costos/perfiles">
+                        <span class="menu__icon"><i class="bi bi-sliders"></i></span>
+                        <span>Perfiles</span>
+                    </NavLink>
+                    <NavLink class="menu__link" href="/costos/historial">
+                        <span class="menu__icon"><i class="bi bi-clock-history"></i></span>
+                        <span>Historial</span>
+                    </NavLink>
+                </nav>
+            }
+            else if (_currentModule == "auditoria")
+            {
+                <a class="menu__back" href="/">
+                    <i class="bi bi-grid-3x3-gap-fill"></i>
+                    <span>Aplicaciones</span>
+                </a>
+                <p class="menu__section">Auditoría</p>
+                <nav class="menu__nav">
+                    <NavLink class="menu__link" href="/auditoria" Match="NavLinkMatch.All">
+                        <span class="menu__icon"><i class="bi bi-shield-exclamation"></i></span>
+                        <span>Resumen</span>
+                    </NavLink>
+                    <NavLink class="menu__link" href="/auditoria/errores" Match="NavLinkMatch.Prefix">
+                        <span class="menu__icon"><i class="bi bi-bug"></i></span>
+                        <span>Errores</span>
+                    </NavLink>
+                </nav>
+            }
+            else if (_currentModule == "ventas")
+            {
+                <a class="menu__back" href="/">
+                    <i class="bi bi-grid-3x3-gap-fill"></i>
+                    <span>Aplicaciones</span>
+                </a>
+                <p class="menu__section">Ventas</p>
+                <nav class="menu__nav">
+                    <NavLink class="menu__link" href="/ventas" Match="NavLinkMatch.All">
+                        <span class="menu__icon"><i class="bi bi-graph-up-arrow"></i></span>
+                        <span>Inicio</span>
+                    </NavLink>
+                    <NavLink class="menu__link" href="/ventas/clientes">
+                        <span class="menu__icon"><i class="bi bi-people-fill"></i></span>
+                        <span>Clientes</span>
+                    </NavLink>
+                    <NavLink class="menu__link" href="/ventas/rubros">
+                        <span class="menu__icon"><i class="bi bi-tag-fill"></i></span>
+                        <span>Rubros</span>
+                    </NavLink>
+                    <NavLink class="menu__link" href="/ventas/familias">
+                        <span class="menu__icon"><i class="bi bi-collection-fill"></i></span>
+                        <span>Familias</span>
+                    </NavLink>
+                    <NavLink class="menu__link" href="/ventas/articulos">
+                        <span class="menu__icon"><i class="bi bi-box-fill"></i></span>
+                        <span>Artículos</span>
+                    </NavLink>
+                    <NavLink class="menu__link" href="/ventas/comprobantes">
+                        <span class="menu__icon"><i class="bi bi-receipt"></i></span>
+                        <span>Comprobantes</span>
+                    </NavLink>
+                </nav>
+            }
+            else if (_currentModule == "stock")
+            {
+                <a class="menu__back" href="/">
+                    <i class="bi bi-grid-3x3-gap-fill"></i>
+                    <span>Aplicaciones</span>
+                </a>
+                <p class="menu__section">Stock</p>
+                <nav class="menu__nav">
+                    <NavLink class="menu__link" href="/stock" Match="NavLinkMatch.All">
+                        <span class="menu__icon"><i class="bi bi-box-seam"></i></span>
+                        <span>Resumen</span>
+                    </NavLink>
+                </nav>
+            }
+            else if (_currentModule == "caja-bancos")
+            {
+                <a class="menu__back" href="/">
+                    <i class="bi bi-grid-3x3-gap-fill"></i>
+                    <span>Aplicaciones</span>
+                </a>
+                <p class="menu__section">Caja y Bancos</p>
+                <nav class="menu__nav">
+                    <NavLink class="menu__link" href="/caja-bancos" Match="NavLinkMatch.All">
+                        <span class="menu__icon"><i class="bi bi-bank"></i></span>
+                        <span>Resumen</span>
+                    </NavLink>
+                </nav>
+            }
+            else if (_currentModule == "contabilidad")
+            {
+                <a class="menu__back" href="/">
+                    <i class="bi bi-grid-3x3-gap-fill"></i>
+                    <span>Aplicaciones</span>
+                </a>
+                <p class="menu__section">Contabilidad</p>
+                <nav class="menu__nav">
+                    <NavLink class="menu__link" href="/contabilidad" Match="NavLinkMatch.All">
+                        <span class="menu__icon"><i class="bi bi-journal-bookmark-fill"></i></span>
+                        <span>Resumen</span>
+                    </NavLink>
+                    <NavLink class="menu__link" href="/contabilidad/posicion-iva" Match="NavLinkMatch.All">
+                        <span class="menu__icon"><i class="bi bi-receipt"></i></span>
+                        <span>Posición de IVA</span>
+                    </NavLink>
+                </nav>
+            }
+            else if (_currentModule == "compras")
+            {
+                <a class="menu__back" href="/">
+                    <i class="bi bi-grid-3x3-gap-fill"></i>
+                    <span>Aplicaciones</span>
+                </a>
+                <p class="menu__section">Compras</p>
+                <nav class="menu__nav">
+                    <NavLink class="menu__link" href="/compras" Match="NavLinkMatch.All">
+                        <span class="menu__icon"><i class="bi bi-house-fill"></i></span>
+                        <span>Inicio</span>
+                    </NavLink>
+                    <NavLink class="menu__link" href="/compras/proveedores">
+                        <span class="menu__icon"><i class="bi bi-people-fill"></i></span>
+                        <span>Proveedores</span>
+                    </NavLink>
+                    <NavLink class="menu__link" href="/compras/comprobantes">
+                        <span class="menu__icon"><i class="bi bi-receipt"></i></span>
+                        <span>Comprobantes</span>
+                    </NavLink>
+                    <NavLink class="menu__link" href="/compras/rubros">
+                        <span class="menu__icon"><i class="bi bi-tag-fill"></i></span>
+                        <span>Rubros</span>
+                    </NavLink>
+                    <NavLink class="menu__link" href="/compras/familias">
+                        <span class="menu__icon"><i class="bi bi-collection-fill"></i></span>
+                        <span>Familias</span>
+                    </NavLink>
+                    <NavLink class="menu__link" href="/compras/articulos">
+                        <span class="menu__icon"><i class="bi bi-box-fill"></i></span>
+                        <span>Artículos</span>
+                    </NavLink>
+                    <NavLink class="menu__link" href="/compras/actividad">
+                        <span class="menu__icon"><i class="bi bi-bar-chart-steps"></i></span>
+                        <span>Actividad</span>
+                    </NavLink>
+                    <NavLink class="menu__link" href="/compras/informesia">
+                        <span class="menu__icon"><i class="bi bi-stars"></i></span>
+                        <span>InformesIA</span>
+                    </NavLink>
+                </nav>
+            }
+            else
+            {
+                <p class="menu__section">Tableros</p>
+                <nav class="menu__nav">
+                    <NavLink class="menu__link" href="/" Match="NavLinkMatch.All">
+                        <span class="menu__icon"><i class="bi bi-grid-3x3-gap-fill"></i></span>
+                        <span>Aplicaciones</span>
+                    </NavLink>
+                </nav>
+            }
+
+            <div class="menu__footer">
+                <NavLink class="menu__link menu__link--help" href="@(_currentModule == "consultas" ? "/ayuda?topic=consultas" : "/ayuda")">
+                    <span class="menu__icon"><i class="bi bi-question-circle-fill"></i></span>
+                    <span>Ayuda</span>
+                </NavLink>
+            </div>
+        </div>
+    </aside>
+
+    <main class="shell__main">
+        <header class="shell__header">
+            <div>
+                <p class="shell__eyebrow">Alfa Gestión</p>
+                <h1 class="shell__title">@GetModuleTitle()</h1>
+            </div>
+            <div class="shell__actions">
+                <button type="button" class="btn btn--ghost no-print" @onclick="ToggleThemeAsync" title="@(_isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro")">
+                    <i class="bi @(_isDark ? "bi-sun" : "bi-moon")"></i>
+                </button>
+                @if (_currentModule == "compras")
+                {
+                    <button type="button" class="btn btn--ghost shell__print no-print" @onclick="ExportCurrentPageToPdfAsync" title="Exportar pantalla actual a PDF">
+                        <i class="bi bi-file-earmark-pdf"></i>
+                        <span>Exportar PDF</span>
+                    </button>
+                }
+                <button class="session-chip no-print" @onclick="() => _drawerOpen = true" title="Gestionar sesiones de base de datos">
+                    <span class="session-chip__dot"></span>
+                    <span class="session-chip__text">@(_activeSession?.Servidor ?? "—") · @(_activeSession?.BaseDatos ?? "—")</span>
+                    <i class="bi bi-chevron-down"></i>
+                </button>
+                <div class="shell__status">
+                    <span class="shell__dot"></span>
+                    <span>Actualizado en tiempo real</span>
+                    <span class="shell__date">@DateTime.Now.ToString("dd/MM/yyyy")</span>
+                    <a class="help-btn no-print" href="@(_currentModule == "consultas" ? "/ayuda?topic=consultas" : "/ayuda")" title="Manual de usuario">
+                        <i class="bi bi-question-circle"></i>
+                    </a>
+                </div>
+            </div>
+        </header>
+
+        <section class="shell__content">
+            <div class="print-banner print-only">
+                <div>
+                    <p class="print-banner__eyebrow">Dashboard de Compras</p>
+                    <h2 class="print-banner__title">@CurrentPageTitle</h2>
+                </div>
+                <p class="print-banner__meta">Exportado el @DateTime.Now.ToString("dd/MM/yyyy HH:mm")</p>
+            </div>
+            @Body
+        </section>
+    </main>
+</div>
+
+<SessionDrawer Open="_drawerOpen" OnClose="() => _drawerOpen = false" />
+
+@code {
+    private bool _sidebarCollapsed;
+    private bool _sidebarInitialized;
+    private bool _isDark = false;
+    private bool _drawerOpen;
+    private AlfaCore.Models.SessionDto? _activeSession;
+    private string CurrentPageTitle => GetCurrentPageTitle();
+
+    private string _currentModule = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        _activeSession = SessionSvc.GetActiveSession();
+        SessionSvc.SessionChanged += OnSessionChanged;
+    }
+
+    private void OnSessionChanged()
+    {
+        _activeSession = SessionSvc.GetActiveSession();
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => SessionSvc.SessionChanged -= OnSessionChanged;
+
+    protected override void OnParametersSet()
+    {
+        var path = Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0].Split('#')[0].Trim('/');
+        _currentModule = path.Split('/').FirstOrDefault()?.ToLowerInvariant() ?? string.Empty;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        try
+        {
+            var sidebar = await JS.InvokeAsync<string?>("localStorage.getItem", "dashboard.sidebar.collapsed");
+            _sidebarCollapsed = string.Equals(sidebar, "true", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            _sidebarCollapsed = false;
+        }
+
+        try
+        {
+            var theme = await JS.InvokeAsync<string>("dashboardTheme.get");
+            _isDark = !string.Equals(theme, "light", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            _isDark = true;
+        }
+
+        _sidebarInitialized = true;
+        StateHasChanged();
+    }
+
+    private async Task ToggleSidebar()
+    {
+        _sidebarCollapsed = !_sidebarCollapsed;
+
+        if (!_sidebarInitialized)
+            return;
+
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", "dashboard.sidebar.collapsed", _sidebarCollapsed ? "true" : "false");
+        }
+        catch
+        {
+            // Si localStorage no está disponible, dejamos el estado solo en memoria.
+        }
+    }
+
+    private async Task ToggleThemeAsync()
+    {
+        _isDark = !_isDark;
+        try
+        {
+            await JS.InvokeVoidAsync("dashboardTheme.set", _isDark ? "dark" : "light");
+        }
+        catch { }
+    }
+
+    private async Task ExportCurrentPageToPdfAsync()
+    {
+        await JS.InvokeVoidAsync("dashboardExport.printCurrentPage", CurrentPageTitle);
+    }
+
+    private string GetCurrentPageTitle()
+    {
+        var relative = Nav.ToBaseRelativePath(Nav.Uri);
+        var path = relative.Split('?', '#', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim('/').ToLowerInvariant() ?? string.Empty;
+
+        return path switch
+        {
+            "" => "Aplicaciones",
+            "ventas" => "Ventas",
+            "ventas/clientes" => "Clientes",
+            "ventas/rubros" => "Rubros",
+            "ventas/familias" => "Familias",
+            "ventas/articulos" => "Artículos",
+            "ventas/comprobantes" => "Comprobantes",
+            "stock" => "Stock",
+            "caja-bancos" => "Caja y Bancos",
+            "contabilidad" => "Contabilidad",
+            "contabilidad/posicion-iva" => "Posición de IVA",
+            "costos" => "Actualización de Costos",
+            "costos/nueva" => "Nueva Importación",
+            "costos/perfiles" => "Perfiles de Costos",
+            "costos/historial" => "Historial de Costos",
+            "auditoria" => "Auditoría",
+            "auditoria/errores" => "Errores",
+            "compras" => "Inicio",
+            "compras/proveedores" => "Proveedores",
+            "compras/comprobantes" => "Comprobantes",
+            "compras/rubros" => "Rubros",
+            "compras/familias" => "Familias",
+            "compras/articulos" => "Artículos",
+            "compras/actividad" => "Actividad",
+            "compras/informesia" => "Informes IA",
+            "consultas" => "Consultas",
+            "ayuda" => "Ayuda",
+            _ when path.StartsWith("compras/informesia/resultado/") => "Informe IA",
+            _ when path.StartsWith("costos/lotes/") => "Lote de Costos",
+            _ when path.StartsWith("auditoria/error/") => "Detalle de Error",
+            "consultas/nueva" => "Nueva consulta",
+            _ when path.StartsWith("consultas/") && path.EndsWith("/editar") => "Editar consulta",
+            _ when path.StartsWith("consultas/") => "Consulta",
+            _ => "Dashboard"
+        };
+    }
+
+    private string GetModuleTitle() => _currentModule switch
+    {
+        "consultas" => "Diseñador de Consultas",
+        "ventas" => "Dashboard de Ventas",
+        "stock" => "Dashboard de Stock",
+        "caja-bancos" => "Caja y Bancos",
+        "contabilidad" => "Dashboard Contable",
+        "costos" => "Actualización de Costos",
+        "auditoria" => "Auditoría",
+        _ => "Dashboard de Compras"
+    };
+}

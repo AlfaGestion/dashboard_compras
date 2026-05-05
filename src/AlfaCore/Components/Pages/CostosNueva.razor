@@ -1,0 +1,401 @@
+@page "/costos/nueva"
+@using Microsoft.AspNetCore.Components.Forms
+@inject AlfaCore.Services.ICostosService CostosSvc
+@inject NavigationManager Nav
+
+<PageTitle>Nueva Importación de Costos | Alfa Gestión</PageTitle>
+
+<div class="page-grid">
+    <section class="page-intro">
+        <div>
+            <h2 class="page-intro__title">Nueva Importación</h2>
+            <p class="page-intro__text">Seleccioná un perfil y cargá un archivo estructurado (`.xlsx`, `.csv`, `.txt`). PDF e imagen quedan para la siguiente etapa IA.</p>
+        </div>
+    </section>
+
+    <section class="panel-card">
+        <div class="panel-card__header">
+            <div>
+                <h3 class="panel-card__title">Configuración</h3>
+            </div>
+        </div>
+
+        <div class="filters-grid">
+            <div class="field">
+                <label>Perfil</label>
+                <input type="text"
+                       class="costos-nueva__search-input"
+                       placeholder="Buscar perfil por nombre o código…"
+                       value="@_filterText"
+                       @oninput="OnFilterInput" />
+
+                @if (_profileId != 0 && SelectedProfile is not null)
+                {
+                    <div class="costos-nueva__selected-profile">
+                        <div>
+                            <small class="costos-nueva__selected-label">Perfil seleccionado</small>
+                            <strong>@SelectedProfile.ProviderName</strong>
+                            @if (!string.IsNullOrWhiteSpace(SelectedProfile.ProviderAccount))
+                            {
+                                <span class="costos-nueva__selected-code">[@SelectedProfile.ProviderAccount]</span>
+                            }
+                        </div>
+                        <button type="button" class="btn btn--ghost btn--sm" @onclick="ClearSelectedProfile">
+                            <i class="bi bi-x-circle"></i>
+                            <span>Cambiar</span>
+                        </button>
+                    </div>
+                }
+
+                <div class="costos-nueva__profile-results">
+                    @if (FilteredProfiles.Count == 0)
+                    {
+                        <div class="costos-nueva__empty">
+                            No hay perfiles que coincidan con “@_filterText”.
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var profile in FilteredProfiles)
+                        {
+                            var isSelected = profile.Id == _profileId;
+                            <button type="button"
+                                    class="costos-nueva__profile-option @(isSelected ? "is-selected" : null)"
+                                    @onclick="() => SelectProfile(profile.Id)">
+                                <span class="costos-nueva__profile-name">@profile.ProviderName</span>
+                                @if (!string.IsNullOrWhiteSpace(profile.ProviderAccount))
+                                {
+                                    <span class="costos-nueva__profile-code">@profile.ProviderAccount</span>
+                                }
+                            </button>
+                        }
+                    }
+                </div>
+            </div>
+            <div class="field">
+                <label>Archivo</label>
+                <InputFile OnChange="OnFileSelectedAsync" disabled="@_busy" />
+                @if (_detectingColumns)
+                {
+                    <small style="color:var(--color-accent); display:block; margin-top:.25rem;">Analizando columnas…</small>
+                }
+                @if (_upload is not null && !_detectingColumns)
+                {
+                    <div style="display:flex; align-items:center; gap:.5rem; margin-top:.4rem; padding:.4rem .6rem; background:var(--color-surface); border:1px solid var(--color-border); border-radius:5px;">
+                        <i class="bi bi-file-earmark-spreadsheet" style="color:var(--color-accent);"></i>
+                        <span style="font-size:.85rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">@_upload.Name</span>
+                        <span style="font-size:.8rem; color:var(--color-muted); white-space:nowrap;">@FileSizeFmt(_upload.Size)</span>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* Selector de columna de precio *@
+        @if (_fileColumns is { Detected: true } && _fileColumns.PriceCandidates.Count > 1)
+        {
+            <div style="margin-top:.75rem; padding:.75rem; border:1px solid var(--color-border); border-radius:6px; background:var(--color-surface);">
+                <label style="font-weight:600; display:block; margin-bottom:.4rem;">
+                    ¿Cuál columna usar como costo?
+                </label>
+                <p class="panel-card__subtitle" style="margin-bottom:.5rem;">
+                    El archivo tiene @_fileColumns.PriceCandidates.Count columnas con precios. Elegí la que corresponde al costo de importación.
+                </p>
+                <select value="@_chosenPriceColIndex" @onchange="OnPriceColumnChanged">
+                    @foreach (var col in _fileColumns.PriceCandidates)
+                    {
+                        var sample = GetSampleValue(col.ColIndex);
+                        <option value="@col.ColIndex">@col.Name@(string.IsNullOrWhiteSpace(sample) ? string.Empty : $"  (ej: {sample})")</option>
+                    }
+                </select>
+            </div>
+        }
+
+        @if (_profileId != 0)
+        {
+            <div class="field" style="margin-top:1rem;">
+                <label>Notas / Prompt</label>
+                <textarea rows="3"
+                          placeholder="Notas o instrucciones para esta corrida (por ejemplo: usar PRECIO NETO con 10% de descuento como costo…)."
+                          @bind="_notes"
+                          disabled="@_busy"
+                          style="width:100%; resize:vertical;"></textarea>
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_message))
+        {
+            <div class="editor-msg @(_isError ? "editor-msg--error" : "editor-msg--ok")" style="margin-top:1rem;">
+                <i class="bi @(_isError ? "bi-exclamation-circle" : "bi-check-circle")"></i> @_message
+            </div>
+        }
+
+        @* Barra de progreso *@
+        @if (_busy)
+        {
+            <div style="margin-top:.75rem;">
+                <div style="width:100%; height:8px; background:var(--color-border); border-radius:4px; overflow:hidden;">
+                    <div style="width:@(_importProgress)%; height:100%; background:var(--color-primary); border-radius:4px; transition:width .25s ease;"></div>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:.3rem;">
+                    <small style="color:var(--color-muted);">@_importProgress% — @ImportStepLabel()</small>
+                    <button class="btn-link btn-link--danger" @onclick="CancelImport" style="font-size:.82rem;">
+                        <i class="bi bi-x-circle"></i> Cancelar
+                    </button>
+                </div>
+            </div>
+        }
+
+        <div class="actions" style="margin-top:1rem;">
+            <button class="btn btn--primary" @onclick="ImportAsync" disabled="@(_upload is null || _profileId == 0 || _busy || _detectingColumns)">
+                @if (_busy)
+                {
+                    <i class="bi bi-hourglass-split"></i>
+                    <span>Importando…</span>
+                }
+                else
+                {
+                    <i class="bi bi-upload"></i>
+                    <span>Iniciar importación</span>
+                }
+            </button>
+            @if (_result is not null && !_busy)
+            {
+                <button class="btn btn--ghost" @onclick="RerunAsync" disabled="@(_upload is null)">
+                    <i class="bi bi-arrow-clockwise"></i>
+                    <span>Volver a correr</span>
+                </button>
+                <a class="btn btn--ghost" href="/costos/lotes/@_result.Batch.Id">
+                    <i class="bi bi-box-arrow-right"></i>
+                    <span>Abrir lote</span>
+                </a>
+            }
+        </div>
+    </section>
+
+    @if (_result is not null)
+    {
+        <section class="panel-card">
+            <div class="panel-card__header">
+                <div>
+                    <h3 class="panel-card__title">Vista previa</h3>
+                    <p class="panel-card__subtitle">Corrida #@_result.Batch.Id · @_result.Rows.Count filas válidas · @_result.Batch.SourceFileName</p>
+                </div>
+            </div>
+
+            <div style="margin-bottom:1rem;">
+                <a class="btn btn--secondary"
+                   href="/api/costos/importaciones/@_result.Batch.Id/descargar-archivo"
+                   target="_blank"
+                   style="display:inline-flex; align-items:center; gap:.4rem;">
+                    <i class="bi bi-file-earmark-arrow-down"></i>
+                    Abrir archivo original
+                </a>
+            </div>
+
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Fila</th>
+                            <th>Código prov.</th>
+                            <th>Descripción</th>
+                            <th>Costo</th>
+                            <th>Hoja</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _result.Rows.Take(25))
+                        {
+                            <tr>
+                                <td>@row.RowNumber</td>
+                                <td>@row.ProviderCode</td>
+                                <td>@row.Description</td>
+                                <td>@(row.CostPrice?.ToString("N2") ?? "—")</td>
+                                <td>@(row.SourceSheet ?? "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<AlfaCore.Models.CostosProfileDto> _profiles = [];
+    private int _profileId;
+    private string _filterText = string.Empty;
+    private string _notes = string.Empty;
+    private IBrowserFile? _upload;
+    private AlfaCore.Models.CostosFileColumnsDto? _fileColumns;
+    private int _chosenPriceColIndex = -1;
+    private bool _detectingColumns;
+    private AlfaCore.Models.CostosImportResultDto? _result;
+    private string _message = string.Empty;
+    private bool _isError;
+    private bool _busy;
+    private int _importProgress;
+    private CancellationTokenSource? _importCts;
+
+    private AlfaCore.Models.CostosProfileDto? SelectedProfile =>
+        _profiles.FirstOrDefault(p => p.Id == _profileId);
+
+    private List<AlfaCore.Models.CostosProfileDto> FilteredProfiles =>
+        _profiles
+            .Where(p => string.IsNullOrWhiteSpace(_filterText)
+                || p.ProviderName.Contains(_filterText, StringComparison.OrdinalIgnoreCase)
+                || (!string.IsNullOrWhiteSpace(p.ProviderAccount)
+                    && p.ProviderAccount.Contains(_filterText, StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(p => p.ProviderName)
+            .Take(50)
+            .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _profiles = await CostosSvc.GetProfilesAsync();
+        var lastId = await CostosSvc.GetLastUsedProfileIdAsync();
+        if (lastId.HasValue && _profiles.Any(p => p.Id == lastId.Value))
+        {
+            _profileId = lastId.Value;
+            _notes = _profiles.First(p => p.Id == _profileId).Notes;
+        }
+    }
+
+    private void OnFilterInput(ChangeEventArgs e)
+    {
+        _filterText = e.Value?.ToString() ?? string.Empty;
+    }
+
+    private void SelectProfile(int id)
+    {
+        _profileId = id;
+        var selected = SelectedProfile;
+        _notes = selected?.Notes ?? string.Empty;
+    }
+
+    private void ClearSelectedProfile()
+    {
+        _profileId = 0;
+        _notes = string.Empty;
+    }
+
+    private void OnPriceColumnChanged(ChangeEventArgs e)
+    {
+        _chosenPriceColIndex = int.TryParse(e.Value?.ToString(), out var v)
+            ? v
+            : (_fileColumns?.DefaultPriceColIndex ?? -1);
+    }
+
+    private async Task OnFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        _upload = e.File;
+        _fileColumns = null;
+        _chosenPriceColIndex = -1;
+        _message = string.Empty;
+        _isError = false;
+        _result = null;
+
+        if (_upload is null)
+            return;
+
+        _detectingColumns = true;
+        try
+        {
+            var profile = _profiles.FirstOrDefault(p => p.Id == _profileId);
+            await using var previewStream = _upload.OpenReadStream(25 * 1024 * 1024);
+            _fileColumns = await CostosSvc.DetectFileColumnsAsync(_upload.Name, previewStream, profile?.SheetName ?? string.Empty);
+            _chosenPriceColIndex = _fileColumns.DefaultPriceColIndex;
+        }
+        finally
+        {
+            _detectingColumns = false;
+        }
+    }
+
+    private string GetSampleValue(int colIndex)
+    {
+        if (_fileColumns is null || _fileColumns.SampleRows.Count == 0)
+            return string.Empty;
+        var row = _fileColumns.SampleRows[0];
+        return colIndex < row.Count ? row[colIndex] : string.Empty;
+    }
+
+    private static string FileSizeFmt(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
+        _ => $"{bytes / 1024.0 / 1024.0:F1} MB"
+    };
+
+    private string ImportStepLabel() => _importProgress switch
+    {
+        < 5 => "Iniciando…",
+        < 15 => "Guardando archivo…",
+        < 20 => "Leyendo filas…",
+        < 95 => "Insertando filas…",
+        _ => "Finalizando…"
+    };
+
+    private void CancelImport()
+    {
+        _importCts?.Cancel();
+    }
+
+    private async Task ImportAsync()
+    {
+        if (_upload is null || _profileId == 0)
+            return;
+
+        _busy = true;
+        _importProgress = 0;
+        _message = string.Empty;
+        _isError = false;
+        _importCts?.Dispose();
+        _importCts = new CancellationTokenSource();
+
+        var progress = new Progress<int>(pct =>
+        {
+            _importProgress = pct;
+            _ = InvokeAsync(StateHasChanged);
+        });
+
+        try
+        {
+            var priceColOverride = _fileColumns is { PriceCandidates.Count: > 1 } && _chosenPriceColIndex >= 0
+                ? (int?)_chosenPriceColIndex
+                : null;
+
+            await using var stream = _upload.OpenReadStream(25 * 1024 * 1024);
+            _result = await CostosSvc.ImportStructuredFileAsync(
+                _profileId, _upload.Name, stream, Environment.UserName,
+                _notes, priceColOverride, progress, _importCts.Token);
+            _message = $"Corrida #{_result.Batch.Id} creada correctamente — {_result.Rows.Count} filas.";
+        }
+        catch (OperationCanceledException)
+        {
+            _isError = true;
+            _message = "Importación cancelada.";
+            _result = null;
+        }
+        catch (Exception ex)
+        {
+            _isError = true;
+            _message = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+            _importProgress = 0;
+            _importCts?.Dispose();
+            _importCts = null;
+        }
+    }
+
+    private async Task RerunAsync()
+    {
+        _result = null;
+        _message = string.Empty;
+        _isError = false;
+        await ImportAsync();
+    }
+}

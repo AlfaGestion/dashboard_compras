@@ -10,7 +10,7 @@ set "SOURCE_DIR=.\publish\AlfaCoreLAN"
 set "INSTALLER_ROOT=.\publish\AlfaCoreInstaller"
 set "INPUT_DIR=%INSTALLER_ROOT%\Input"
 set "OUTPUT_DIR=%INSTALLER_ROOT%\Output"
-set "ISS_FILE=.\installer\DashboardComprasServidor.iss"
+set "ISS_FILE=.\installer\AlfaCore.iss"
 set "PREREQS_CACHE=.\installer\prereqs"
 set "HOSTING_BUNDLE_URL=https://aka.ms/dotnet/8.0/dotnet-hosting-win.exe"
 set "ISCC_EXE="
@@ -50,7 +50,7 @@ if exist "%INPUT_DIR%" (
 if not exist "%INPUT_DIR%" mkdir "%INPUT_DIR%"
 if not exist "%OUTPUT_DIR%" mkdir "%OUTPUT_DIR%"
 
-robocopy "%SOURCE_DIR_FULL%" "%INPUT_DIR_FULL%" /MIR /XF "*.pdb" "*.log" "appsettings.Development.json" >nul
+robocopy "%SOURCE_DIR_FULL%" "%INPUT_DIR_FULL%" /MIR /XF "*.pdb" "*.log" "appsettings.Development.json" /XD "App_Data" >nul
 set "ROBOCODE=%ERRORLEVEL%"
 if %ROBOCODE% GEQ 8 (
   echo Robocopy devolvio error %ROBOCODE%.
@@ -60,6 +60,8 @@ if %ROBOCODE% GEQ 8 (
 echo [2.5/5] Limpiando datos de conexion del instalador...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$f = '%INPUT_DIR_FULL%\appsettings.json'; $j = Get-Content $f -Raw | ConvertFrom-Json; $j.ConnectionStrings.AlfaGestion = ''; $j | ConvertTo-Json -Depth 10 | Set-Content $f -Encoding UTF8"
+if exist "%INPUT_DIR_FULL%\appsettings.Server.sample.json" powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$f = '%INPUT_DIR_FULL%\appsettings.Server.sample.json'; $j = Get-Content $f -Raw | ConvertFrom-Json; $j.ConnectionStrings.AlfaGestion = ''; $j | ConvertTo-Json -Depth 10 | Set-Content $f -Encoding UTF8"
 if exist "%INPUT_DIR_FULL%\appsettings.Production.json" del /Q "%INPUT_DIR_FULL%\appsettings.Production.json"
 
 echo [2.6/5] Copiando scripts de servicio...

@@ -1,0 +1,69 @@
+@page "/costos/historial"
+@inject AlfaCore.Services.ICostosService CostosSvc
+
+<PageTitle>Historial de Costos | Alfa Gestión</PageTitle>
+
+@if (_loading)
+{
+    <div class="consultas-loading">
+        <i class="bi bi-hourglass-split"></i> Cargando historial…
+    </div>
+}
+else
+{
+    <div class="page-grid">
+        <section class="page-intro">
+            <div>
+                <h2 class="page-intro__title">Historial de Actualizaciones</h2>
+                <p class="page-intro__text">Registros tomados desde `IA_Costos_Actualizacion_Hist`.</p>
+            </div>
+        </section>
+
+        <section class="panel-card">
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Usuario</th>
+                            <th>Proveedor</th>
+                            <th>Fila</th>
+                            <th>Artículo</th>
+                            <th>Descripción</th>
+                            <th>Anterior</th>
+                            <th>Nuevo</th>
+                            <th>Match</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _items)
+                        {
+                            <tr>
+                                <td>@item.Timestamp.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>@item.UserName</td>
+                                <td>@item.ProviderName</td>
+                                <td>@item.RowNumber</td>
+                                <td>@item.ArticleId</td>
+                                <td>@item.ImportedDescription</td>
+                                <td>@(item.PreviousCost?.ToString("N2") ?? "—")</td>
+                                <td>@(item.NewCost?.ToString("N2") ?? "—")</td>
+                                <td>@item.MatchType</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private IReadOnlyList<AlfaCore.Models.CostosHistoryDto> _items = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _items = await CostosSvc.GetRecentHistoryAsync(200);
+        _loading = false;
+    }
+}

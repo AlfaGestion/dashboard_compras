@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions
 
-cd /d "%~dp0..\src\DashboardCompras"
+cd /d "%~dp0..\src\AlfaCore"
 if errorlevel 1 goto :fail
 
 set "CONFIG_FILE="
@@ -52,7 +52,7 @@ goto :end
 echo.
 echo ===============================================
 echo No se pudo abrir la carpeta del proyecto.
-echo Ruta esperada: %~dp0..\src\DashboardCompras
+echo Ruta esperada: %~dp0..\src\AlfaCore
 echo ===============================================
 pause
 

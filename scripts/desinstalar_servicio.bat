@@ -2,7 +2,7 @@
 setlocal
 
 set "SERVICE_NAME=AlfaCore"
-set "LEGACY_SERVICE_NAME=DashboardCompras"
+set "LEGACY_SERVICE_NAME=AlfaCore"
 set "SILENT="
 if /i "%~1"=="/silent" set "SILENT=1"
 

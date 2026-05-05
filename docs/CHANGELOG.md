@@ -15,7 +15,7 @@ Formato: `[versión] — fecha — descripción`
 
 **Servicio Windows y publicación**
 - El servicio Windows ahora se registra como `AlfaCore`.
-- Se mantiene compatibilidad de migración: los scripts de instalación y desinstalación detectan y eliminan el servicio anterior `DashboardCompras` si existe.
+- Se mantiene compatibilidad de migración: los scripts de instalación y desinstalación detectan y eliminan el servicio anterior `AlfaCore` si existe.
 - Las carpetas de salida de publicación e instalador fueron renombradas a `publish\AlfaCoreLAN` y `publish\AlfaCoreInstaller`.
 - El instalador genera ahora `AlfaCoreSetup_<versión>.exe`.
 
@@ -202,7 +202,7 @@ Formato: `[versión] — fecha — descripción`
 - **Gráfico LineChart mejorado**: curvas Catmull-Rom (suaves), etiquetas X posicionadas en SVG, máximo 8 etiquetas visibles, puntos solo cuando hay ≤ 20 datos.
 
 ### Cambiado
-- `DashboardComprasShell` eliminó WebView2: ahora abre el navegador por defecto con `Process.Start` y se cierra.
+- `AlfaCoreShell` eliminó WebView2: ahora abre el navegador por defecto con `Process.Start` y se cierra.
 - Installer limpia credenciales de conexión antes de empaquetar (`appsettings.json` con string vacío, elimina `appsettings.Production.json`).
 - `GetCurrentPageTitle()` en MainLayout actualizado para rutas con prefijo `/compras/`.
 - Sidebar colapsable: la etiqueta "Próximamente" se oculta al colapsar.
@@ -236,6 +236,6 @@ Formato: `[versión] — fecha — descripción`
 - **Insights automáticos** en Rubros, Familias y Artículos
 - **Alertas operativas** en Comprobantes (importe cero, sin detalle, IVA cero)
 - **Vistas SQL**: `vw_compras_cabecera_dashboard`, `vw_compras_detalle_dashboard`
-- **Instalador Inno Setup** (`DashboardComprasServidor.iss`) con shortcuts, firewall, readme
+- **Instalador Inno Setup** (`AlfaCore.iss`) con shortcuts, firewall, readme
 - **Scripts de publicación**: `publicar_release.bat`, `publicar_instalador.bat`
 - **Ayuda / Manual de usuario** con índice, búsqueda y anclas por sección

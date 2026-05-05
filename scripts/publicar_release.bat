@@ -8,14 +8,14 @@ if exist "%PUBLISH_DIR%" (
   powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -LiteralPath '%PUBLISH_DIR_FULL%' -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
 )
 echo Limpiando residuos de publicacion anterior...
-if exist ".\src\DashboardCompras\obj" (
-  powershell -NoProfile -ExecutionPolicy Bypass -Command "Remove-Item -Recurse -Force '.\src\DashboardCompras\obj' -ErrorAction SilentlyContinue"
+if exist ".\src\AlfaCore\obj" (
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "Remove-Item -Recurse -Force '.\src\AlfaCore\obj' -ErrorAction SilentlyContinue"
 )
-if exist ".\src\DashboardComprasShell\obj" (
-  powershell -NoProfile -ExecutionPolicy Bypass -Command "Remove-Item -Recurse -Force '.\src\DashboardComprasShell\obj' -ErrorAction SilentlyContinue"
+if exist ".\src\AlfaCoreShell\obj" (
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "Remove-Item -Recurse -Force '.\src\AlfaCoreShell\obj' -ErrorAction SilentlyContinue"
 )
 echo Cerrando instancia anterior si existe...
-for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "$publishDir = (Resolve-Path '%PUBLISH_DIR_FULL%' -ErrorAction SilentlyContinue).Path; $releaseDir = (Resolve-Path '.\src\DashboardCompras\bin\Release\net8.0' -ErrorAction SilentlyContinue).Path; $targets = @(); if ($publishDir) { $targets += (Join-Path $publishDir 'AlfaCore.exe') }; if ($releaseDir) { $targets += (Join-Path $releaseDir 'AlfaCore.exe') }; $p = Get-Process AlfaCore -ErrorAction SilentlyContinue | Where-Object { $_.Path -and ($targets -contains $_.Path) } | Select-Object -ExpandProperty Id; foreach ($id in $p) { Write-Output $id }" 2^>nul`) do (
+for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "$publishDir = (Resolve-Path '%PUBLISH_DIR_FULL%' -ErrorAction SilentlyContinue).Path; $releaseDir = (Resolve-Path '.\src\AlfaCore\bin\Release\net8.0' -ErrorAction SilentlyContinue).Path; $targets = @(); if ($publishDir) { $targets += (Join-Path $publishDir 'AlfaCore.exe') }; if ($releaseDir) { $targets += (Join-Path $releaseDir 'AlfaCore.exe') }; $p = Get-Process AlfaCore -ErrorAction SilentlyContinue | Where-Object { $_.Path -and ($targets -contains $_.Path) } | Select-Object -ExpandProperty Id; foreach ($id in $p) { Write-Output $id }" 2^>nul`) do (
   echo Deteniendo proceso backend PID %%I...
   powershell -NoProfile -ExecutionPolicy Bypass -Command "Stop-Process -Id %%I -Force"
 )
@@ -24,14 +24,14 @@ for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass
   powershell -NoProfile -ExecutionPolicy Bypass -Command "Stop-Process -Id %%I -Force"
 )
 echo Publicando release en %PUBLISH_DIR% ...
-dotnet publish .\src\DashboardCompras\DashboardCompras.csproj -c Release -o %PUBLISH_DIR%
+dotnet publish .\src\AlfaCore\AlfaCore.csproj -c Release -o %PUBLISH_DIR%
 if errorlevel 1 goto :error
-dotnet publish .\src\DashboardComprasShell\DashboardComprasShell.csproj -c Release -o %PUBLISH_DIR%
+dotnet publish .\src\AlfaCoreShell\AlfaCoreShell.csproj -c Release -o %PUBLISH_DIR%
 if errorlevel 1 goto :error
 
 echo Copiando documentacion y scripts de servidor...
 copy /Y .\README_INSTALACION.md %PUBLISH_DIR%\README_INSTALACION.md >nul
-copy /Y .\src\DashboardCompras\appsettings.Server.sample.json %PUBLISH_DIR%\appsettings.Server.sample.json >nul
+copy /Y .\src\AlfaCore\appsettings.Server.sample.json %PUBLISH_DIR%\appsettings.Server.sample.json >nul
 copy /Y .\scripts\Abrir-Firewall.ps1 %PUBLISH_DIR%\Abrir-Firewall.ps1 >nul
 
 (

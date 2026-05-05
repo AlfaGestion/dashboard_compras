@@ -2,7 +2,7 @@
 setlocal
 
 set "SERVICE_NAME=AlfaCore"
-set "LEGACY_SERVICE_NAME=DashboardCompras"
+set "LEGACY_SERVICE_NAME=AlfaCore"
 set "DISPLAY_NAME=AlfaCore"
 set "DESCRIPTION=Servidor web de AlfaCore. Se inicia automaticamente con Windows."
 set "EXE_PATH=%~dp0AlfaCore.exe"

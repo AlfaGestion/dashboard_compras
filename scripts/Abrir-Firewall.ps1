@@ -3,8 +3,8 @@ $ErrorActionPreference = "Stop"
 $candidatePaths = @(
     (Join-Path $PSScriptRoot "appsettings.Production.json"),
     (Join-Path $PSScriptRoot "appsettings.json"),
-    (Join-Path (Split-Path -Parent $PSScriptRoot) "src\DashboardCompras\appsettings.Production.json"),
-    (Join-Path (Split-Path -Parent $PSScriptRoot) "src\DashboardCompras\appsettings.json")
+    (Join-Path (Split-Path -Parent $PSScriptRoot) "src\AlfaCore\appsettings.Production.json"),
+    (Join-Path (Split-Path -Parent $PSScriptRoot) "src\AlfaCore\appsettings.json")
 )
 
 $appSettingsPath = $candidatePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
