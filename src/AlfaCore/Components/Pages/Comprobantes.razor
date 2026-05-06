@@ -1,5 +1,6 @@
 @page "/compras/comprobantes"
 @inject AlfaCore.Services.IComprasDashboardService DashboardService
+@inject AlfaCore.Services.IAppUiOperationService UiOps
 @inject AlfaCore.Services.FilterStateService FilterState
 
 <PageTitle>Comprobantes | Dashboard de Compras</PageTitle>
@@ -120,14 +121,22 @@
             </tr>
         </Header>
         <Rows>
-            @if (!string.IsNullOrWhiteSpace(_error))
+            @if (_error is not null)
             {
                 <tr>
                     <td colspan="15">
                         <div class="empty-state">
                             <span class="empty-state__eyebrow">Consulta</span>
                             <h3>No fue posible cargar los comprobantes</h3>
-                            <p>@_error</p>
+                            <p>@_error.Message</p>
+                            @if (_error.HasCode)
+                            {
+                                <p>Código: @_error.Code</p>
+                            }
+                            @if (_error.HasSuggestion)
+                            {
+                                <p>@_error.Suggestion</p>
+                            }
                         </div>
                     </td>
                 </tr>
@@ -226,7 +235,7 @@
     private ComprobantesResultDto? _resultado;
     private ComprobanteDetalleDto? _detalle;
     private ComprobantesOverviewDto? _overview;
-    private string? _error;
+    private AlfaCore.Models.AppUiMessage? _error;
     private bool _isLoading;
     private static readonly System.Globalization.CultureInfo Cultura = System.Globalization.CultureInfo.GetCultureInfo("es-AR");
     private QuickFilterMode _quickFilter = QuickFilterMode.Todos;
@@ -236,7 +245,14 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _options = await DashboardService.GetFilterOptionsAsync();
+        var optionsResult = await UiOps.RunAsync(
+            () => DashboardService.GetFilterOptionsAsync(),
+            "No se pudieron cargar los filtros de comprobantes.");
+        if (optionsResult.Success && optionsResult.Value is not null)
+            _options = optionsResult.Value;
+        else
+            _error = optionsResult.Feedback;
+
         _filtro.FechaDesde = FilterState.Current.FechaDesde ?? _filtro.FechaDesde;
         _filtro.FechaHasta = FilterState.Current.FechaHasta ?? _filtro.FechaHasta;
         _filtro.Articulo = FilterState.Current.Articulo;
@@ -252,7 +268,13 @@
 
         if (!string.IsNullOrWhiteSpace(TcQuery) && !string.IsNullOrWhiteSpace(IdQuery) && !string.IsNullOrWhiteSpace(CuentaQuery))
         {
-            _detalle = await DashboardService.GetComprobanteDetalleAsync(TcQuery, IdQuery, CuentaQuery);
+            var detailResult = await UiOps.RunAsync(
+                () => DashboardService.GetComprobanteDetalleAsync(TcQuery, IdQuery, CuentaQuery),
+                "No se pudo cargar el detalle del comprobante.");
+            if (detailResult.Success)
+                _detalle = detailResult.Value;
+            else
+                _error = detailResult.Feedback;
         }
     }
 
@@ -282,7 +304,7 @@
                 TamanioPagina = _filtro.TamanioPagina
             };
             _overview = null;
-            _error = ex.Message;
+            _error = UiOps.BuildMessage(ex, "No se pudieron cargar los comprobantes.");
         }
         finally
         {
@@ -292,7 +314,13 @@
 
     private async Task VerDetalleAsync(ComprobanteDto item)
     {
-        _detalle = await DashboardService.GetComprobanteDetalleAsync(item.Tc, item.IdComprobante, item.Cuenta);
+        var result = await UiOps.RunAsync(
+            () => DashboardService.GetComprobanteDetalleAsync(item.Tc, item.IdComprobante, item.Cuenta),
+            "No se pudo cargar el detalle del comprobante.");
+        if (result.Success)
+            _detalle = result.Value;
+        else
+            _error = result.Feedback;
     }
 
     private async Task PaginaAnteriorAsync()
@@ -344,7 +372,7 @@
 
     private string GetGridSubtitle()
     {
-        if (!string.IsNullOrWhiteSpace(_error))
+        if (_error is not null)
         {
             return "No se pudo completar la consulta";
         }

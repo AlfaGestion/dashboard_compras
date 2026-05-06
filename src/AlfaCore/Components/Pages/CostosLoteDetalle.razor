@@ -1,6 +1,7 @@
 @page "/costos/lotes/{Id:int}"
 @using AlfaCore.Models
 @inject AlfaCore.Services.ICostosService CostosSvc
+@inject AlfaCore.Services.IAppUiOperationService UiOps
 
 <PageTitle>Lote de Costos | Alfa Gestión</PageTitle>
 
@@ -339,6 +340,7 @@ else
     private string _sortColumn = "score";
     private bool _sortDescending = true;
     private bool _showCandidatesModal;
+    private AlfaCore.Models.AppUiMessage? _feedback;
 
     private List<CostosBatchDetailRowDto> FilteredRows =>
         SortRows((_detail?.Rows ?? [])
@@ -358,7 +360,20 @@ else
 
     private async Task ReloadAsync()
     {
-        _detail = await CostosSvc.GetBatchDetailAsync(Id);
+        var result = await UiOps.RunAsync(
+            () => CostosSvc.GetBatchDetailAsync(Id),
+            "No se pudo cargar el lote de costos.");
+
+        if (!result.Success)
+        {
+            _feedback = result.Feedback;
+            _isError = true;
+            _message = BuildFeedbackText(result.Feedback);
+            return;
+        }
+
+        _feedback = null;
+        _detail = result.Value;
         if (_detail is null)
             return;
 
@@ -419,8 +434,9 @@ else
         }
         catch (Exception ex)
         {
+            _feedback = UiOps.BuildMessage(ex, "No se pudo procesar el matching del lote.");
             _isError = true;
-            _message = ex.Message;
+            _message = BuildFeedbackText(_feedback);
         }
         finally
         {
@@ -454,7 +470,20 @@ else
 
     private async Task LoadCandidatesAsync(int rowNumber)
     {
-        _candidates = await CostosSvc.GetCandidatesAsync(Id, rowNumber, _candidateSearch, _includeFallbackSearch);
+        var result = await UiOps.RunAsync(
+            () => CostosSvc.GetCandidatesAsync(Id, rowNumber, _candidateSearch, _includeFallbackSearch),
+            "No se pudieron cargar los candidatos para la fila seleccionada.");
+
+        if (!result.Success || result.Value is null)
+        {
+            _feedback = result.Feedback;
+            _isError = true;
+            _message = BuildFeedbackText(result.Feedback);
+            return;
+        }
+
+        _feedback = null;
+        _candidates = result.Value;
         _selectedCandidate = _candidates.FirstOrDefault(c => string.Equals(c.ArticleId, _selectedRow?.ArticleId, StringComparison.OrdinalIgnoreCase))
             ?? _candidates.FirstOrDefault();
     }
@@ -480,8 +509,9 @@ else
         }
         catch (Exception ex)
         {
+            _feedback = UiOps.BuildMessage(ex, "No se pudo confirmar el artículo para la fila.");
             _isError = true;
-            _message = ex.Message;
+            _message = BuildFeedbackText(_feedback);
         }
         finally
         {
@@ -507,8 +537,9 @@ else
         }
         catch (Exception ex)
         {
+            _feedback = UiOps.BuildMessage(ex, "No se pudo descartar la fila seleccionada.");
             _isError = true;
-            _message = ex.Message;
+            _message = BuildFeedbackText(_feedback);
         }
         finally
         {
@@ -529,8 +560,9 @@ else
         }
         catch (Exception ex)
         {
+            _feedback = UiOps.BuildMessage(ex, "No se pudieron aplicar las filas seleccionadas.");
             _isError = true;
-            _message = ex.Message;
+            _message = BuildFeedbackText(_feedback);
         }
         finally
         {
@@ -551,8 +583,9 @@ else
         }
         catch (Exception ex)
         {
+            _feedback = UiOps.BuildMessage(ex, "No se pudo deshacer la última aplicación del lote.");
             _isError = true;
-            _message = ex.Message;
+            _message = BuildFeedbackText(_feedback);
         }
         finally
         {
@@ -746,4 +779,17 @@ else
 
     private static string FormatVariation(double? variation) =>
         variation is null ? "—" : $"{variation.Value:+0.0;-0.0;0.0}%";
+
+    private static string BuildFeedbackText(AlfaCore.Models.AppUiMessage? feedback)
+    {
+        if (feedback is null)
+            return string.Empty;
+
+        var parts = new List<string> { feedback.Message };
+        if (feedback.HasSuggestion)
+            parts.Add(feedback.Suggestion);
+        if (feedback.HasCode)
+            parts.Add($"Código: {feedback.Code}");
+        return string.Join(" ", parts.Where(static part => !string.IsNullOrWhiteSpace(part)));
+    }
 }

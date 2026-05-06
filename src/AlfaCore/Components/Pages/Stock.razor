@@ -1,5 +1,6 @@
 @page "/stock"
 @inject AlfaCore.Services.IGestionDashboardService GestionSvc
+@inject AlfaCore.Services.IAppUiOperationService UiOps
 @inject AlfaCore.Services.GestionFilterStateService FilterState
 
 <PageTitle>Stock | Alfa Gestión</PageTitle>
@@ -123,12 +124,24 @@
     {
         <div class="consultas-loading"><i class="bi bi-hourglass-split"></i> Cargando stock…</div>
     }
-    else if (!string.IsNullOrWhiteSpace(_error))
-    {
-        <div class="consultas-error"><i class="bi bi-exclamation-triangle"></i> @_error</div>
-    }
     else
     {
+        @if (_feedback is not null)
+        {
+            <div class="conversations-inline @GetFeedbackClass(_feedback)">
+                <strong>@_feedback.Title</strong>
+                <div>@_feedback.Message</div>
+                @if (_feedback.HasCode)
+                {
+                    <div>Código: @_feedback.Code</div>
+                }
+                @if (_feedback.HasSuggestion)
+                {
+                    <div>@_feedback.Suggestion</div>
+                }
+            </div>
+        }
+
         <section class="kpi-grid">
             <article class="kpi-card"><div class="kpi-card__label">Stock valorizado</div><div class="kpi-card__value">@FmtMoney(_data.StockValorizado)</div></article>
             <article class="kpi-card"><div class="kpi-card__label">Artículos con stock</div><div class="kpi-card__value">@_data.ArticulosConStock</div></article>
@@ -175,7 +188,7 @@
 
 @code {
     private bool _loading = true;
-    private string _error = string.Empty;
+    private AlfaCore.Models.AppUiMessage? _feedback;
     private bool _showAdvanced;
     private StockDashboardDto _data = new();
     private StockDashboardFilters _filters = null!;
@@ -184,25 +197,31 @@
     protected override async Task OnInitializedAsync()
     {
         _filters = FilterState.Stock;
-        try
+        var result = await UiOps.RunAsync(async () =>
         {
             _options = await GestionSvc.GetStockFilterOptionsAsync();
             await LoadAsync();
-        }
-        catch (Exception ex)
-        {
-            _error = ex.Message;
-            _loading = false;
-        }
+        }, "No se pudo cargar stock.");
+
+        _feedback = result.Success ? null : result.Feedback;
+        _loading = false;
     }
 
     private async Task LoadAsync()
     {
         _loading = true;
-        _error = string.Empty;
-        try { _data = await GestionSvc.GetStockAsync(_filters); }
-        catch (Exception ex) { _error = ex.Message; }
-        finally { _loading = false; }
+        _feedback = null;
+
+        var result = await UiOps.RunAsync(
+            () => GestionSvc.GetStockAsync(_filters),
+            "No se pudieron cargar los datos de stock.");
+
+        if (result.Success && result.Value is not null)
+            _data = result.Value;
+        else
+            _feedback = result.Feedback;
+
+        _loading = false;
     }
 
     private Task HoyAsync() => ApplyQuickRangeAsync("hoy");
@@ -292,4 +311,13 @@
     }
 
     private static string FmtMoney(decimal value) => value.ToString("$ #,##0", System.Globalization.CultureInfo.GetCultureInfo("es-AR"));
+
+    private static string GetFeedbackClass(AlfaCore.Models.AppUiMessage message)
+        => message.Severity switch
+        {
+            AlfaCore.Models.AppUiFeedbackSeverity.Success => "conversations-inline--ok",
+            AlfaCore.Models.AppUiFeedbackSeverity.Warning => "conversations-inline--error",
+            AlfaCore.Models.AppUiFeedbackSeverity.Error => "conversations-inline--error",
+            _ => "conversations-inline--ok"
+        };
 }

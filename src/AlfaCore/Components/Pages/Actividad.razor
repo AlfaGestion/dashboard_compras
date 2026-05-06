@@ -1,5 +1,6 @@
 @page "/compras/actividad"
 @inject AlfaCore.Services.IComprasDashboardService DashboardService
+@inject AlfaCore.Services.IAppUiOperationService UiOps
 @inject AlfaCore.Services.FilterStateService FilterState
 
 <PageTitle>Actividad | Dashboard de Compras</PageTitle>
@@ -14,12 +15,20 @@
 
     <GlobalFiltersBar Model="_filters" Options="_options" OnApply="LoadAsync" />
 
-    @if (!string.IsNullOrWhiteSpace(_error))
+    @if (_error is not null)
     {
         <div class="panel-card empty-state">
             <span class="empty-state__eyebrow">Consulta</span>
             <h3>No fue posible cargar la actividad</h3>
-            <p>@_error</p>
+            <p>@_error.Message</p>
+            @if (_error.HasCode)
+            {
+                <p>Código: @_error.Code</p>
+            }
+            @if (_error.HasSuggestion)
+            {
+                <p>@_error.Suggestion</p>
+            }
         </div>
     }
     else if (_page is null)
@@ -237,12 +246,19 @@
     private FilterOptionsDto _options = new();
     private ActividadPageDto? _page;
     private ActividadUsuarioDetalleDto? _detalle;
-    private string? _error;
+    private AlfaCore.Models.AppUiMessage? _error;
 
     protected override async Task OnInitializedAsync()
     {
         _filters = FilterState.Current;
-        _options = await DashboardService.GetFilterOptionsAsync();
+        var optionsResult = await UiOps.RunAsync(
+            () => DashboardService.GetFilterOptionsAsync(),
+            "No se pudieron cargar los filtros de actividad.");
+        if (optionsResult.Success && optionsResult.Value is not null)
+            _options = optionsResult.Value;
+        else
+            _error = optionsResult.Feedback;
+
         await LoadAsync();
     }
 
@@ -257,13 +273,19 @@
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = UiOps.BuildMessage(ex, "No se pudo cargar la actividad.");
         }
     }
 
     private async Task SelectUsuarioAsync(string usuario)
     {
-        _detalle = await DashboardService.GetActividadUsuarioDetalleAsync(usuario, _filters);
+        var result = await UiOps.RunAsync(
+            () => DashboardService.GetActividadUsuarioDetalleAsync(usuario, _filters),
+            "No se pudo cargar el detalle del usuario.");
+        if (result.Success)
+            _detalle = result.Value;
+        else
+            _error = result.Feedback;
     }
 
     private string DetalleUsuarioMasTrabajo()

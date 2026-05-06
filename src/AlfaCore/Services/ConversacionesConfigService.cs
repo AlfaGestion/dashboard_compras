@@ -23,15 +23,19 @@ public sealed class ConversacionesConfigService(
     public Task<ConversacionWhatsAppConfigDto> GetWhatsAppConfigAsync(CancellationToken ct = default)
         => ExecuteLoggedAsync("Conversaciones", "GetWhatsAppConfig", async token =>
         {
-            var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync(token);
-            await using var cmd = new SqlCommand(BuildSelectSql(), cn);
+            var detailColumn = await ResolveDetailColumnAsync(cn, token);
+            var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            await using var cmd = new SqlCommand(BuildSelectSql(detailColumn), cn);
             await using var rd = await cmd.ExecuteReaderAsync(token);
             while (await rd.ReadAsync(token))
             {
-                values[GetString(rd, 0)] = GetString(rd, 1);
+                var key = GetString(rd, 0);
+                var value = GetString(rd, 1);
+                var detailValue = GetString(rd, 2);
+                values[key] = ResolveStoredValue(value, detailValue);
             }
 
             var config = new ConversacionWhatsAppConfigDto
@@ -68,6 +72,7 @@ public sealed class ConversacionesConfigService(
 
             foreach (var item in BuildItems(normalized))
             {
+                var stored = SplitStoredValue(item.Value);
                 var sql = $"""
                     UPDATE dbo.TA_CONFIGURACION
                     SET
@@ -87,8 +92,8 @@ public sealed class ConversacionesConfigService(
 
                 cmd.Parameters.AddWithValue("@ClaveNormalizada", item.Key.ToUpperInvariant());
                 cmd.Parameters.AddWithValue("@Clave", item.Key);
-                cmd.Parameters.AddWithValue("@Valor", DbNullable(item.Value));
-                cmd.Parameters.AddWithValue("@ValorAux", DbNullable(item.Description));
+                cmd.Parameters.AddWithValue("@Valor", DbNullable(stored.Value));
+                cmd.Parameters.AddWithValue("@ValorAux", DbNullable(stored.AuxValue));
                 cmd.Parameters.AddWithValue("@Grupo", ConfigGroup);
                 await cmd.ExecuteNonQueryAsync(token);
             }
@@ -134,11 +139,12 @@ public sealed class ConversacionesConfigService(
         return column;
     }
 
-    private static string BuildSelectSql()
-        => """
+    private static string BuildSelectSql(string detailColumn)
+        => $"""
             SELECT
                 UPPER(LTRIM(RTRIM(CLAVE))),
-                ISNULL(VALOR, '')
+                ISNULL(VALOR, ''),
+                ISNULL({detailColumn}, '')
             FROM dbo.TA_CONFIGURACION
             WHERE UPPER(LTRIM(RTRIM(CLAVE))) IN
             (
@@ -153,16 +159,16 @@ public sealed class ConversacionesConfigService(
             )
             """;
 
-    private static IEnumerable<(string Key, string Value, string Description)> BuildItems(ConversacionWhatsAppConfigDto config)
+    private static IEnumerable<(string Key, string Value)> BuildItems(ConversacionWhatsAppConfigDto config)
     {
-        yield return ("CONV_WHATSAPP_VERIFY_TOKEN", config.VerifyToken, "Token de verificación del webhook de Meta.");
-        yield return ("CONV_WHATSAPP_ACCESS_TOKEN", config.AccessToken, "Token de acceso permanente o del sistema para Cloud API.");
-        yield return ("CONV_WHATSAPP_PHONE_NUMBER_ID", config.PhoneNumberId, "Phone Number ID del número conectado.");
-        yield return ("CONV_WHATSAPP_BUSINESS_ACCOUNT_ID", config.BusinessAccountId, "WhatsApp Business Account ID.");
-        yield return ("CONV_WHATSAPP_APP_SECRET", config.AppSecret, "App Secret de Meta para futuras validaciones de firma.");
-        yield return ("CONV_WHATSAPP_API_VERSION", config.ApiVersion, "Versión del Graph API usada para mensajes.");
-        yield return ("CONV_WHATSAPP_PUBLIC_BASE_URL", config.PublicBaseUrl, "Base URL pública HTTPS donde Meta puede llegar al webhook.");
-        yield return ("CONV_WHATSAPP_WEBHOOK_PATH", config.WebhookPath, "Ruta local del webhook de Conversaciones.");
+        yield return ("CONV_WHATSAPP_VERIFY_TOKEN", config.VerifyToken);
+        yield return ("CONV_WHATSAPP_ACCESS_TOKEN", config.AccessToken);
+        yield return ("CONV_WHATSAPP_PHONE_NUMBER_ID", config.PhoneNumberId);
+        yield return ("CONV_WHATSAPP_BUSINESS_ACCOUNT_ID", config.BusinessAccountId);
+        yield return ("CONV_WHATSAPP_APP_SECRET", config.AppSecret);
+        yield return ("CONV_WHATSAPP_API_VERSION", config.ApiVersion);
+        yield return ("CONV_WHATSAPP_PUBLIC_BASE_URL", config.PublicBaseUrl);
+        yield return ("CONV_WHATSAPP_WEBHOOK_PATH", config.WebhookPath);
     }
 
     private static ConversacionWhatsAppConfigDto Normalize(ConversacionWhatsAppConfigDto config)
@@ -206,6 +212,23 @@ public sealed class ConversacionesConfigService(
             return fallback.Trim();
 
         return defaultValue;
+    }
+
+    private static string ResolveStoredValue(string value, string auxValue)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+            return value.Trim();
+
+        return string.IsNullOrWhiteSpace(auxValue) ? string.Empty : auxValue.Trim();
+    }
+
+    private static (string Value, string AuxValue) SplitStoredValue(string? value)
+    {
+        var normalized = string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+        if (normalized.Length > 150)
+            return (string.Empty, normalized);
+
+        return (normalized, string.Empty);
     }
 
     private static object DbNullable(string? value)
