@@ -1,6 +1,7 @@
 @page "/auditoria/error/{Id:int}"
 @using Microsoft.AspNetCore.Components.Forms
 @inject AlfaCore.Services.IAuditoriaService AuditoriaSvc
+@inject AlfaCore.Services.IAppUiOperationService UiOps
 
 <PageTitle>Detalle de Error | Alfa Gestión</PageTitle>
 
@@ -8,12 +9,6 @@
 {
     <div class="consultas-loading">
         <i class="bi bi-hourglass-split"></i> Cargando error…
-    </div>
-}
-else if (!string.IsNullOrWhiteSpace(_error))
-{
-    <div class="consultas-error">
-        <i class="bi bi-exclamation-triangle"></i> @_error
     </div>
 }
 else if (_item is null)
@@ -25,6 +20,22 @@ else if (_item is null)
 else
 {
     <div class="page-grid">
+        @if (_feedback is not null)
+        {
+            <div class="conversations-inline @GetFeedbackClass(_feedback)">
+                <strong>@_feedback.Title</strong>
+                <div>@_feedback.Message</div>
+                @if (_feedback.HasCode)
+                {
+                    <div>Código: @_feedback.Code</div>
+                }
+                @if (_feedback.HasSuggestion)
+                {
+                    <div>@_feedback.Suggestion</div>
+                }
+            </div>
+        }
+
         <section class="page-intro">
             <div>
                 <h2 class="page-intro__title">Error #@_item.Id</h2>
@@ -82,24 +93,27 @@ else
     [Parameter] public int Id { get; set; }
 
     private bool _loading = true;
-    private string _error = string.Empty;
+    private AlfaCore.Models.AppUiMessage? _feedback;
     private AuditoriaErrorRowDto? _item;
 
     protected override async Task OnParametersSetAsync()
     {
         _loading = true;
-        _error = string.Empty;
-        try
-        {
-            _item = await AuditoriaSvc.GetErrorByIdAsync(Id);
-        }
-        catch (Exception ex)
-        {
-            _error = ex.Message;
-        }
-        finally
-        {
-            _loading = false;
-        }
+        _feedback = null;
+        var result = await UiOps.RunAsync(
+            () => AuditoriaSvc.GetErrorByIdAsync(Id),
+            "No se pudo cargar el detalle del error.");
+        _item = result.Value;
+        _feedback = result.Feedback;
+        _loading = false;
     }
+
+    private static string GetFeedbackClass(AlfaCore.Models.AppUiMessage message)
+        => message.Severity switch
+        {
+            AlfaCore.Models.AppUiFeedbackSeverity.Success => "conversations-inline--ok",
+            AlfaCore.Models.AppUiFeedbackSeverity.Warning => "conversations-inline--error",
+            AlfaCore.Models.AppUiFeedbackSeverity.Error => "conversations-inline--error",
+            _ => "conversations-inline--ok"
+        };
 }

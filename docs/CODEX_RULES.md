@@ -386,6 +386,66 @@ Toda la interfaz debe estar en **español**, salvo términos técnicos inevitabl
 - interfaces recargadas
 - componentes sin coherencia visual
 
+### 17.3 Manejo de errores orientado a usuario
+
+Cuando una operación falle, Codex debe pensar en dos públicos al mismo tiempo:
+
+- el usuario final
+- soporte / desarrollo
+
+Reglas obligatorias:
+
+1. **Registrar el error técnico completo** en la capa centralizada (`AUX_ERR` / logging común).
+2. **Mostrar al usuario un mensaje claro, corto y accionable**, en español.
+3. **No exponer detalles técnicos crudos** como stack traces, nombres internos de clases o SQL completo en la UI.
+4. **Conservar un código de incidente o referencia** cuando exista, para soporte.
+5. **Traducir errores frecuentes** a mensajes funcionales cuando sea posible, por ejemplo:
+   - problema de conexión SQL
+   - objeto SQL faltante
+   - configuración inexistente
+   - permisos insuficientes
+6. **No hacer que una pantalla “muera” completa** si el error afecta solo una parte recuperable de la operación.
+
+Ejemplo de enfoque esperado:
+
+- soporte recibe el detalle técnico en `AUX_ERR`
+- el usuario ve algo como:
+  - “No se pudo conectar a la base activa.”
+  - “Revisá la sesión SQL seleccionada y la conectividad del servidor.”
+  - “Código: 1234”
+
+No usar mensajes pobres del estilo:
+
+- “Object reference not set…”
+- “SqlException…”
+- “Error inesperado”
+
+salvo como último fallback muy controlado.
+
+### 17.4 No perder estado cargado por el usuario
+
+En formularios, asistentes, filtros, importaciones, editores, búsquedas o pantallas de configuración:
+
+1. **Un error no debe borrar automáticamente lo que el usuario ya escribió o seleccionó.**
+2. Codex debe preferir estrategias donde:
+   - se conserve el modelo en memoria
+   - se muestre feedback de error sin resetear el formulario
+   - se permita corregir y reintentar
+3. Solo resetear estado si:
+   - el usuario lo pidió
+   - la operación fue exitosa y tiene sentido limpiar
+   - existe una razón fuerte y explícita de negocio
+4. Si una carga inicial falla, Codex debe intentar:
+   - mantener defaults útiles
+   - permitir completar manualmente lo posible
+   - aislar el error en un bloque visible sin inutilizar toda la pantalla, si es razonable
+
+Para Codex esto significa:
+
+- no implementar `catch` que solo haga `_error = ex.Message` y deje la UI rota
+- no recargar el modelo desde cero después de un fallo si eso hace perder trabajo del usuario
+- preferir una rutina común de traducción de errores y feedback UI reutilizable entre módulos
+
 ---
 
 ## 18. Regla sobre comentarios y documentación

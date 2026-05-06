@@ -156,6 +156,21 @@ Claves del módulo:
 
 Manual operativo: `docs/conversaciones_whatsapp_conexion.md`
 
+### Manejo de errores y conservación de estado
+
+La pantalla de configuración usa un patrón base del proyecto para errores de UI:
+
+- el error técnico completo sigue registrándose en `AUX_ERR` y diagnóstico local
+- la UI muestra un mensaje claro para el usuario
+- cuando existe, se conserva un código de incidente para soporte
+- si falla una operación, el formulario no debe perder automáticamente lo que el usuario ya escribió
+
+Caso ya contemplado:
+
+- si la sesión SQL activa no puede conectarse, la UI informa que no se pudo conectar a la base activa y sugiere revisar sesión, red, instancia y credenciales
+
+Este patrón debe extenderse al resto de módulos para mantener una experiencia consistente.
+
 ## Issues pendientes
 
 ### Issue 8. Completar flujo de envío WhatsApp

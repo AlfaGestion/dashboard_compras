@@ -1399,7 +1399,7 @@ public sealed class ConversacionesService(
         catch (SqlException ex) when (TryBuildKnownSqlMessage(ex, out var knownMessage))
         {
             var incidentId = await _appEvents.LogErrorAsync(module, action, ex, userMessage, null, AppEventSeverity.Error, ct);
-            throw new InvalidOperationException($"{knownMessage} Codigo: {incidentId}");
+            throw new AppUserFacingException(knownMessage, incidentId, ex);
         }
         catch (InvalidOperationException)
         {
@@ -1408,7 +1408,7 @@ public sealed class ConversacionesService(
         catch (Exception ex)
         {
             var incidentId = await _appEvents.LogErrorAsync(module, action, ex, userMessage, null, AppEventSeverity.Error, ct);
-            throw new InvalidOperationException($"{userMessage} Código: {incidentId}");
+            throw new AppUserFacingException(userMessage, incidentId, ex);
         }
     }
 

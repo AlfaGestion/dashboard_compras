@@ -1,5 +1,6 @@
 @page "/costos/perfiles"
 @inject AlfaCore.Services.ICostosService CostosSvc
+@inject AlfaCore.Services.IAppUiOperationService UiOps
 
 <PageTitle>Perfiles de Costos | Alfa Gestión</PageTitle>
 
@@ -193,6 +194,7 @@ else
     private string _notes = string.Empty;
     private bool _onlyAdd;
     private bool _onlyModify;
+    private AlfaCore.Models.AppUiMessage? _feedback;
 
     private string SelectedProviderText =>
         _selectedProvider is not null
@@ -209,7 +211,15 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadProfilesAsync();
+        var result = await UiOps.RunAsync(
+            () => LoadProfilesAsync(),
+            "No se pudieron cargar los perfiles de costos.");
+        _feedback = result.Feedback;
+        if (!result.Success)
+        {
+            _isError = true;
+            _message = BuildFeedbackText(result.Feedback);
+        }
         _loading = false;
     }
 
@@ -230,6 +240,7 @@ else
         _onlyModify = false;
         _message = string.Empty;
         _isError = false;
+        _feedback = null;
     }
 
     private void Seleccionar(CostosProfileDto profile)
@@ -246,6 +257,7 @@ else
         _onlyModify = profile.OnlyModify;
         _message = string.Empty;
         _isError = false;
+        _feedback = null;
     }
 
     private async Task GuardarAsync()
@@ -253,6 +265,7 @@ else
         _busy = true;
         _message = string.Empty;
         _isError = false;
+        _feedback = null;
 
         try
         {
@@ -287,8 +300,9 @@ else
         }
         catch (Exception ex)
         {
+            _feedback = UiOps.BuildMessage(ex, "No se pudo guardar el perfil de costos.");
             _isError = true;
-            _message = ex.Message;
+            _message = BuildFeedbackText(_feedback);
         }
         finally
         {
@@ -349,6 +363,7 @@ else
         _busy = true;
         _message = string.Empty;
         _isError = false;
+        _feedback = null;
 
         try
         {
@@ -360,8 +375,9 @@ else
         }
         catch (Exception ex)
         {
+            _feedback = UiOps.BuildMessage(ex, "No se pudo eliminar el perfil de costos.");
             _isError = true;
-            _message = ex.Message;
+            _message = BuildFeedbackText(_feedback);
         }
         finally
         {
@@ -376,5 +392,18 @@ else
         if (profile.OnlyModify) parts.Add("SoloModificación");
         if (parts.Count == 0) parts.Add("Sin reglas");
         return string.Join(" · ", parts);
+    }
+
+    private static string BuildFeedbackText(AlfaCore.Models.AppUiMessage? feedback)
+    {
+        if (feedback is null)
+            return string.Empty;
+
+        var parts = new List<string> { feedback.Message };
+        if (feedback.HasSuggestion)
+            parts.Add(feedback.Suggestion);
+        if (feedback.HasCode)
+            parts.Add($"Código: {feedback.Code}");
+        return string.Join(" ", parts.Where(static part => !string.IsNullOrWhiteSpace(part)));
     }
 }

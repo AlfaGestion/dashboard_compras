@@ -2,6 +2,7 @@
 @page "/consultas/{Id:int}/editar"
 @using AlfaCore.Services
 @inject IConsultasService ConsultasSvc
+@inject IAppUiOperationService UiOps
 @inject NavigationManager Nav
 
 <PageTitle>@_titulo | Alfa Gestión</PageTitle>
@@ -432,10 +433,17 @@ else
         _id = Id;
         if (_id.HasValue) _titulo = "Editar consulta";
 
-        var tareas = new List<Task> { CargarArbolAsync() };
-        if (_id.HasValue) tareas.Add(CargarConsultaAsync(_id.Value));
-        else if (From.HasValue) tareas.Add(CargarPlantillaAsync(From.Value));
-        await Task.WhenAll(tareas);
+        var result = await UiOps.RunAsync(async () =>
+        {
+            var tareas = new List<Task> { CargarArbolAsync() };
+            if (_id.HasValue) tareas.Add(CargarConsultaAsync(_id.Value));
+            else if (From.HasValue) tareas.Add(CargarPlantillaAsync(From.Value));
+            await Task.WhenAll(tareas);
+        }, "No se pudo cargar el editor de consultas.");
+
+        if (!result.Success)
+            _mensajeError = BuildFeedbackText(result.Feedback);
+
         _cargando = false;
     }
 
@@ -532,7 +540,15 @@ else
     {
         _buscandoTablas = true;
         StateHasChanged();
-        _vistasDisponibles = (await ConsultasSvc.GetVistasDisponiblesAsync(_filtroTabla)).ToList();
+        try
+        {
+            _vistasDisponibles = (await ConsultasSvc.GetVistasDisponiblesAsync(_filtroTabla)).ToList();
+            _mensajeError = null;
+        }
+        catch (Exception ex)
+        {
+            _mensajeError = BuildFeedbackText(UiOps.BuildMessage(ex, "No se pudieron buscar tablas o vistas."));
+        }
         _buscandoTablas = false;
     }
 
@@ -562,8 +578,16 @@ else
 
         _cargandoColumnas = true;
         StateHasChanged();
-        var cols = await ConsultasSvc.GetColumnasAsync(_tablaBuilder);
-        _columnasBuilder = cols.Select(c => new ColumnaBuilder { Nombre = c.Nombre, Tipo = c.Tipo, Seleccionada = true }).ToList();
+        try
+        {
+            var cols = await ConsultasSvc.GetColumnasAsync(_tablaBuilder);
+            _columnasBuilder = cols.Select(c => new ColumnaBuilder { Nombre = c.Nombre, Tipo = c.Tipo, Seleccionada = true }).ToList();
+            _mensajeError = null;
+        }
+        catch (Exception ex)
+        {
+            _mensajeError = BuildFeedbackText(UiOps.BuildMessage(ex, "No se pudieron cargar las columnas de la fuente seleccionada."));
+        }
         _cargandoColumnas = false;
         SincronizarMetadatosAgrupacion();
     }
@@ -865,7 +889,7 @@ else
         }
         catch (Exception ex)
         {
-            _mensajeError = $"Error al guardar: {ex.Message}";
+            _mensajeError = BuildFeedbackText(UiOps.BuildMessage(ex, "No se pudo guardar la consulta."));
         }
         finally
         {
@@ -883,13 +907,26 @@ else
         }
         catch (Exception ex)
         {
-            _mensajeError = $"Error al eliminar: {ex.Message}";
+            _mensajeError = BuildFeedbackText(UiOps.BuildMessage(ex, "No se pudo eliminar la consulta."));
             _mostrarConfirmarEliminar = false;
         }
         finally
         {
             _eliminando = false;
         }
+    }
+
+    private static string BuildFeedbackText(AlfaCore.Models.AppUiMessage? feedback)
+    {
+        if (feedback is null)
+            return string.Empty;
+
+        var parts = new List<string> { feedback.Message };
+        if (feedback.HasSuggestion)
+            parts.Add(feedback.Suggestion);
+        if (feedback.HasCode)
+            parts.Add($"Código: {feedback.Code}");
+        return string.Join(" ", parts.Where(static part => !string.IsNullOrWhiteSpace(part)));
     }
 
     private sealed record OpcionArbol(string Clave, string Label);

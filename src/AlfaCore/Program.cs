@@ -55,6 +55,7 @@ public class Program
         builder.Services.AddScoped<IConversacionesConfigService, ConversacionesConfigService>();
         builder.Services.AddScoped<IAuditoriaService, AuditoriaService>();
         builder.Services.AddScoped<IGestionDashboardService, GestionDashboardService>();
+        builder.Services.AddScoped<IAppUiOperationService, AppUiOperationService>();
         builder.Services.AddSingleton<IAuxErrRepository, AuxErrRepository>();
         builder.Services.AddSingleton<IAppEventService, AppEventService>();
         builder.Services.AddSingleton<ConsultasExcelExporter>();

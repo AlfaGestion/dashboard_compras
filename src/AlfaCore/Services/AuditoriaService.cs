@@ -251,7 +251,7 @@ public sealed class AuditoriaService(
         catch (Exception ex)
         {
             var incidentId = await appEvents.LogErrorAsync(module, action, ex, userMessage, null, AppEventSeverity.Error, ct);
-            throw new InvalidOperationException($"{userMessage} Código: {incidentId}");
+            throw new AppUserFacingException(userMessage, incidentId, ex);
         }
     }
 }

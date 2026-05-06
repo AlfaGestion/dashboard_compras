@@ -1,5 +1,6 @@
 @page "/consultas"
 @inject AlfaCore.Services.IConsultasService ConsultasSvc
+@inject AlfaCore.Services.IAppUiOperationService UiOps
 @inject AlfaCore.Services.ISessionService SessionSvc
 @implements IDisposable
 
@@ -23,11 +24,21 @@
 }
 else if (_error is not null)
 {
-    <div class="consultas-error">
-        <i class="bi bi-exclamation-triangle"></i> @_error
+    <div class="conversations-inline @GetFeedbackClass(_error)">
+        <strong>@_error.Title</strong>
+        <div>@_error.Message</div>
+        @if (_error.HasCode)
+        {
+            <div>Código: @_error.Code</div>
+        }
+        @if (_error.HasSuggestion)
+        {
+            <div>@_error.Suggestion</div>
+        }
     </div>
 }
-else if (_raiz.Count == 0)
+
+@if (_raiz.Count == 0)
 {
     <div class="consultas-empty">
         No se encontraron consultas guardadas en la base de datos.
@@ -99,7 +110,7 @@ else
     private HashSet<string> _expandidos = [];
     private string _busqueda = string.Empty;
     private bool _cargando = true;
-    private string? _error;
+    private AlfaCore.Models.AppUiMessage? _error;
 
     protected override async Task OnInitializedAsync()
     {
@@ -111,20 +122,16 @@ else
     {
         _cargando = true;
         _error = null;
-        try
+
+        var result = await UiOps.RunAsync(async () =>
         {
             _raiz = (await ConsultasSvc.GetArbolAsync()).ToList();
             foreach (var r in _raiz)
                 _expandidos.Add(r.Clave);
-        }
-        catch (Exception ex)
-        {
-            _error = $"No se pudieron cargar las consultas: {ex.Message}";
-        }
-        finally
-        {
-            _cargando = false;
-        }
+        }, "No se pudieron cargar las consultas.");
+
+        _error = result.Feedback;
+        _cargando = false;
     }
 
     private void OnSessionChanged()
@@ -174,4 +181,13 @@ else
                 yield return hijo;
         }
     }
+
+    private static string GetFeedbackClass(AlfaCore.Models.AppUiMessage message)
+        => message.Severity switch
+        {
+            AlfaCore.Models.AppUiFeedbackSeverity.Success => "conversations-inline--ok",
+            AlfaCore.Models.AppUiFeedbackSeverity.Warning => "conversations-inline--error",
+            AlfaCore.Models.AppUiFeedbackSeverity.Error => "conversations-inline--error",
+            _ => "conversations-inline--ok"
+        };
 }

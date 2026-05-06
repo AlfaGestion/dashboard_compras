@@ -1,5 +1,6 @@
 @page "/costos"
 @inject AlfaCore.Services.ICostosService CostosSvc
+@inject AlfaCore.Services.IAppUiOperationService UiOps
 
 <PageTitle>Actualización de Costos | Alfa Gestión</PageTitle>
 
@@ -7,12 +8,6 @@
 {
     <div class="consultas-loading">
         <i class="bi bi-hourglass-split"></i> Cargando módulo…
-    </div>
-}
-else if (!string.IsNullOrWhiteSpace(_error))
-{
-    <div class="consultas-error">
-        <i class="bi bi-exclamation-triangle"></i> @_error
     </div>
 }
 else
@@ -34,6 +29,22 @@ else
                 </a>
             </div>
         </section>
+
+        @if (_feedback is not null)
+        {
+            <div class="conversations-inline @GetFeedbackClass(_feedback)">
+                <strong>@_feedback.Title</strong>
+                <div>@_feedback.Message</div>
+                @if (_feedback.HasCode)
+                {
+                    <div>Código: @_feedback.Code</div>
+                }
+                @if (_feedback.HasSuggestion)
+                {
+                    <div>@_feedback.Suggestion</div>
+                }
+            </div>
+        }
 
         <section class="kpi-grid">
             <article class="kpi-card">
@@ -159,27 +170,22 @@ else
 
 @code {
     private bool _loading = true;
-    private string _error = string.Empty;
+    private AlfaCore.Models.AppUiMessage? _feedback;
     private IReadOnlyList<AlfaCore.Models.CostosProfileDto> _profiles = [];
     private IReadOnlyList<AlfaCore.Models.CostosBatchSummaryDto> _batches = [];
     private IReadOnlyList<AlfaCore.Models.CostosHistoryDto> _history = [];
 
     protected override async Task OnInitializedAsync()
     {
-        try
+        var result = await UiOps.RunAsync(async () =>
         {
             _profiles = await CostosSvc.GetProfilesAsync();
             _batches = await CostosSvc.GetRecentBatchesAsync();
             _history = await CostosSvc.GetRecentHistoryAsync(25);
-        }
-        catch (Exception ex)
-        {
-            _error = ex.Message;
-        }
-        finally
-        {
-            _loading = false;
-        }
+        }, "No se pudo cargar el módulo de costos.");
+
+        _feedback = result.Feedback;
+        _loading = false;
     }
 
     private static string BuildRules(AlfaCore.Models.CostosProfileDto profile)
@@ -190,4 +196,13 @@ else
         if (parts.Count == 0) parts.Add("Sin reglas");
         return string.Join(" · ", parts);
     }
+
+    private static string GetFeedbackClass(AlfaCore.Models.AppUiMessage message)
+        => message.Severity switch
+        {
+            AlfaCore.Models.AppUiFeedbackSeverity.Success => "conversations-inline--ok",
+            AlfaCore.Models.AppUiFeedbackSeverity.Warning => "conversations-inline--error",
+            AlfaCore.Models.AppUiFeedbackSeverity.Error => "conversations-inline--error",
+            _ => "conversations-inline--ok"
+        };
 }

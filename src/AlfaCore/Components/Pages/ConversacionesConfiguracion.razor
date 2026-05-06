@@ -1,5 +1,6 @@
 @page "/conversaciones/configuracion"
 @inject AlfaCore.Services.IConversacionesConfigService ConfigSvc
+@inject AlfaCore.Services.IAppUiOperationService UiOps
 @inject NavigationManager Nav
 
 <PageTitle>Configuración de WhatsApp | Alfa Gestión</PageTitle>
@@ -20,17 +21,22 @@
         </div>
     </div>
 
-    @if (_error is not null)
+    @if (_feedback is not null)
     {
-        <div class="panel-card empty-state">
-            <span class="empty-state__eyebrow">Configuración</span>
-            <h3>No se pudo cargar la configuración</h3>
-            <p>@_error</p>
+        <div class="conversations-inline @GetFeedbackClass(_feedback)">
+            <strong>@_feedback.Title</strong>
+            <div>@_feedback.Message</div>
+            @if (_feedback.HasCode)
+            {
+                <div>Código: @_feedback.Code</div>
+            }
+            @if (_feedback.HasSuggestion)
+            {
+                <div>@_feedback.Suggestion</div>
+            }
         </div>
     }
-    else
-    {
-        <div class="conv-config-status-grid">
+    <div class="conv-config-status-grid">
             <article class="panel-card conv-status-card">
                 <span class="panel-card__tag">Envío Cloud API</span>
                 <strong class="@GetStatusClass(_config.IsConfiguredForSend)">@GetStatusLabel(_config.IsConfiguredForSend)</strong>
@@ -48,9 +54,9 @@
                 <strong class="@GetStatusClass(_config.IsReadyForMetaSetup)">@GetPublicationLabel()</strong>
                 <p class="panel-card__subtitle">Meta necesita una URL pública HTTPS para llamar al webhook.</p>
             </article>
-        </div>
+    </div>
 
-        <div class="conv-config-layout">
+    <div class="conv-config-layout">
             <section class="panel-card conv-config-form">
                 <div class="panel-card__header">
                     <div>
@@ -59,11 +65,6 @@
                     </div>
                     <span class="panel-card__tag">TA_CONFIGURACION</span>
                 </div>
-
-                @if (_message is not null)
-                {
-                    <div class="conversations-inline conversations-inline--ok">@_message</div>
-                }
 
                 <div class="conv-config-fields">
                     <div class="field">
@@ -151,16 +152,14 @@
                     <span class="context-card__muted">Ahí te dejo el paso a paso completo y el mapa entre Meta y AlfaCore.</span>
                 </div>
             </aside>
-        </div>
-    }
+    </div>
 </section>
 
 @code {
     private ConversacionWhatsAppConfigDto _config = new();
     private bool Loading { get; set; }
     private bool Saving { get; set; }
-    private string? _error;
-    private string? _message;
+    private AppUiMessage? _feedback;
     private string _suggestedBaseUrl = string.Empty;
 
     protected override async Task OnInitializedAsync()
@@ -172,46 +171,60 @@
     private async Task LoadAsync()
     {
         Loading = true;
-        _error = null;
-        _message = null;
+        _feedback = null;
 
-        try
+        var result = await UiOps.RunAsync(
+            () => ConfigSvc.GetWhatsAppConfigAsync(),
+            "No se pudo cargar la configuración de WhatsApp.");
+
+        if (result.Success && result.Value is not null)
         {
-            _config = await ConfigSvc.GetWhatsAppConfigAsync();
+            _config = result.Value;
+            EnsureDefaults();
         }
-        catch (Exception ex)
+        else
         {
-            _error = ex.Message;
+            EnsureDefaults();
+            _feedback = result.Feedback;
         }
-        finally
-        {
-            Loading = false;
-        }
+
+        Loading = false;
     }
 
     private async Task SaveAsync()
     {
         Saving = true;
-        _error = null;
-        _message = null;
+        _feedback = null;
 
-        try
-        {
-            if (string.IsNullOrWhiteSpace(_config.PublicBaseUrl))
-                _config.PublicBaseUrl = _suggestedBaseUrl;
+        if (string.IsNullOrWhiteSpace(_config.PublicBaseUrl))
+            _config.PublicBaseUrl = _suggestedBaseUrl;
 
-            await ConfigSvc.SaveWhatsAppConfigAsync(_config);
-            _message = "Configuración guardada correctamente en TA_CONFIGURACION.";
-            _config = await ConfigSvc.GetWhatsAppConfigAsync();
-        }
-        catch (Exception ex)
+        var result = await UiOps.RunAsync(
+            () => ConfigSvc.SaveWhatsAppConfigAsync(_config),
+            "No se pudo guardar la configuración de WhatsApp.");
+
+        if (result.Success)
         {
-            _error = ex.Message;
+            _config.ConfigSource = "TA_CONFIGURACION";
+            _feedback = AppUiMessage.Success(
+                "Configuración guardada",
+                "La configuración se grabó correctamente. Si cambiás de sesión SQL, los valores pueden variar según la base activa.");
         }
-        finally
+        else
         {
-            Saving = false;
+            _feedback = result.Feedback;
         }
+
+        Saving = false;
+    }
+
+    private void EnsureDefaults()
+    {
+        if (string.IsNullOrWhiteSpace(_config.WebhookPath))
+            _config.WebhookPath = "/api/conversaciones/whatsapp/webhook";
+
+        if (string.IsNullOrWhiteSpace(_config.ApiVersion))
+            _config.ApiVersion = "v22.0";
     }
 
     private string GetCurrentBaseUrl()
@@ -245,5 +258,14 @@
             "mixta" => "Mixta (TA_CONFIGURACION + appsettings)",
             "appsettings" => "appsettings",
             _ => "No determinado"
+        };
+
+    private static string GetFeedbackClass(AppUiMessage message)
+        => message.Severity switch
+        {
+            AppUiFeedbackSeverity.Success => "conversations-inline--ok",
+            AppUiFeedbackSeverity.Warning => "conversations-inline--error",
+            AppUiFeedbackSeverity.Error => "conversations-inline--error",
+            _ => "conversations-inline--ok"
         };
 }

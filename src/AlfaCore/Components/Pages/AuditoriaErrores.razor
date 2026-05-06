@@ -1,6 +1,7 @@
 @using Microsoft.AspNetCore.Components.Forms
 @page "/auditoria/errores"
 @inject AlfaCore.Services.IAuditoriaService AuditoriaSvc
+@inject AlfaCore.Services.IAppUiOperationService UiOps
 
 <PageTitle>Errores | Alfa Gestión</PageTitle>
 
@@ -8,12 +9,6 @@
 {
     <div class="consultas-loading">
         <i class="bi bi-hourglass-split"></i> Cargando errores…
-    </div>
-}
-else if (!string.IsNullOrWhiteSpace(_error))
-{
-    <div class="consultas-error">
-        <i class="bi bi-exclamation-triangle"></i> @_error
     </div>
 }
 else
@@ -25,6 +20,22 @@ else
                 <p class="page-intro__text">Filtrá `AUX_ERR` por fecha, usuario, proceso, equipo y texto técnico para investigar incidentes.</p>
             </div>
         </section>
+
+        @if (_feedback is not null)
+        {
+            <div class="conversations-inline @GetFeedbackClass(_feedback)">
+                <strong>@_feedback.Title</strong>
+                <div>@_feedback.Message</div>
+                @if (_feedback.HasCode)
+                {
+                    <div>Código: @_feedback.Code</div>
+                }
+                @if (_feedback.HasSuggestion)
+                {
+                    <div>@_feedback.Suggestion</div>
+                }
+            </div>
+        }
 
         <section class="panel-card">
             <div class="panel-card__header">
@@ -135,7 +146,7 @@ else
 
 @code {
     private bool _loading = true;
-    private string _error = string.Empty;
+    private AlfaCore.Models.AppUiMessage? _feedback;
     private IReadOnlyList<string> _usuarios = [];
     private IReadOnlyList<string> _procesos = [];
     private IReadOnlyList<AuditoriaErrorRowDto> _rows = [];
@@ -149,26 +160,21 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        try
+        var result = await UiOps.RunAsync(async () =>
         {
             _usuarios = await AuditoriaSvc.GetUsuariosAsync();
             _procesos = await AuditoriaSvc.GetProcesosAsync();
             await BuscarAsync();
-        }
-        catch (Exception ex)
-        {
-            _error = ex.Message;
-        }
-        finally
-        {
-            _loading = false;
-        }
+        }, "No se pudo cargar el listado de errores.");
+
+        _feedback = result.Success ? null : result.Feedback;
+        _loading = false;
     }
 
     private async Task BuscarAsync()
     {
-        _error = string.Empty;
-        try
+        _feedback = null;
+        var result = await UiOps.RunAsync(async () =>
         {
             _rows = await AuditoriaSvc.SearchErrorsAsync(new AuditoriaErrorFilterDto
             {
@@ -181,11 +187,9 @@ else
                 Texto = _texto,
                 MaxRows = 500
             });
-        }
-        catch (Exception ex)
-        {
-            _error = ex.Message;
-        }
+        }, "No se pudieron cargar los errores filtrados.");
+
+        _feedback = result.Feedback;
     }
 
     private async Task LimpiarFiltros()
@@ -200,4 +204,12 @@ else
         await BuscarAsync();
     }
 
+    private static string GetFeedbackClass(AlfaCore.Models.AppUiMessage message)
+        => message.Severity switch
+        {
+            AlfaCore.Models.AppUiFeedbackSeverity.Success => "conversations-inline--ok",
+            AlfaCore.Models.AppUiFeedbackSeverity.Warning => "conversations-inline--error",
+            AlfaCore.Models.AppUiFeedbackSeverity.Error => "conversations-inline--error",
+            _ => "conversations-inline--ok"
+        };
 }

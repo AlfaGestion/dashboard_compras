@@ -1,6 +1,7 @@
 @page "/costos/nueva"
 @using Microsoft.AspNetCore.Components.Forms
 @inject AlfaCore.Services.ICostosService CostosSvc
+@inject AlfaCore.Services.IAppUiOperationService UiOps
 @inject NavigationManager Nav
 
 <PageTitle>Nueva Importación de Costos | Alfa Gestión</PageTitle>
@@ -236,6 +237,7 @@
     private bool _busy;
     private int _importProgress;
     private CancellationTokenSource? _importCts;
+    private AlfaCore.Models.AppUiMessage? _feedback;
 
     private AlfaCore.Models.CostosProfileDto? SelectedProfile =>
         _profiles.FirstOrDefault(p => p.Id == _profileId);
@@ -252,12 +254,22 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _profiles = await CostosSvc.GetProfilesAsync();
-        var lastId = await CostosSvc.GetLastUsedProfileIdAsync();
-        if (lastId.HasValue && _profiles.Any(p => p.Id == lastId.Value))
+        var result = await UiOps.RunAsync(async () =>
         {
-            _profileId = lastId.Value;
-            _notes = _profiles.First(p => p.Id == _profileId).Notes;
+            _profiles = await CostosSvc.GetProfilesAsync();
+            var lastId = await CostosSvc.GetLastUsedProfileIdAsync();
+            if (lastId.HasValue && _profiles.Any(p => p.Id == lastId.Value))
+            {
+                _profileId = lastId.Value;
+                _notes = _profiles.First(p => p.Id == _profileId).Notes;
+            }
+        }, "No se pudo cargar la configuración de importación.");
+
+        _feedback = result.Feedback;
+        if (!result.Success)
+        {
+            _isError = true;
+            _message = BuildFeedbackText(result.Feedback);
         }
     }
 
@@ -294,6 +306,7 @@
         _message = string.Empty;
         _isError = false;
         _result = null;
+        _feedback = null;
 
         if (_upload is null)
             return;
@@ -305,6 +318,12 @@
             await using var previewStream = _upload.OpenReadStream(25 * 1024 * 1024);
             _fileColumns = await CostosSvc.DetectFileColumnsAsync(_upload.Name, previewStream, profile?.SheetName ?? string.Empty);
             _chosenPriceColIndex = _fileColumns.DefaultPriceColIndex;
+        }
+        catch (Exception ex)
+        {
+            _feedback = UiOps.BuildMessage(ex, "No se pudieron detectar las columnas del archivo.");
+            _isError = true;
+            _message = BuildFeedbackText(_feedback);
         }
         finally
         {
@@ -350,6 +369,7 @@
         _importProgress = 0;
         _message = string.Empty;
         _isError = false;
+        _feedback = null;
         _importCts?.Dispose();
         _importCts = new CancellationTokenSource();
 
@@ -379,8 +399,9 @@
         }
         catch (Exception ex)
         {
+            _feedback = UiOps.BuildMessage(ex, "No se pudo completar la importación.");
             _isError = true;
-            _message = ex.Message;
+            _message = BuildFeedbackText(_feedback);
         }
         finally
         {
@@ -396,6 +417,20 @@
         _result = null;
         _message = string.Empty;
         _isError = false;
+        _feedback = null;
         await ImportAsync();
+    }
+
+    private static string BuildFeedbackText(AlfaCore.Models.AppUiMessage? feedback)
+    {
+        if (feedback is null)
+            return string.Empty;
+
+        var parts = new List<string> { feedback.Message };
+        if (feedback.HasSuggestion)
+            parts.Add(feedback.Suggestion);
+        if (feedback.HasCode)
+            parts.Add($"Código: {feedback.Code}");
+        return string.Join(" ", parts.Where(static part => !string.IsNullOrWhiteSpace(part)));
     }
 }
