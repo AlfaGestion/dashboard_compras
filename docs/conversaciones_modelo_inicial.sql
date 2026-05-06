@@ -63,7 +63,7 @@ BEGIN
     (
         IdConversacion bigint IDENTITY(1,1) NOT NULL,
         Canal nvarchar(20) NOT NULL CONSTRAINT DF_CONV_CONVERSACIONES_Canal DEFAULT (N'WHATSAPP'),
-        TelefonoWhatsApp nvarchar(30) NOT NULL,
+        TelefonoWhatsApp nvarchar(30) NULL,
         NombreVisible nvarchar(120) NULL,
         ClienteCodigo nvarchar(15) NULL,
         ClienteSucursal int NULL,
@@ -80,7 +80,7 @@ BEGIN
         FechaHora_Grabacion datetime NOT NULL CONSTRAINT DF_CONV_CONVERSACIONES_FhGrab DEFAULT (GETDATE()),
         FechaHora_Modificacion datetime NULL,
         CONSTRAINT PK_CONV_CONVERSACIONES PRIMARY KEY CLUSTERED (IdConversacion),
-        CONSTRAINT CK_CONV_CONVERSACIONES_Canal CHECK (Canal IN (N'WHATSAPP')),
+        CONSTRAINT CK_CONV_CONVERSACIONES_Canal CHECK (Canal IN (N'WHATSAPP', N'INTERNO')),
         CONSTRAINT CK_CONV_CONVERSACIONES_Prioridad CHECK (Prioridad IS NULL OR Prioridad IN (N'BAJA', N'MEDIA', N'ALTA', N'URGENTE')),
         CONSTRAINT FK_CONV_CONVERSACIONES_ESTADO FOREIGN KEY (CodigoEstado)
             REFERENCES dbo.CONV_ESTADOS (CodigoEstado),
@@ -127,7 +127,7 @@ BEGIN
     (
         IdMensaje bigint IDENTITY(1,1) NOT NULL,
         IdConversacion bigint NOT NULL,
-        TelefonoWhatsApp nvarchar(30) NOT NULL,
+        TelefonoWhatsApp nvarchar(30) NULL,
         WhatsAppMessageId nvarchar(150) NULL,
         WhatsAppReplyToMessageId nvarchar(150) NULL,
         MessageType nvarchar(20) NOT NULL,

@@ -52,6 +52,7 @@ public class Program
         builder.Services.AddScoped<IConsultasService, ConsultasService>();
         builder.Services.AddScoped<ICostosService, CostosService>();
         builder.Services.AddScoped<IConversacionesService, ConversacionesService>();
+        builder.Services.AddScoped<IConversacionesConfigService, ConversacionesConfigService>();
         builder.Services.AddScoped<IAuditoriaService, AuditoriaService>();
         builder.Services.AddScoped<IGestionDashboardService, GestionDashboardService>();
         builder.Services.AddSingleton<IAuxErrRepository, AuxErrRepository>();
@@ -239,11 +240,12 @@ public class Program
             return Results.Ok();
         });
 
-        app.MapGet("/api/conversaciones/whatsapp/webhook", (
+        app.MapGet("/api/conversaciones/whatsapp/webhook", async (
             HttpRequest request,
-            IConfiguration configuration) =>
+            IConversacionesConfigService configService,
+            CancellationToken ct) =>
         {
-            var options = configuration.GetSection(WhatsAppOptions.SectionName).Get<WhatsAppOptions>() ?? new();
+            var options = await configService.GetWhatsAppConfigAsync(ct);
             var mode = request.Query["hub.mode"].ToString();
             var verifyToken = request.Query["hub.verify_token"].ToString();
             var challenge = request.Query["hub.challenge"].ToString();
@@ -279,6 +281,53 @@ public class Program
             return Results.Ok(result);
         });
 
+        app.MapPost("/api/conversaciones/{id:long}/adjuntos", async (
+            long id,
+            HttpRequest request,
+            IConversacionesService svc,
+            CancellationToken ct) =>
+        {
+            if (!request.HasFormContentType)
+                return Results.BadRequest("Se esperaba multipart/form-data.");
+
+            var form = await request.ReadFormAsync(ct);
+            var file = form.Files.GetFile("archivo");
+            if (file is null || file.Length == 0)
+                return Results.BadRequest("No se recibió ningún archivo.");
+
+            var tipoArchivo = form["tipoArchivo"].ToString();
+            var idTecnico = form["idTecnico"].ToString();
+
+            var uploadRequest = new ConversacionUploadAdjuntoRequest
+            {
+                IdConversacion = id,
+                NombreArchivo = file.FileName,
+                MimeType = file.ContentType,
+                TipoArchivo = string.IsNullOrWhiteSpace(tipoArchivo)
+                    ? InferTipoArchivo(file.ContentType, file.FileName)
+                    : tipoArchivo,
+                Contenido = file.OpenReadStream(),
+                TamanoBytes = file.Length,
+                IdTecnicoAutor = string.IsNullOrWhiteSpace(idTecnico) ? null : idTecnico
+            };
+
+            var result = await svc.UploadAttachmentAsync(uploadRequest, ct);
+            return Results.Ok(result);
+        });
+
+        app.MapGet("/api/conversaciones/adjuntos/{idAdjunto:long}", async (
+            long idAdjunto,
+            IConversacionesService svc,
+            CancellationToken ct) =>
+        {
+            var adjunto = await svc.GetAttachmentForServeAsync(idAdjunto, ct);
+            if (adjunto is null || !File.Exists(adjunto.RutaLocal))
+                return Results.NotFound();
+
+            var mime = string.IsNullOrWhiteSpace(adjunto.MimeType) ? "application/octet-stream" : adjunto.MimeType;
+            return Results.File(adjunto.RutaLocal, mime, adjunto.NombreArchivo);
+        });
+
         try
         {
             app.Run();
@@ -290,6 +339,14 @@ public class Program
                 ex);
             throw;
         }
+    }
+
+    private static string InferTipoArchivo(string mimeType, string fileName)
+    {
+        if (mimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)) return "IMAGE";
+        if (mimeType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase)) return "AUDIO";
+        if (mimeType.StartsWith("video/", StringComparison.OrdinalIgnoreCase)) return "VIDEO";
+        return "DOCUMENT";
     }
 
     private static void WriteStartupError(string message, Exception exception)

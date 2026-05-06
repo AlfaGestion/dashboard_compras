@@ -8,6 +8,7 @@ public sealed class ConversacionesInboxFilters
     public string Search { get; set; } = string.Empty;
     public string? IdTecnicoActual { get; set; }
     public string? CodigoEstado { get; set; }
+    public string? Canal { get; set; }
     public int Limit { get; set; } = 50;
     public int Offset { get; set; }
 }
@@ -141,8 +142,53 @@ public sealed class ConversacionWebhookResultDto
     public int MensajesProcesados { get; set; }
 }
 
+public sealed class ConversacionUploadAdjuntoRequest
+{
+    public long IdConversacion { get; set; }
+    public string NombreArchivo { get; set; } = string.Empty;
+    public string MimeType { get; set; } = string.Empty;
+    public string TipoArchivo { get; set; } = string.Empty;
+    public Stream Contenido { get; set; } = Stream.Null;
+    public long TamanoBytes { get; set; }
+    public string? IdTecnicoAutor { get; set; }
+    public string? UsuarioAccion { get; set; }
+    public string? SistemaAccion { get; set; }
+}
+
+public sealed class ConversacionAdjuntoServeDto
+{
+    public string RutaLocal { get; set; } = string.Empty;
+    public string MimeType { get; set; } = string.Empty;
+    public string NombreArchivo { get; set; } = string.Empty;
+}
+
+public sealed class ConversacionCrearHiloInternoRequest
+{
+    public string NombreHilo { get; set; } = string.Empty;
+    public string? IdTecnico { get; set; }
+    public string? UsuarioAccion { get; set; }
+    public string? SistemaAccion { get; set; }
+}
+
 public sealed class ConversacionWebhookRequest
 {
     public JsonDocument Payload { get; set; } = JsonDocument.Parse("{}");
     public IDictionary<string, string> Headers { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+}
+
+public sealed class ConversacionTecnicoOptionDto
+{
+    public string IdTecnico { get; set; } = string.Empty;
+    public string Nombre { get; set; } = string.Empty;
+    public string Cargo { get; set; } = string.Empty;
+    public string UsuarioAsociado { get; set; } = string.Empty;
+    public string SistemaAsociado { get; set; } = string.Empty;
+}
+
+public sealed class ConversacionEstadoOptionDto
+{
+    public string CodigoEstado { get; set; } = string.Empty;
+    public string Descripcion { get; set; } = string.Empty;
+    public bool EsCerrado { get; set; }
+    public int Orden { get; set; }
 }

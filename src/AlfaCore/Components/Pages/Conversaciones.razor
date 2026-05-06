@@ -1,0 +1,926 @@
+@page "/conversaciones"
+@inject AlfaCore.Services.IConversacionesService ConversacionesSvc
+@inject IJSRuntime JS
+
+<PageTitle>Conversaciones | Alfa Gestión</PageTitle>
+
+<section class="page-grid">
+    <div class="page-intro">
+        <div>
+            <h2 class="page-intro__title">Conversaciones</h2>
+            <p class="page-intro__text">Inbox operativo para gestionar WhatsApp, asignar técnicos y mantener trazabilidad entre contacto, cliente y estado.</p>
+        </div>
+        <div class="actions">
+            <a class="btn btn--ghost" href="/conversaciones/configuracion">
+                <i class="bi bi-sliders"></i> Configuración
+            </a>
+            <button type="button" class="btn btn--ghost" @onclick="RecargarAsync" disabled="_loadingInbox || _loadingConversation">
+                <i class="bi bi-arrow-clockwise"></i> Recargar
+            </button>
+        </div>
+    </div>
+
+    @if (_loadError is not null)
+    {
+        <div class="panel-card empty-state">
+            <span class="empty-state__eyebrow">Conversaciones</span>
+            <h3>No fue posible cargar el módulo</h3>
+            <p>@_loadError</p>
+            @if (IsInitializationPending(_loadError))
+            {
+                <p>Pasos sugeridos: ejecutar <code>docs/conversaciones_modelo_inicial.sql</code> en la base activa, recargar la pantalla y revisar <code>AUX_ERR</code> si el incidente persiste.</p>
+            }
+        </div>
+    }
+    else
+    {
+        <section class="panel-card conversations-filters">
+            <div class="conversations-canal">
+                <button type="button"
+                        class="conversations-filter-pill @(_canalActivo == "WHATSAPP" ? "is-active" : string.Empty)"
+                        @onclick='() => ChangeCanalAsync("WHATSAPP")'>
+                    <i class="bi bi-whatsapp"></i> WhatsApp
+                </button>
+                <button type="button"
+                        class="conversations-filter-pill @(_canalActivo == "INTERNO" ? "is-active" : string.Empty)"
+                        @onclick='() => ChangeCanalAsync("INTERNO")'>
+                    <i class="bi bi-people-fill"></i> Chat interno
+                </button>
+                @if (_canalActivo == "INTERNO")
+                {
+                    <button type="button" class="btn btn--primary btn--sm" @onclick='() => _showNuevoHilo = true'>
+                        <i class="bi bi-plus-circle-fill"></i> Nuevo hilo
+                    </button>
+                }
+            </div>
+
+            <div class="conversations-filters__modes">
+                @foreach (var mode in _modeOptions)
+                {
+                    <button type="button"
+                            class="conversations-filter-pill @(mode.Value == _filters.Modo ? "is-active" : string.Empty)"
+                            @onclick="() => ChangeModeAsync(mode.Value)">
+                        @mode.Label
+                    </button>
+                }
+            </div>
+
+            <div class="conversations-filters__fields">
+                <div class="field">
+                    <label for="conv-search">Buscar</label>
+                    <input id="conv-search"
+                           type="search"
+                           placeholder="Teléfono, cliente, contacto o resumen…"
+                           @bind="_filters.Search"
+                           @bind:event="oninput"
+                           @onkeydown="HandleSearchEnter" />
+                </div>
+
+                <div class="field">
+                    <label for="conv-my-tech">Mi técnico</label>
+                    <select id="conv-my-tech" @bind="_filters.IdTecnicoActual">
+                        <option value="">Todos</option>
+                        @foreach (var tech in _technicians)
+                        {
+                            <option value="@tech.IdTecnico">@tech.Nombre (@tech.IdTecnico)</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="field">
+                    <label for="conv-state-filter">Estado</label>
+                    <select id="conv-state-filter" @bind="_filters.CodigoEstado">
+                        <option value="">Todos</option>
+                        @foreach (var state in _states)
+                        {
+                            <option value="@state.CodigoEstado">@state.Descripcion</option>
+                        }
+                    </select>
+                </div>
+
+                <button type="button" class="btn btn--primary" @onclick="LoadInboxAsync" disabled="_loadingInbox">
+                    <i class="bi bi-funnel"></i> Aplicar
+                </button>
+            </div>
+        </section>
+
+        <div class="conversations-layout">
+            <aside class="panel-card conversations-list">
+                <div class="conversations-list__header">
+                    <div>
+                        <h3 class="panel-card__title">Inbox</h3>
+                        <p class="panel-card__subtitle">@_inbox.Count conversación(es)</p>
+                    </div>
+                </div>
+
+                @if (_loadingInbox)
+                {
+                    <div class="loading">Cargando conversaciones…</div>
+                }
+                else if (_inbox.Count == 0)
+                {
+                    <div class="conversations-empty">
+                        No hay conversaciones para los filtros seleccionados.
+                    </div>
+                }
+                else
+                {
+                    <div class="conversations-list__items">
+                        @foreach (var item in _inbox)
+                        {
+                            <button type="button"
+                                    class="conversation-row @(item.IdConversacion == _selectedConversationId ? "is-selected" : string.Empty)"
+                                    @onclick="() => SelectConversationAsync(item.IdConversacion)">
+                                <div class="conversation-row__top">
+                                    <span class="conversation-row__name">@GetDisplayName(item)</span>
+                                    <span class="conversation-row__date">@FormatShortDate(item.FechaHoraUltimoMensaje)</span>
+                                </div>
+                                <div class="conversation-row__meta">
+                                    <span>@item.TelefonoWhatsApp</span>
+                                    @if (!string.IsNullOrWhiteSpace(item.TecnicoNombre))
+                                    {
+                                        <span>• @item.TecnicoNombre</span>
+                                    }
+                                </div>
+                                <div class="conversation-row__badges">
+                                    <span class="conversation-badge conversation-badge--state">@item.EstadoDescripcion</span>
+                                    @if (!string.IsNullOrWhiteSpace(item.ClienteNombre))
+                                    {
+                                        <span class="conversation-badge">@item.ClienteNombre</span>
+                                    }
+                                </div>
+                                <p class="conversation-row__summary">@item.ResumenUltimoMensaje</p>
+                            </button>
+                        }
+                    </div>
+                }
+            </aside>
+
+            <section class="panel-card conversations-chat">
+                @if (_loadingConversation)
+                {
+                    <div class="loading">Cargando conversación…</div>
+                }
+                else if (_selectedConversation is null)
+                {
+                    <div class="conversations-empty conversations-empty--center">
+                        Seleccioná una conversación del panel izquierdo para verla y responder.
+                    </div>
+                }
+                else
+                {
+                    <header class="conversations-chat__header">
+                        <div>
+                            <h3 class="panel-card__title">@GetConversationHeader(_selectedConversation)</h3>
+                            @if (_selectedConversation.Canal != "INTERNO" && !string.IsNullOrWhiteSpace(_selectedConversation.TelefonoWhatsApp))
+                            {
+                                <p class="panel-card__subtitle">@_selectedConversation.TelefonoWhatsApp</p>
+                            }
+                        </div>
+                        <div class="conversations-chat__chips">
+                            <span class="conversation-badge conversation-badge--state">@_selectedConversation.EstadoDescripcion</span>
+                            @if (!string.IsNullOrWhiteSpace(_selectedConversation.TecnicoNombre))
+                            {
+                                <span class="conversation-badge">@_selectedConversation.TecnicoNombre</span>
+                            }
+                        </div>
+                    </header>
+
+                    @if (_conversationError is not null)
+                    {
+                        <div class="conversations-error">@_conversationError</div>
+                    }
+
+                    <div class="conversations-thread">
+                        @if (_messages.Count == 0)
+                        {
+                            <div class="conversations-empty conversations-empty--center">
+                                La conversación todavía no tiene mensajes registrados.
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var message in _messages)
+                            {
+                                <article class="message-card @GetMessageClass(message)">
+                                    <div class="message-card__meta">
+                                        <span>@GetMessageAuthor(message)</span>
+                                        <span>@message.FechaHora.ToString("dd/MM HH:mm")</span>
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(message.Texto) && message.MessageType is not ("IMAGE" or "AUDIO" or "VIDEO" or "DOCUMENT"))
+                                    {
+                                        <p class="message-card__text">@message.Texto</p>
+                                    }
+                                    @if (message.TieneAdjuntos && _adjuntosPorMensaje.TryGetValue(message.IdMensaje, out var adjuntos))
+                                    {
+                                        <div class="message-attachments">
+                                            @foreach (var adj in adjuntos)
+                                            {
+                                                @if (adj.TipoArchivo == "IMAGE")
+                                                {
+                                                    <div class="message-attachment message-attachment--image">
+                                                        <img src="/api/conversaciones/adjuntos/@adj.IdAdjunto" alt="@adj.NombreArchivo" loading="lazy" />
+                                                        <span class="attachment-name">@adj.NombreArchivo</span>
+                                                    </div>
+                                                }
+                                                else if (adj.TipoArchivo == "AUDIO")
+                                                {
+                                                    <div class="message-attachment message-attachment--audio">
+                                                        <audio controls preload="metadata">
+                                                            <source src="/api/conversaciones/adjuntos/@adj.IdAdjunto"
+                                                                    type="@(string.IsNullOrWhiteSpace(adj.MimeType) ? "audio/webm" : adj.MimeType)" />
+                                                        </audio>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="message-attachment message-attachment--file">
+                                                        <a class="attachment-link" href="/api/conversaciones/adjuntos/@adj.IdAdjunto" download="@adj.NombreArchivo">
+                                                            <i class="bi bi-file-earmark-arrow-down"></i>
+                                                            <span>@adj.NombreArchivo</span>
+                                                            @if (adj.TamanoBytes > 0)
+                                                            {
+                                                                <span class="attachment-link__size">@FormatFileSize(adj.TamanoBytes)</span>
+                                                            }
+                                                        </a>
+                                                    </div>
+                                                }
+                                            }
+                                        </div>
+                                    }
+                                    <div class="message-card__footer">
+                                        <span>@GetMessageTypeLabel(message)</span>
+                                        @if (!string.IsNullOrWhiteSpace(message.EstadoEnvio))
+                                        {
+                                            <span>• @message.EstadoEnvio</span>
+                                        }
+                                    </div>
+                                </article>
+                            }
+                        }
+                    </div>
+
+                    <div class="conversations-composer">
+                        <div class="field">
+                            <label for="conv-message">
+                                @(_selectedConversation.Canal == "INTERNO" ? "Mensaje al equipo" : "Responder")
+                            </label>
+                            <textarea id="conv-message"
+                                      rows="4"
+                                      placeholder="@(_selectedConversation.Canal == "INTERNO" ? "Escribí un mensaje para el equipo…" : "Escribí una respuesta para WhatsApp…")"
+                                      @bind="_replyText"></textarea>
+                        </div>
+                        <div class="conversations-composer__actions">
+                            <button type="button" class="btn btn--primary" @onclick="SendReplyAsync" disabled="@(!_canSendReply)">
+                                <i class="bi bi-send-fill"></i>
+                                @(_selectedConversation.Canal == "INTERNO" ? "Enviar" : "Enviar mensaje")
+                            </button>
+                            <label class="btn btn--ghost" title="Adjuntar archivo" style="cursor:pointer">
+                                <i class="bi @(_uploadingFile ? "bi-hourglass-split" : "bi-paperclip")"></i>
+                                <InputFile OnChange="HandleFileSelectedAsync" style="display:none"
+                                           accept="image/*,audio/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip,.rar" />
+                            </label>
+                            <button type="button"
+                                    class="btn btn--ghost @(_recording ? "is-recording" : string.Empty)"
+                                    @onclick="ToggleRecordingAsync"
+                                    title="@(_recording ? "Detener y enviar audio" : "Grabar mensaje de voz")"
+                                    disabled="@_uploadingAudio">
+                                <i class="bi @(_recording ? "bi-stop-circle-fill" : "bi-mic-fill")"></i>
+                            </button>
+                        </div>
+
+                        <div class="field">
+                            <label for="conv-note">Nota interna</label>
+                            <textarea id="conv-note"
+                                      rows="3"
+                                      placeholder="Escribí una nota interna visible solo para el equipo…"
+                                      @bind="_internalNoteText"></textarea>
+                        </div>
+                        <div class="conversations-composer__actions">
+                            <button type="button" class="btn btn--ghost" @onclick="AddInternalNoteAsync" disabled="@(!_canAddNote)">
+                                <i class="bi bi-journal-text"></i> Guardar nota
+                            </button>
+                        </div>
+                    </div>
+                }
+            </section>
+
+            <aside class="panel-card conversations-context">
+                <div class="conversations-context__section">
+                    <h3 class="panel-card__title">Contexto</h3>
+                    <p class="panel-card__subtitle">Cliente, contacto y gestión</p>
+                </div>
+
+                @if (_selectedConversation is null)
+                {
+                    <div class="conversations-empty">
+                        Seleccioná una conversación para ver sus datos.
+                    </div>
+                }
+                else
+                {
+                    @if (_selectedConversation.Canal != "INTERNO")
+                    {
+                        <div class="context-card">
+                            <span class="context-card__label">Cliente</span>
+                            <strong>@DisplayOrFallback(_selectedConversation.ClienteNombre)</strong>
+                            <span class="context-card__muted">@DisplayOrFallback(_selectedConversation.ClienteCodigo)</span>
+                        </div>
+
+                        <div class="context-card">
+                            <span class="context-card__label">Contacto</span>
+                            <strong>@DisplayOrFallback(_selectedConversation.ContactoNombre)</strong>
+                            <span class="context-card__muted">@DisplayOrFallback(_selectedConversation.ContactoCargo)</span>
+                            <span class="context-card__muted">@DisplayOrFallback(_selectedConversation.ContactoCelular, _selectedConversation.ContactoTelefono)</span>
+                            <span class="context-card__muted">@DisplayOrFallback(_selectedConversation.ContactoEmail)</span>
+                        </div>
+                    }
+
+                    <div class="conversations-context__section">
+                        <h4 class="panel-card__title">Asignación</h4>
+                        <div class="field">
+                            <label for="conv-tech">Técnico</label>
+                            <select id="conv-tech" @bind="_assignmentTechnicianId">
+                                <option value="">Sin asignar</option>
+                                @foreach (var tech in _technicians)
+                                {
+                                    <option value="@tech.IdTecnico">@tech.Nombre (@tech.IdTecnico)</option>
+                                }
+                            </select>
+                        </div>
+                        <button type="button" class="btn btn--ghost" @onclick="AssignAsync" disabled="_busyAction">
+                            <i class="bi bi-person-check-fill"></i> Guardar asignación
+                        </button>
+                    </div>
+
+                    <div class="conversations-context__section">
+                        <h4 class="panel-card__title">Estado</h4>
+                        <div class="field">
+                            <label for="conv-state">Estado actual</label>
+                            <select id="conv-state" @bind="_statusCode">
+                                @foreach (var state in _states)
+                                {
+                                    <option value="@state.CodigoEstado">@state.Descripcion</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="conversations-context__actions">
+                            <button type="button" class="btn btn--ghost" @onclick="SaveStatusAsync" disabled="_busyAction">
+                                <i class="bi bi-check2-circle"></i> Guardar estado
+                            </button>
+                            <button type="button" class="btn btn--ghost" @onclick="CloseConversationAsync" disabled="_busyAction">
+                                <i class="bi bi-lock-fill"></i> Cerrar conversación
+                            </button>
+                        </div>
+                    </div>
+
+                    @if (_actionMessage is not null)
+                    {
+                        <div class="conversations-inline conversations-inline--ok">@_actionMessage</div>
+                    }
+                    @if (_actionError is not null)
+                    {
+                        <div class="conversations-inline conversations-inline--error">@_actionError</div>
+                    }
+                }
+            </aside>
+        </div>
+    }
+</section>
+
+@if (_showNuevoHilo)
+{
+    <div class="modal-overlay" @onclick="CerrarNuevoHilo">
+        <div class="modal-card" @onclick:stopPropagation>
+            <h3 class="modal-card__title">Nuevo hilo interno</h3>
+            <div class="field">
+                <label for="hilo-nombre">Nombre del hilo</label>
+                <input id="hilo-nombre" type="text" @bind="_nuevoHiloNombre"
+                       placeholder="Ej: Revisión instalación cliente X…" />
+            </div>
+            <div class="field">
+                <label for="hilo-tecnico">Asignar a técnico (opcional)</label>
+                <select id="hilo-tecnico" @bind="_nuevoHiloTecnico">
+                    <option value="">Sin asignar</option>
+                    @foreach (var tech in _technicians)
+                    {
+                        <option value="@tech.IdTecnico">@tech.Nombre (@tech.IdTecnico)</option>
+                    }
+                </select>
+            </div>
+            @if (_nuevoHiloError is not null)
+            {
+                <div class="conversations-error">@_nuevoHiloError</div>
+            }
+            <div class="modal-card__actions">
+                <button type="button" class="btn btn--primary" @onclick="CrearHiloInternoAsync" disabled="_busyAction">
+                    <i class="bi bi-plus-circle-fill"></i> Crear hilo
+                </button>
+                <button type="button" class="btn btn--ghost" @onclick="CerrarNuevoHilo">
+                    Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private readonly (string Value, string Label)[] _modeOptions =
+    [
+        ("todas", "Todas"),
+        ("sin_asignar", "Sin asignar"),
+        ("asignadas_a_mi", "Asignadas a mí"),
+        ("pendientes", "Pendientes"),
+        ("cerradas", "Cerradas")
+    ];
+
+    private string _canalActivo = "WHATSAPP";
+    private bool _showNuevoHilo;
+    private string _nuevoHiloNombre = string.Empty;
+    private string _nuevoHiloTecnico = string.Empty;
+    private string? _nuevoHiloError;
+    private bool _recording;
+    private bool _uploadingFile;
+    private bool _uploadingAudio;
+    private Dictionary<long, List<ConversacionAdjuntoDto>> _adjuntosPorMensaje = [];
+
+    private ConversacionesInboxFilters _filters = new() { Canal = "WHATSAPP" };
+    private List<ConversacionTecnicoOptionDto> _technicians = [];
+    private List<ConversacionEstadoOptionDto> _states = [];
+    private List<ConversacionInboxItemDto> _inbox = [];
+    private List<ConversacionMensajeDto> _messages = [];
+    private ConversacionDetalleDto? _selectedConversation;
+    private long? _selectedConversationId;
+    private bool _loadingInbox;
+    private bool _loadingConversation;
+    private bool _busyAction;
+    private string? _loadError;
+    private string? _conversationError;
+    private string? _actionMessage;
+    private string? _actionError;
+    private string _replyText = string.Empty;
+    private string _internalNoteText = string.Empty;
+    private string _assignmentTechnicianId = string.Empty;
+    private string _statusCode = "ABIERTA";
+
+    private bool _canSendReply => !_busyAction && _selectedConversation is not null && !string.IsNullOrWhiteSpace(_replyText);
+    private bool _canAddNote => !_busyAction && _selectedConversation is not null && !string.IsNullOrWhiteSpace(_internalNoteText);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLookupsAsync();
+        if (_loadError is null)
+            await LoadInboxAsync();
+    }
+
+    private async Task LoadLookupsAsync()
+    {
+        try
+        {
+            _technicians = (await ConversacionesSvc.GetTechniciansAsync()).ToList();
+            _states = (await ConversacionesSvc.GetStatesAsync()).ToList();
+            _statusCode = _states.FirstOrDefault()?.CodigoEstado ?? "ABIERTA";
+        }
+        catch (Exception ex)
+        {
+            _loadError = ex.Message;
+        }
+    }
+
+    private async Task RecargarAsync()
+    {
+        _actionMessage = null;
+        _actionError = null;
+        await LoadInboxAsync();
+        if (_selectedConversationId.HasValue)
+            await SelectConversationAsync(_selectedConversationId.Value);
+    }
+
+    private async Task ChangeModeAsync(string mode)
+    {
+        _filters.Modo = mode;
+        await LoadInboxAsync();
+    }
+
+    private async Task HandleSearchEnter(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+            await LoadInboxAsync();
+    }
+
+    private async Task LoadInboxAsync()
+    {
+        _loadingInbox = true;
+        _loadError = null;
+
+        try
+        {
+            _inbox = (await ConversacionesSvc.GetInboxAsync(_filters)).ToList();
+
+            if (_selectedConversationId.HasValue && _inbox.Any(x => x.IdConversacion == _selectedConversationId.Value))
+                return;
+
+            if (_inbox.Count > 0)
+                await SelectConversationAsync(_inbox[0].IdConversacion);
+            else
+                ClearSelection();
+        }
+        catch (Exception ex)
+        {
+            _loadError = ex.Message;
+        }
+        finally
+        {
+            _loadingInbox = false;
+        }
+    }
+
+    private async Task SelectConversationAsync(long idConversacion)
+    {
+        _selectedConversationId = idConversacion;
+        _loadingConversation = true;
+        _conversationError = null;
+        _actionMessage = null;
+        _actionError = null;
+
+        try
+        {
+            _selectedConversation = await ConversacionesSvc.GetConversationAsync(idConversacion);
+            _messages = (await ConversacionesSvc.GetMessagesAsync(idConversacion)).ToList();
+            var adjuntos = await ConversacionesSvc.GetConversationAttachmentsAsync(idConversacion);
+            _adjuntosPorMensaje = adjuntos
+                .GroupBy(a => a.IdMensaje)
+                .ToDictionary(g => g.Key, g => g.ToList());
+            _assignmentTechnicianId = _selectedConversation?.IdTecnico ?? string.Empty;
+            _statusCode = _selectedConversation?.CodigoEstado ?? (_states.FirstOrDefault()?.CodigoEstado ?? "ABIERTA");
+        }
+        catch (Exception ex)
+        {
+            _conversationError = ex.Message;
+            _selectedConversation = null;
+            _messages = [];
+        }
+        finally
+        {
+            _loadingConversation = false;
+        }
+    }
+
+    private async Task SendReplyAsync()
+    {
+        if (_selectedConversation is null)
+            return;
+
+        _busyAction = true;
+        _actionMessage = null;
+        _actionError = null;
+
+        try
+        {
+            await ConversacionesSvc.SendMessageAsync(new ConversacionSendMessageRequest
+            {
+                IdConversacion = _selectedConversation.IdConversacion,
+                Texto = _replyText.Trim(),
+                MessageType = "TEXT",
+                IdTecnicoAutor = _assignmentTechnicianId
+            });
+
+            _replyText = string.Empty;
+            _actionMessage = "Mensaje registrado correctamente.";
+            await SelectConversationAsync(_selectedConversation.IdConversacion);
+            await LoadInboxAsync();
+        }
+        catch (Exception ex)
+        {
+            _actionError = ex.Message;
+        }
+        finally
+        {
+            _busyAction = false;
+        }
+    }
+
+    private async Task AddInternalNoteAsync()
+    {
+        if (_selectedConversation is null)
+            return;
+
+        _busyAction = true;
+        _actionMessage = null;
+        _actionError = null;
+
+        try
+        {
+            await ConversacionesSvc.AddInternalNoteAsync(new ConversacionNotaInternaRequest
+            {
+                IdConversacion = _selectedConversation.IdConversacion,
+                Texto = _internalNoteText.Trim(),
+                IdTecnicoAutor = _assignmentTechnicianId
+            });
+
+            _internalNoteText = string.Empty;
+            _actionMessage = "Nota interna guardada.";
+            await SelectConversationAsync(_selectedConversation.IdConversacion);
+            await LoadInboxAsync();
+        }
+        catch (Exception ex)
+        {
+            _actionError = ex.Message;
+        }
+        finally
+        {
+            _busyAction = false;
+        }
+    }
+
+    private async Task AssignAsync()
+    {
+        if (_selectedConversation is null)
+            return;
+
+        _busyAction = true;
+        _actionMessage = null;
+        _actionError = null;
+
+        try
+        {
+            await ConversacionesSvc.AssignConversationAsync(new ConversacionAsignacionRequest
+            {
+                IdConversacion = _selectedConversation.IdConversacion,
+                IdTecnico = _assignmentTechnicianId
+            });
+
+            _actionMessage = "Asignación actualizada.";
+            await SelectConversationAsync(_selectedConversation.IdConversacion);
+            await LoadInboxAsync();
+        }
+        catch (Exception ex)
+        {
+            _actionError = ex.Message;
+        }
+        finally
+        {
+            _busyAction = false;
+        }
+    }
+
+    private async Task SaveStatusAsync()
+    {
+        if (_selectedConversation is null || string.IsNullOrWhiteSpace(_statusCode))
+            return;
+
+        _busyAction = true;
+        _actionMessage = null;
+        _actionError = null;
+
+        try
+        {
+            await ConversacionesSvc.ChangeStatusAsync(new ConversacionEstadoRequest
+            {
+                IdConversacion = _selectedConversation.IdConversacion,
+                CodigoEstado = _statusCode
+            });
+
+            _actionMessage = "Estado actualizado.";
+            await SelectConversationAsync(_selectedConversation.IdConversacion);
+            await LoadInboxAsync();
+        }
+        catch (Exception ex)
+        {
+            _actionError = ex.Message;
+        }
+        finally
+        {
+            _busyAction = false;
+        }
+    }
+
+    private async Task CloseConversationAsync()
+    {
+        var closedState = _states.FirstOrDefault(x => x.EsCerrado)?.CodigoEstado ?? "CERRADA";
+        _statusCode = closedState;
+        await SaveStatusAsync();
+    }
+
+    private async Task ChangeCanalAsync(string canal)
+    {
+        _canalActivo = canal;
+        _filters.Canal = canal;
+        _showNuevoHilo = false;
+        ClearSelection();
+        await LoadInboxAsync();
+    }
+
+    private async Task CrearHiloInternoAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_nuevoHiloNombre))
+        {
+            _nuevoHiloError = "El nombre del hilo es obligatorio.";
+            return;
+        }
+
+        _busyAction = true;
+        _nuevoHiloError = null;
+
+        try
+        {
+            var id = await ConversacionesSvc.CreateInternalThreadAsync(new ConversacionCrearHiloInternoRequest
+            {
+                NombreHilo = _nuevoHiloNombre.Trim(),
+                IdTecnico = string.IsNullOrWhiteSpace(_nuevoHiloTecnico) ? null : _nuevoHiloTecnico
+            });
+
+            _showNuevoHilo = false;
+            _nuevoHiloNombre = string.Empty;
+            _nuevoHiloTecnico = string.Empty;
+            await LoadInboxAsync();
+            await SelectConversationAsync(id);
+        }
+        catch (Exception ex)
+        {
+            _nuevoHiloError = ex.Message;
+        }
+        finally
+        {
+            _busyAction = false;
+        }
+    }
+
+    private async Task HandleFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        if (_selectedConversation is null) return;
+
+        var file = e.File;
+        if (file.Size == 0) return;
+
+        _uploadingFile = true;
+        _actionMessage = null;
+        _actionError = null;
+
+        try
+        {
+            const long maxSize = 25 * 1024 * 1024;
+            await using var stream = file.OpenReadStream(maxSize);
+
+            await ConversacionesSvc.UploadAttachmentAsync(new ConversacionUploadAdjuntoRequest
+            {
+                IdConversacion = _selectedConversation.IdConversacion,
+                NombreArchivo = file.Name,
+                MimeType = file.ContentType,
+                TipoArchivo = InferTipoArchivo(file.ContentType),
+                Contenido = stream,
+                TamanoBytes = file.Size,
+                IdTecnicoAutor = string.IsNullOrWhiteSpace(_assignmentTechnicianId) ? null : _assignmentTechnicianId
+            });
+
+            _actionMessage = "Adjunto enviado.";
+            await SelectConversationAsync(_selectedConversation.IdConversacion);
+            await LoadInboxAsync();
+        }
+        catch (Exception ex)
+        {
+            _actionError = ex.Message;
+        }
+        finally
+        {
+            _uploadingFile = false;
+        }
+    }
+
+    private async Task ToggleRecordingAsync()
+    {
+        if (_recording)
+            await StopAndUploadAudioAsync();
+        else
+            await StartRecordingAsync();
+    }
+
+    private async Task StartRecordingAsync()
+    {
+        try
+        {
+            _recording = await JS.InvokeAsync<bool>("conversacionesAudio.startRecording");
+        }
+        catch (Exception ex)
+        {
+            _actionError = $"No se pudo iniciar la grabación: {ex.Message}";
+        }
+    }
+
+    private async Task StopAndUploadAudioAsync()
+    {
+        _recording = false;
+        _uploadingAudio = true;
+        _actionMessage = null;
+        _actionError = null;
+
+        try
+        {
+            var base64 = await JS.InvokeAsync<string>("conversacionesAudio.stopRecording");
+            if (string.IsNullOrWhiteSpace(base64)) return;
+
+            var bytes = Convert.FromBase64String(base64);
+            await using var stream = new MemoryStream(bytes);
+            var fileName = $"audio_{DateTime.Now:yyyyMMdd_HHmmss}.webm";
+
+            await ConversacionesSvc.UploadAttachmentAsync(new ConversacionUploadAdjuntoRequest
+            {
+                IdConversacion = _selectedConversation!.IdConversacion,
+                NombreArchivo = fileName,
+                MimeType = "audio/webm",
+                TipoArchivo = "AUDIO",
+                Contenido = stream,
+                TamanoBytes = bytes.Length,
+                IdTecnicoAutor = string.IsNullOrWhiteSpace(_assignmentTechnicianId) ? null : _assignmentTechnicianId
+            });
+
+            _actionMessage = "Audio enviado.";
+            await SelectConversationAsync(_selectedConversation!.IdConversacion);
+            await LoadInboxAsync();
+        }
+        catch (Exception ex)
+        {
+            _actionError = $"No se pudo guardar el audio: {ex.Message}";
+        }
+        finally
+        {
+            _uploadingAudio = false;
+        }
+    }
+
+    private void CerrarNuevoHilo()
+    {
+        _showNuevoHilo = false;
+        _nuevoHiloNombre = string.Empty;
+        _nuevoHiloTecnico = string.Empty;
+        _nuevoHiloError = null;
+    }
+
+    private void ClearSelection()
+    {
+        _selectedConversationId = null;
+        _selectedConversation = null;
+        _messages = [];
+        _adjuntosPorMensaje = [];
+        _replyText = string.Empty;
+        _internalNoteText = string.Empty;
+        _assignmentTechnicianId = string.Empty;
+    }
+
+    private static string GetDisplayName(ConversacionInboxItemDto item)
+        => FirstNonEmpty(item.ContactoNombre, item.ClienteNombre, item.NombreVisible, item.TelefonoWhatsApp);
+
+    private static string GetConversationHeader(ConversacionDetalleDto item)
+        => FirstNonEmpty(item.ContactoNombre, item.ClienteNombre, item.NombreVisible, item.TelefonoWhatsApp);
+
+    private static string GetMessageAuthor(ConversacionMensajeDto message)
+        => message.Direction switch
+        {
+            "ENTRANTE" => "Cliente / Contacto",
+            "NOTA_INTERNA" => FirstNonEmpty(message.TecnicoAutorNombre, message.UsuarioAutor, "Nota interna"),
+            _ => FirstNonEmpty(message.TecnicoAutorNombre, message.UsuarioAutor, "Equipo Alfa")
+        };
+
+    private static string GetMessageTypeLabel(ConversacionMensajeDto message)
+        => message.Direction switch
+        {
+            "NOTA_INTERNA" => "Nota interna",
+            _ => message.MessageType
+        };
+
+    private static string GetMessageClass(ConversacionMensajeDto message)
+        => message.Direction switch
+        {
+            "ENTRANTE" => "message-card--incoming",
+            "NOTA_INTERNA" => "message-card--internal",
+            _ => "message-card--outgoing"
+        };
+
+    private static string DisplayOrFallback(params string?[] values)
+        => FirstNonEmpty(values) is { Length: > 0 } found ? found : "Sin dato";
+
+    private static string FirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))?.Trim() ?? string.Empty;
+
+    private static string FormatShortDate(DateTime value)
+        => value == DateTime.MinValue ? "—" : value.ToString("dd/MM HH:mm");
+
+    private static bool IsInitializationPending(string? message)
+        => !string.IsNullOrWhiteSpace(message)
+           && message.Contains("todavia no esta inicializado", StringComparison.OrdinalIgnoreCase);
+
+    private static string InferTipoArchivo(string mimeType)
+    {
+        if (mimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)) return "IMAGE";
+        if (mimeType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase)) return "AUDIO";
+        if (mimeType.StartsWith("video/", StringComparison.OrdinalIgnoreCase)) return "VIDEO";
+        return "DOCUMENT";
+    }
+
+    private static string FormatFileSize(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024} KB",
+        _ => $"{bytes / (1024 * 1024)} MB"
+    };
+}

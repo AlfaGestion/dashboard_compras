@@ -1,0 +1,249 @@
+@page "/conversaciones/configuracion"
+@inject AlfaCore.Services.IConversacionesConfigService ConfigSvc
+@inject NavigationManager Nav
+
+<PageTitle>Configuración de WhatsApp | Alfa Gestión</PageTitle>
+
+<section class="page-grid">
+    <div class="page-intro">
+        <div>
+            <h2 class="page-intro__title">Configuración de WhatsApp</h2>
+            <p class="page-intro__text">Administrá desde AlfaCore los parámetros del canal oficial de WhatsApp. Esta configuración se guarda en <code>TA_CONFIGURACION</code> y <code>appsettings</code> queda solo como respaldo mínimo.</p>
+        </div>
+        <div class="actions">
+            <a class="btn btn--ghost" href="/conversaciones">
+                <i class="bi bi-arrow-left"></i> Volver al inbox
+            </a>
+            <button type="button" class="btn btn--ghost" @onclick="LoadAsync" disabled="Loading || Saving">
+                <i class="bi bi-arrow-clockwise"></i> Recargar
+            </button>
+        </div>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="panel-card empty-state">
+            <span class="empty-state__eyebrow">Configuración</span>
+            <h3>No se pudo cargar la configuración</h3>
+            <p>@_error</p>
+        </div>
+    }
+    else
+    {
+        <div class="conv-config-status-grid">
+            <article class="panel-card conv-status-card">
+                <span class="panel-card__tag">Envío Cloud API</span>
+                <strong class="@GetStatusClass(_config.IsConfiguredForSend)">@GetStatusLabel(_config.IsConfiguredForSend)</strong>
+                <p class="panel-card__subtitle">Requiere <code>access token</code> y <code>phone_number_id</code>.</p>
+            </article>
+
+            <article class="panel-card conv-status-card">
+                <span class="panel-card__tag">Webhook de verificación</span>
+                <strong class="@GetStatusClass(_config.IsConfiguredForVerify)">@GetStatusLabel(_config.IsConfiguredForVerify)</strong>
+                <p class="panel-card__subtitle">Requiere <code>verify_token</code> para validar el callback de Meta.</p>
+            </article>
+
+            <article class="panel-card conv-status-card">
+                <span class="panel-card__tag">Publicación</span>
+                <strong class="@GetStatusClass(_config.IsReadyForMetaSetup)">@GetPublicationLabel()</strong>
+                <p class="panel-card__subtitle">Meta necesita una URL pública HTTPS para llamar al webhook.</p>
+            </article>
+        </div>
+
+        <div class="conv-config-layout">
+            <section class="panel-card conv-config-form">
+                <div class="panel-card__header">
+                    <div>
+                        <h3 class="panel-card__title">Parámetros del canal</h3>
+                        <p class="panel-card__subtitle">Origen actual: @DisplaySource(_config.ConfigSource)</p>
+                    </div>
+                    <span class="panel-card__tag">TA_CONFIGURACION</span>
+                </div>
+
+                @if (_message is not null)
+                {
+                    <div class="conversations-inline conversations-inline--ok">@_message</div>
+                }
+
+                <div class="conv-config-fields">
+                    <div class="field">
+                        <label for="wa-public-url">Base pública HTTPS</label>
+                        <input id="wa-public-url" @bind="_config.PublicBaseUrl" placeholder="@_suggestedBaseUrl" />
+                    </div>
+
+                    <div class="field">
+                        <label for="wa-api-version">Versión Graph API</label>
+                        <input id="wa-api-version" @bind="_config.ApiVersion" placeholder="v22.0" />
+                    </div>
+
+                    <div class="field">
+                        <label for="wa-phone-id">Phone Number ID</label>
+                        <input id="wa-phone-id" @bind="_config.PhoneNumberId" placeholder="Ej. 123456789012345" />
+                    </div>
+
+                    <div class="field">
+                        <label for="wa-business-id">WhatsApp Business Account ID</label>
+                        <input id="wa-business-id" @bind="_config.BusinessAccountId" placeholder="Ej. 109876543210987" />
+                    </div>
+
+                    <div class="field conv-config-fields__full">
+                        <label for="wa-access-token">Access Token</label>
+                        <textarea id="wa-access-token" rows="4" @bind="_config.AccessToken" placeholder="Pegá acá el token permanente o del sistema"></textarea>
+                    </div>
+
+                    <div class="field">
+                        <label for="wa-verify-token">Verify Token</label>
+                        <input id="wa-verify-token" @bind="_config.VerifyToken" placeholder="Texto secreto que definís vos" />
+                    </div>
+
+                    <div class="field">
+                        <label for="wa-app-secret">App Secret</label>
+                        <input id="wa-app-secret" @bind="_config.AppSecret" placeholder="Opcional por ahora, recomendado para firma" />
+                    </div>
+
+                    <div class="field conv-config-fields__full">
+                        <label for="wa-webhook-path">Webhook interno</label>
+                        <input id="wa-webhook-path" value="@_config.WebhookPath" readonly />
+                    </div>
+                </div>
+
+                <div class="context-card">
+                    <span class="context-card__label">URL de callback a informar en Meta</span>
+                    <strong>@GetWebhookUrlPreview()</strong>
+                    <span class="context-card__muted">Si no cargás la base pública, se sugiere la URL actual del navegador.</span>
+                </div>
+
+                <div class="actions">
+                    <button type="button" class="btn btn--primary" @onclick="SaveAsync" disabled="Loading || Saving">
+                        <i class="bi bi-floppy-fill"></i> Guardar configuración
+                    </button>
+                </div>
+            </section>
+
+            <aside class="panel-card conv-config-help">
+                <div class="panel-card__header">
+                    <div>
+                        <h3 class="panel-card__title">Qué necesitás en Meta</h3>
+                        <p class="panel-card__subtitle">Guía rápida para dejar operativo el canal.</p>
+                    </div>
+                    <span class="panel-card__tag">Cloud API</span>
+                </div>
+
+                <ol class="conv-config-steps">
+                    <li>Crear o usar una app tipo negocio en Meta for Developers y agregar el producto WhatsApp.</li>
+                    <li>Obtener el <code>Phone Number ID</code> del número que vas a conectar.</li>
+                    <li>Obtener el <code>WhatsApp Business Account ID</code> de la cuenta de negocio.</li>
+                    <li>Generar un <code>Access Token</code> válido para el envío de mensajes.</li>
+                    <li>Definir un <code>Verify Token</code> propio y cargar la URL pública del webhook en Meta.</li>
+                    <li>Suscribir el webhook al menos a eventos de mensajes y estados.</li>
+                    <li>Probar verificación, envío y recepción antes de pasar a producción.</li>
+                </ol>
+
+                <div class="context-card">
+                    <span class="context-card__label">Dónde queda guardado</span>
+                    <strong>dbo.TA_CONFIGURACION</strong>
+                    <span class="context-card__muted">Claves usadas: <code>CONV_WHATSAPP_*</code>.</span>
+                </div>
+
+                <div class="context-card">
+                    <span class="context-card__label">Manual interno</span>
+                    <strong><code>docs/conversaciones_whatsapp_conexion.md</code></strong>
+                    <span class="context-card__muted">Ahí te dejo el paso a paso completo y el mapa entre Meta y AlfaCore.</span>
+                </div>
+            </aside>
+        </div>
+    }
+</section>
+
+@code {
+    private ConversacionWhatsAppConfigDto _config = new();
+    private bool Loading { get; set; }
+    private bool Saving { get; set; }
+    private string? _error;
+    private string? _message;
+    private string _suggestedBaseUrl = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _suggestedBaseUrl = GetCurrentBaseUrl();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        Loading = true;
+        _error = null;
+        _message = null;
+
+        try
+        {
+            _config = await ConfigSvc.GetWhatsAppConfigAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            Loading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        Saving = true;
+        _error = null;
+        _message = null;
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_config.PublicBaseUrl))
+                _config.PublicBaseUrl = _suggestedBaseUrl;
+
+            await ConfigSvc.SaveWhatsAppConfigAsync(_config);
+            _message = "Configuración guardada correctamente en TA_CONFIGURACION.";
+            _config = await ConfigSvc.GetWhatsAppConfigAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            Saving = false;
+        }
+    }
+
+    private string GetCurrentBaseUrl()
+    {
+        if (!Uri.TryCreate(Nav.BaseUri, UriKind.Absolute, out var uri))
+            return string.Empty;
+
+        return $"{uri.Scheme}://{uri.Authority}";
+    }
+
+    private string GetWebhookUrlPreview()
+    {
+        if (string.IsNullOrWhiteSpace(_config.PublicBaseUrl))
+            return $"{_suggestedBaseUrl.TrimEnd('/')}{_config.WebhookPath}";
+
+        return _config.GetWebhookUrl();
+    }
+
+    private string GetStatusLabel(bool ready) => ready ? "Listo" : "Pendiente";
+
+    private string GetPublicationLabel()
+        => _config.IsReadyForMetaSetup ? "Lista para configurar en Meta" : "Falta completar datos";
+
+    private static string GetStatusClass(bool ready)
+        => ready ? "conv-config-status conv-config-status--ok" : "conv-config-status conv-config-status--pending";
+
+    private static string DisplaySource(string? value)
+        => value switch
+        {
+            "TA_CONFIGURACION" => "TA_CONFIGURACION",
+            "mixta" => "Mixta (TA_CONFIGURACION + appsettings)",
+            "appsettings" => "appsettings",
+            _ => "No determinado"
+        };
+}

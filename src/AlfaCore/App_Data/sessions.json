@@ -18,7 +18,7 @@
       "Usuario": "ALFANET",
       "Password": "ALFANET",
       "TrustServerCertificate": true,
-      "Activa": true
+      "Activa": false
     },
     {
       "Id": "a7860c47-5030-43e9-a6db-ee618fa9918f",
@@ -29,6 +29,16 @@
       "Password": "FERNANDEZF2-BCK3101",
       "TrustServerCertificate": true,
       "Activa": false
+    },
+    {
+      "Id": "6c1a229c-8a6c-4026-b597-b1f7b8bb3305",
+      "Nombre": "ALFANET 2007",
+      "Servidor": "SERVER-DB",
+      "BaseDatos": "ALFANET2007",
+      "Usuario": "ALFANET2007",
+      "Password": "ALFANET2007",
+      "TrustServerCertificate": true,
+      "Activa": true
     }
   ]
 }

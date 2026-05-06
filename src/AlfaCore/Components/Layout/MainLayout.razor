@@ -84,6 +84,24 @@
                     </NavLink>
                 </nav>
             }
+            else if (_currentModule == "conversaciones")
+            {
+                <a class="menu__back" href="/">
+                    <i class="bi bi-grid-3x3-gap-fill"></i>
+                    <span>Aplicaciones</span>
+                </a>
+                <p class="menu__section">Conversaciones</p>
+                <nav class="menu__nav">
+                    <NavLink class="menu__link" href="/conversaciones" Match="NavLinkMatch.All">
+                        <span class="menu__icon"><i class="bi bi-chat-dots-fill"></i></span>
+                        <span>Inbox</span>
+                    </NavLink>
+                    <NavLink class="menu__link" href="/conversaciones/configuracion" Match="NavLinkMatch.All">
+                        <span class="menu__icon"><i class="bi bi-sliders"></i></span>
+                        <span>Configuración</span>
+                    </NavLink>
+                </nav>
+            }
             else if (_currentModule == "ventas")
             {
                 <a class="menu__back" href="/">
@@ -389,6 +407,8 @@
             "costos/historial" => "Historial de Costos",
             "auditoria" => "Auditoría",
             "auditoria/errores" => "Errores",
+            "conversaciones" => "Conversaciones",
+            "conversaciones/configuracion" => "Configuración de WhatsApp",
             "compras" => "Inicio",
             "compras/proveedores" => "Proveedores",
             "compras/comprobantes" => "Comprobantes",
@@ -411,6 +431,7 @@
 
     private string GetModuleTitle() => _currentModule switch
     {
+        "" => "Inicio",
         "consultas" => "Diseñador de Consultas",
         "ventas" => "Dashboard de Ventas",
         "stock" => "Dashboard de Stock",
@@ -418,6 +439,7 @@
         "contabilidad" => "Dashboard Contable",
         "costos" => "Actualización de Costos",
         "auditoria" => "Auditoría",
+        "conversaciones" => "Conversaciones",
         _ => "Dashboard de Compras"
     };
 }

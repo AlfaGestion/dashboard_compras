@@ -1,7 +1,5 @@
-using AlfaCore.Configuration;
 using AlfaCore.Models;
 using Microsoft.Data.SqlClient;
-using Microsoft.Extensions.Options;
 using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text;
@@ -14,14 +12,83 @@ public sealed class ConversacionesService(
     ISessionService sessionService,
     IAppEventService appEvents,
     IHttpClientFactory httpClientFactory,
-    IOptions<WhatsAppOptions> whatsAppOptions) : IConversacionesService
+    IConversacionesConfigService conversacionesConfigService,
+    IWebHostEnvironment environment) : IConversacionesService
 {
     private readonly IAppEventService _appEvents = appEvents;
-    private readonly WhatsAppOptions _whatsAppOptions = whatsAppOptions.Value;
+    private string UploadsBasePath => Path.Combine(environment.ContentRootPath, "App_Data", "uploads", "conversaciones");
     private string ConnectionString => sessionService.GetConnectionString().Length > 0
         ? sessionService.GetConnectionString()
         : configuration.GetConnectionString("AlfaGestion")
           ?? throw new InvalidOperationException("No se configuró la cadena de conexión 'ConnectionStrings:AlfaGestion'.");
+
+    public Task<IReadOnlyList<ConversacionTecnicoOptionDto>> GetTechniciansAsync(CancellationToken ct = default)
+        => ExecuteLoggedAsync("Conversaciones", "GetTechnicians", async token =>
+        {
+            const string sql = """
+                SELECT
+                    ISNULL(IdTecnico, ''),
+                    ISNULL(Nombre, ''),
+                    ISNULL(Cargo, ''),
+                    ISNULL(UsuarioAsociado, ''),
+                    ISNULL(SistemaAsociado, '')
+                FROM dbo.V_TA_Tecnicos
+                WHERE ISNULL(Baja, 0) = 0
+                ORDER BY Nombre
+                """;
+
+            var items = new List<ConversacionTecnicoOptionDto>();
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+            await using var cmd = new SqlCommand(sql, cn);
+            await using var rd = await cmd.ExecuteReaderAsync(token);
+            while (await rd.ReadAsync(token))
+            {
+                items.Add(new ConversacionTecnicoOptionDto
+                {
+                    IdTecnico = GetString(rd, 0),
+                    Nombre = GetString(rd, 1),
+                    Cargo = GetString(rd, 2),
+                    UsuarioAsociado = GetString(rd, 3),
+                    SistemaAsociado = GetString(rd, 4)
+                });
+            }
+
+            return (IReadOnlyList<ConversacionTecnicoOptionDto>)items;
+        }, "No se pudieron cargar los técnicos.", ct);
+
+    public Task<IReadOnlyList<ConversacionEstadoOptionDto>> GetStatesAsync(CancellationToken ct = default)
+        => ExecuteLoggedAsync("Conversaciones", "GetStates", async token =>
+        {
+            const string sql = """
+                SELECT
+                    ISNULL(CodigoEstado, ''),
+                    ISNULL(Descripcion, ''),
+                    ISNULL(EsCerrado, 0),
+                    ISNULL(Orden, 0)
+                FROM dbo.CONV_ESTADOS
+                WHERE ISNULL(Activo, 1) = 1
+                ORDER BY Orden, Descripcion
+                """;
+
+            var items = new List<ConversacionEstadoOptionDto>();
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+            await using var cmd = new SqlCommand(sql, cn);
+            await using var rd = await cmd.ExecuteReaderAsync(token);
+            while (await rd.ReadAsync(token))
+            {
+                items.Add(new ConversacionEstadoOptionDto
+                {
+                    CodigoEstado = GetString(rd, 0),
+                    Descripcion = GetString(rd, 1),
+                    EsCerrado = GetInt(rd, 2) == 1,
+                    Orden = GetInt(rd, 3)
+                });
+            }
+
+            return (IReadOnlyList<ConversacionEstadoOptionDto>)items;
+        }, "No se pudieron cargar los estados de conversación.", ct);
 
     public Task<IReadOnlyList<ConversacionInboxItemDto>> GetInboxAsync(ConversacionesInboxFilters filters, CancellationToken ct = default)
         => ExecuteLoggedAsync("Conversaciones", "GetInbox", async token =>
@@ -55,7 +122,8 @@ public sealed class ConversacionesService(
                 LEFT JOIN dbo.V_TA_Tecnicos t
                     ON t.IdTecnico = c.IdTecnico
                 WHERE
-                    (@CodigoEstado IS NULL OR c.CodigoEstado = @CodigoEstado)
+                    (@Canal IS NULL OR c.Canal = @Canal)
+                    AND (@CodigoEstado IS NULL OR c.CodigoEstado = @CodigoEstado)
                     AND (
                         @Search IS NULL
                         OR c.TelefonoWhatsApp LIKE @Search
@@ -78,6 +146,7 @@ public sealed class ConversacionesService(
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync(token);
             await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.AddWithValue("@Canal", DbNullable(filters.Canal));
             cmd.Parameters.AddWithValue("@CodigoEstado", DbNullable(filters.CodigoEstado));
             cmd.Parameters.AddWithValue("@Search", DbNullable(Like(filters.Search)));
             cmd.Parameters.AddWithValue("@Modo", NormalizeMode(filters.Modo));
@@ -255,8 +324,20 @@ public sealed class ConversacionesService(
             ValidateOutgoingRequest(request);
 
             var conversation = await RequireConversationAsync(request.IdConversacion, token);
+            var isInternal = string.Equals(conversation.Canal, "INTERNO", StringComparison.OrdinalIgnoreCase);
             var now = DateTime.Now;
-            var initialState = _whatsAppOptions.IsConfiguredForSend ? "PENDIENTE" : "PENDIENTE_CONFIG";
+
+            string initialState;
+            ConversacionWhatsAppConfigDto? whatsAppConfig = null;
+            if (isInternal)
+            {
+                initialState = "ENVIADO";
+            }
+            else
+            {
+                whatsAppConfig = await conversacionesConfigService.GetWhatsAppConfigAsync(token);
+                initialState = whatsAppConfig.IsConfiguredForSend ? "PENDIENTE" : "PENDIENTE_CONFIG";
+            }
 
             var messageId = await InsertMessageAsync(new PendingMessageInsert
             {
@@ -278,9 +359,9 @@ public sealed class ConversacionesService(
             string finalState = initialState;
             string payload = string.Empty;
 
-            if (_whatsAppOptions.IsConfiguredForSend)
+            if (!isInternal && whatsAppConfig?.IsConfiguredForSend == true)
             {
-                var sendResult = await SendToWhatsAppAsync(conversation.TelefonoWhatsApp, request.Texto.Trim(), request.WhatsAppReplyToMessageId, token);
+                var sendResult = await SendToWhatsAppAsync(whatsAppConfig, conversation.TelefonoWhatsApp, request.Texto.Trim(), request.WhatsAppReplyToMessageId, token);
                 whatsAppMessageId = sendResult.WhatsAppMessageId;
                 finalState = sendResult.EstadoEnvio;
                 payload = sendResult.PayloadJson;
@@ -516,6 +597,218 @@ public sealed class ConversacionesService(
             };
         }, "No se pudo procesar el webhook de WhatsApp.", ct);
 
+    public Task<long> CreateInternalThreadAsync(ConversacionCrearHiloInternoRequest request, CancellationToken ct = default)
+        => ExecuteLoggedAsync("Conversaciones", "CreateInternalThread", async token =>
+        {
+            if (string.IsNullOrWhiteSpace(request.NombreHilo))
+                throw new InvalidOperationException("El nombre del hilo es obligatorio.");
+
+            if (!string.IsNullOrWhiteSpace(request.IdTecnico))
+                await ValidateTechnicianExistsAsync(request.IdTecnico, token);
+
+            const string sql = """
+                INSERT INTO dbo.CONV_CONVERSACIONES
+                (
+                    Canal,
+                    NombreVisible,
+                    CodigoEstado,
+                    IdTecnico,
+                    FechaHoraUltimoMensaje,
+                    FechaHora_Grabacion
+                )
+                VALUES
+                (
+                    N'INTERNO',
+                    @NombreVisible,
+                    N'ABIERTA',
+                    @IdTecnico,
+                    GETDATE(),
+                    GETDATE()
+                );
+
+                SELECT CAST(SCOPE_IDENTITY() AS bigint);
+                """;
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.AddWithValue("@NombreVisible", request.NombreHilo.Trim());
+            cmd.Parameters.AddWithValue("@IdTecnico", DbNullable(request.IdTecnico));
+            var result = await cmd.ExecuteScalarAsync(token);
+            var id = Convert.ToInt64(result, CultureInfo.InvariantCulture);
+
+            await _appEvents.LogAuditAsync(
+                "Conversaciones",
+                "CreateInternalThread",
+                "CONV_CONVERSACIONES",
+                id.ToString(CultureInfo.InvariantCulture),
+                "Hilo interno creado.",
+                new { request.NombreHilo, request.IdTecnico },
+                token);
+
+            return id;
+        }, "No se pudo crear el hilo interno.", ct);
+
+    public Task<ConversacionAdjuntoDto> UploadAttachmentAsync(ConversacionUploadAdjuntoRequest request, CancellationToken ct = default)
+        => ExecuteLoggedAsync("Conversaciones", "UploadAttachment", async token =>
+        {
+            if (request.IdConversacion <= 0)
+                throw new InvalidOperationException("La conversación es obligatoria.");
+            if (string.IsNullOrWhiteSpace(request.NombreArchivo))
+                throw new InvalidOperationException("El nombre del archivo es obligatorio.");
+            if (request.TamanoBytes <= 0)
+                throw new InvalidOperationException("El archivo está vacío.");
+
+            var folder = Path.Combine(UploadsBasePath, request.IdConversacion.ToString(CultureInfo.InvariantCulture));
+            Directory.CreateDirectory(folder);
+
+            var ext = Path.GetExtension(request.NombreArchivo).ToLowerInvariant();
+            var safeFileName = $"{Guid.NewGuid():N}{ext}";
+            var rutaLocal = Path.Combine(folder, safeFileName);
+
+            await using (var fs = File.Create(rutaLocal))
+                await request.Contenido.CopyToAsync(fs, token);
+
+            var conversation = await RequireConversationAsync(request.IdConversacion, token);
+            var messageType = NormalizeMessageType(request.TipoArchivo);
+            var now = DateTime.Now;
+
+            var messageId = await InsertMessageAsync(new PendingMessageInsert
+            {
+                ConversationId = request.IdConversacion,
+                Phone = conversation.TelefonoWhatsApp,
+                MessageType = messageType,
+                Direction = "SALIENTE",
+                EstadoEnvio = "ENVIADO",
+                Text = request.NombreArchivo,
+                PayloadJson = string.Empty,
+                FechaHora = now,
+                IdTecnicoAutor = request.IdTecnicoAutor,
+                UsuarioAutor = request.UsuarioAccion,
+                SistemaAutor = request.SistemaAccion
+            }, token);
+
+            const string adjuntoSql = """
+                INSERT INTO dbo.CONV_ADJUNTOS
+                (
+                    IdMensaje,
+                    TipoArchivo,
+                    NombreArchivo,
+                    MimeType,
+                    RutaLocal,
+                    TamanoBytes,
+                    FechaHora_Grabacion
+                )
+                VALUES
+                (
+                    @IdMensaje,
+                    @TipoArchivo,
+                    @NombreArchivo,
+                    @MimeType,
+                    @RutaLocal,
+                    @TamanoBytes,
+                    GETDATE()
+                );
+
+                SELECT CAST(SCOPE_IDENTITY() AS bigint);
+                """;
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+            await using var cmd = new SqlCommand(adjuntoSql, cn);
+            cmd.Parameters.AddWithValue("@IdMensaje", messageId);
+            cmd.Parameters.AddWithValue("@TipoArchivo", messageType);
+            cmd.Parameters.AddWithValue("@NombreArchivo", request.NombreArchivo);
+            cmd.Parameters.AddWithValue("@MimeType", DbNullable(request.MimeType));
+            cmd.Parameters.AddWithValue("@RutaLocal", rutaLocal);
+            cmd.Parameters.AddWithValue("@TamanoBytes", request.TamanoBytes);
+            var adjuntoId = Convert.ToInt64(await cmd.ExecuteScalarAsync(token), CultureInfo.InvariantCulture);
+
+            await RefreshConversationAsync(request.IdConversacion, now, $"[{messageType}] {request.NombreArchivo}", token);
+
+            return new ConversacionAdjuntoDto
+            {
+                IdAdjunto = adjuntoId,
+                IdMensaje = messageId,
+                TipoArchivo = messageType,
+                NombreArchivo = request.NombreArchivo,
+                MimeType = request.MimeType,
+                RutaLocal = rutaLocal,
+                TamanoBytes = request.TamanoBytes
+            };
+        }, "No se pudo guardar el adjunto.", ct);
+
+    public Task<IReadOnlyList<ConversacionAdjuntoDto>> GetConversationAttachmentsAsync(long idConversacion, CancellationToken ct = default)
+        => ExecuteLoggedAsync("Conversaciones", "GetConversationAttachments", async token =>
+        {
+            const string sql = """
+                SELECT
+                    a.IdAdjunto,
+                    a.IdMensaje,
+                    ISNULL(a.TipoArchivo, ''),
+                    ISNULL(a.NombreArchivo, ''),
+                    ISNULL(a.MimeType, ''),
+                    ISNULL(a.UrlArchivo, ''),
+                    ISNULL(a.RutaLocal, ''),
+                    ISNULL(a.TamanoBytes, 0)
+                FROM dbo.CONV_ADJUNTOS a
+                INNER JOIN dbo.CONV_MENSAJES m ON m.IdMensaje = a.IdMensaje
+                WHERE m.IdConversacion = @IdConversacion
+                ORDER BY a.IdAdjunto
+                """;
+
+            var items = new List<ConversacionAdjuntoDto>();
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.AddWithValue("@IdConversacion", idConversacion);
+            await using var rd = await cmd.ExecuteReaderAsync(token);
+            while (await rd.ReadAsync(token))
+            {
+                items.Add(new ConversacionAdjuntoDto
+                {
+                    IdAdjunto = rd.GetInt64(0),
+                    IdMensaje = rd.GetInt64(1),
+                    TipoArchivo = GetString(rd, 2),
+                    NombreArchivo = GetString(rd, 3),
+                    MimeType = GetString(rd, 4),
+                    UrlArchivo = GetString(rd, 5),
+                    RutaLocal = GetString(rd, 6),
+                    TamanoBytes = rd.IsDBNull(7) ? 0 : rd.GetInt64(7)
+                });
+            }
+
+            return (IReadOnlyList<ConversacionAdjuntoDto>)items;
+        }, "No se pudieron cargar los adjuntos.", ct);
+
+    public Task<ConversacionAdjuntoServeDto?> GetAttachmentForServeAsync(long idAdjunto, CancellationToken ct = default)
+        => ExecuteLoggedAsync("Conversaciones", "GetAttachmentForServe", async token =>
+        {
+            const string sql = """
+                SELECT
+                    ISNULL(RutaLocal, ''),
+                    ISNULL(MimeType, ''),
+                    ISNULL(NombreArchivo, '')
+                FROM dbo.CONV_ADJUNTOS
+                WHERE IdAdjunto = @IdAdjunto
+                """;
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.AddWithValue("@IdAdjunto", idAdjunto);
+            await using var rd = await cmd.ExecuteReaderAsync(token);
+            if (!await rd.ReadAsync(token))
+                return null;
+
+            return new ConversacionAdjuntoServeDto
+            {
+                RutaLocal = GetString(rd, 0),
+                MimeType = GetString(rd, 1),
+                NombreArchivo = GetString(rd, 2)
+            };
+        }, "No se pudo obtener el adjunto.", ct);
+
     private async Task<long> EnsureConversationAsync(IncomingWhatsAppMessage incoming, CancellationToken ct)
     {
         const string findSql = """
@@ -590,7 +883,8 @@ public sealed class ConversacionesService(
         const string sql = """
             SELECT TOP (1)
                 IdConversacion,
-                ISNULL(TelefonoWhatsApp, '')
+                ISNULL(TelefonoWhatsApp, ''),
+                ISNULL(Canal, 'WHATSAPP')
             FROM dbo.CONV_CONVERSACIONES
             WHERE IdConversacion = @IdConversacion
             """;
@@ -607,7 +901,8 @@ public sealed class ConversacionesService(
         return new ConversationIdentity
         {
             IdConversacion = rd.GetInt64(0),
-            TelefonoWhatsApp = GetString(rd, 1)
+            TelefonoWhatsApp = GetString(rd, 1),
+            Canal = GetString(rd, 2)
         };
     }
 
@@ -656,7 +951,7 @@ public sealed class ConversacionesService(
         await cn.OpenAsync(ct);
         await using var cmd = new SqlCommand(sql, cn);
         cmd.Parameters.AddWithValue("@IdConversacion", message.ConversationId);
-        cmd.Parameters.AddWithValue("@TelefonoWhatsApp", message.Phone);
+        cmd.Parameters.AddWithValue("@TelefonoWhatsApp", DbNullable(message.Phone));
         cmd.Parameters.AddWithValue("@WhatsAppMessageId", DbNullable(message.WhatsAppMessageId));
         cmd.Parameters.AddWithValue("@WhatsAppReplyToMessageId", DbNullable(message.ReplyToMessageId));
         cmd.Parameters.AddWithValue("@MessageType", NormalizeMessageType(message.MessageType));
@@ -718,11 +1013,11 @@ public sealed class ConversacionesService(
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
-    private async Task<WhatsAppSendResult> SendToWhatsAppAsync(string phone, string text, string? replyToMessageId, CancellationToken ct)
+    private async Task<WhatsAppSendResult> SendToWhatsAppAsync(ConversacionWhatsAppConfigDto config, string phone, string text, string? replyToMessageId, CancellationToken ct)
     {
-        var url = $"https://graph.facebook.com/{_whatsAppOptions.ApiVersion}/{_whatsAppOptions.PhoneNumberId}/messages";
+        var url = $"https://graph.facebook.com/{config.ApiVersion}/{config.PhoneNumberId}/messages";
         using var request = new HttpRequestMessage(HttpMethod.Post, url);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _whatsAppOptions.AccessToken.Trim());
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", config.AccessToken.Trim());
 
         var payload = new Dictionary<string, object?>
         {
@@ -1057,6 +1352,39 @@ public sealed class ConversacionesService(
         return clean.Length <= 500 ? clean : clean[..500];
     }
 
+    private static bool TryBuildKnownSqlMessage(SqlException ex, out string message)
+    {
+        message = string.Empty;
+        if (ex.Number != 208)
+            return false;
+
+        var rawMessage = ex.Message ?? string.Empty;
+        if (!rawMessage.Contains("CONV_", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var objectName = ExtractMissingObjectName(rawMessage);
+        var objectLabel = string.IsNullOrWhiteSpace(objectName) ? "CONV_*" : objectName;
+        message = $"El modulo Conversaciones todavia no esta inicializado en la base activa. Falta crear el objeto {objectLabel}. Ejecuta el script docs/conversaciones_modelo_inicial.sql y recarga el modulo.";
+        return true;
+    }
+
+    private static string ExtractMissingObjectName(string rawMessage)
+    {
+        var marker = "'";
+        var firstQuote = rawMessage.IndexOf(marker, StringComparison.Ordinal);
+        if (firstQuote < 0)
+            return string.Empty;
+
+        var secondQuote = rawMessage.IndexOf(marker, firstQuote + 1, StringComparison.Ordinal);
+        if (secondQuote <= firstQuote)
+            return string.Empty;
+
+        var value = rawMessage[(firstQuote + 1)..secondQuote].Trim();
+        return value.StartsWith("dbo.", StringComparison.OrdinalIgnoreCase)
+            ? value[4..]
+            : value;
+    }
+
     private async Task<T> ExecuteLoggedAsync<T>(
         string module,
         string action,
@@ -1067,6 +1395,11 @@ public sealed class ConversacionesService(
         try
         {
             return await operation(ct);
+        }
+        catch (SqlException ex) when (TryBuildKnownSqlMessage(ex, out var knownMessage))
+        {
+            var incidentId = await _appEvents.LogErrorAsync(module, action, ex, userMessage, null, AppEventSeverity.Error, ct);
+            throw new InvalidOperationException($"{knownMessage} Codigo: {incidentId}");
         }
         catch (InvalidOperationException)
         {
@@ -1100,6 +1433,7 @@ public sealed class ConversacionesService(
     {
         public long IdConversacion { get; init; }
         public string TelefonoWhatsApp { get; init; } = string.Empty;
+        public string Canal { get; init; } = string.Empty;
     }
 
     private sealed class ContactLookupResult

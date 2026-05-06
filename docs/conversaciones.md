@@ -1,246 +1,199 @@
 # Conversaciones
 
-## Descripción del proyecto
+## Descripción del módulo
 
-`Conversaciones` es un nuevo módulo de `AlfaCore` orientado a centralizar la gestión de conversaciones de WhatsApp dentro de la aplicación Blazor existente.
+`Conversaciones` centraliza la gestión de mensajes dentro de `AlfaCore`. Soporta dos canales:
 
-La idea funcional es ofrecer una experiencia similar a un inbox operativo:
+- **WHATSAPP** — inbox operativo para atender clientes por WhatsApp Cloud API
+- **INTERNO** — chat entre técnicos del equipo, sin dependencia de WhatsApp
 
-- ver conversaciones activas
-- identificar cliente y contacto
-- asignar cada conversación a un técnico
-- responder mensajes
-- registrar notas internas
-- cambiar estados de atención
-- conservar trazabilidad operativa
+Funcionalidades disponibles hoy:
 
-El módulo fue pensado para integrarse con la base actual de Alfa Gestión, reutilizando estructuras ya confirmadas del sistema:
+- inbox con filtros por canal, estado y técnico asignado
+- historial de mensajes con soporte de texto, imágenes, archivos, audio y notas internas
+- asignación y reasignación de conversaciones a técnicos
+- gestión de estados (Abierta, Pendiente, En gestión, Cerrada, Archivada)
+- adjuntos: imágenes, documentos y mensajes de voz grabados en el navegador
+- hilos internos entre técnicos (sin número de teléfono requerido)
+- configuración del canal WhatsApp desde pantalla interna
+
+Integra estructuras existentes del sistema:
 
 - clientes desde `VT_CLIENTES`
-- técnicos/agentes desde `V_TA_Tecnicos`
+- técnicos desde `V_TA_Tecnicos`
 - contactos desde `MA_CONTACTOS`
-- logging técnico centralizado en `AUX_ERR`
+- logging técnico en `AUX_ERR`
 
-## Objetivo funcional
+## Canales
 
-El módulo debe permitir que el equipo atienda WhatsApp desde una única pantalla interna, vinculando cada conversación con personas y entidades reales del sistema.
+### WHATSAPP
 
-Objetivos principales:
+Conversaciones iniciadas por clientes o por el equipo vía WhatsApp Cloud API de Meta. Requieren número de teléfono. El envío usa el endpoint de Meta configurado en `TA_CONFIGURACION`.
 
-- concentrar conversaciones entrantes y salientes en un solo lugar
-- facilitar la asignación por técnico
-- registrar historial completo de mensajes
-- preparar la integración formal con WhatsApp Cloud API de Meta
-- evitar pérdida de contexto entre contacto, cliente y técnico
+### INTERNO
 
-## Alcance actual
+Hilos de chat entre técnicos. No requieren número de teléfono ni configuración de Meta. Los mensajes se guardan localmente con `EstadoEnvio = ENVIADO` sin pasar por la API de WhatsApp. Soportan todos los tipos de adjunto igual que el canal WhatsApp.
 
-Hasta este momento quedó preparada la base conceptual y backend inicial del módulo:
-
-- análisis de tablas existentes
-- modelo SQL inicial `CONV_*`
-- servicio backend `ConversacionesService`
-- endpoints internos para inbox, mensajes, asignación, estado y webhook
-- configuración base para integración con WhatsApp
-
-Todavía no está implementado en esta etapa:
-
-- pantalla Blazor del inbox
-- opción de menú visible
-- tiempo real con SignalR
-- envío 100% productivo contra Meta
-- pruebas funcionales end-to-end
-
-## Arquitectura prevista
+## Arquitectura implementada
 
 ### Frontend
 
 - Blazor Server sobre la estructura existente de `AlfaCore`
-- pantalla principal tipo inbox en tres paneles:
-  - lista de conversaciones
-  - chat central
-  - panel lateral de contexto
+- pantalla `/conversaciones` con layout de tres paneles:
+  - lista de conversaciones con canal switcher (WhatsApp / Chat interno)
+  - chat central con historial, compositor, adjuntos y grabación de voz
+  - panel lateral con contexto, asignación y estado
+- modal para crear hilos internos
+- `IJSRuntime` para grabación de audio via `MediaRecorder`
 
 ### Backend
 
-- servicios C# dentro del proyecto actual
-- acceso a SQL Server con `SqlConnection` y SQL explícito
-- logging técnico y auditoría usando servicios ya existentes del sistema
+- `ConversacionesService` — servicio principal con acceso a SQL Server
+- `ConversacionesConfigService` — gestión de parámetros del canal WhatsApp
+- minimal API endpoints registrados en `Program.cs`
+- archivos de adjuntos almacenados en `App_Data/uploads/conversaciones/{IdConversacion}/`
+- script JS en `wwwroot/js/conversaciones.js` para grabación de audio
 
 ### Base de datos
 
-Modelo nuevo propuesto:
+Tablas del módulo (`CONV_*`):
 
-- `CONV_ESTADOS`
-- `CONV_CONVERSACIONES`
-- `CONV_MENSAJES`
-- `CONV_ASIGNACIONES`
-- `CONV_ETIQUETAS`
-- `CONV_CONVERSACION_ETIQUETAS`
-- `CONV_ADJUNTOS`
-- `CONV_WEBHOOK_LOG`
+- `CONV_ESTADOS` — catálogo de estados (Abierta, Pendiente, En gestión, Cerrada, Archivada)
+- `CONV_CONVERSACIONES` — conversaciones; `Canal` admite `WHATSAPP` e `INTERNO`; `TelefonoWhatsApp` es nullable
+- `CONV_MENSAJES` — mensajes; `TelefonoWhatsApp` es nullable; `MessageType` admite TEXT, IMAGE, AUDIO, VIDEO, DOCUMENT y más
+- `CONV_ASIGNACIONES` — historial de asignaciones por técnico
+- `CONV_ADJUNTOS` — metadata de archivos adjuntos con ruta local y mime type
+- `CONV_ETIQUETAS` / `CONV_CONVERSACION_ETIQUETAS` — etiquetas (estructura lista, UI pendiente)
+- `CONV_WEBHOOK_LOG` — log de payloads recibidos desde Meta
 
-### Integraciones existentes reutilizadas
+## Adjuntos y mensajes de voz
 
-- `VT_CLIENTES`
-- `V_TA_Tecnicos`
-- `MA_CONTACTOS`
-- `TA_USUARIOS`
-- `AUX_ERR`
+### Almacenamiento
 
-## Criterios funcionales ya definidos
+Los archivos se guardan en:
 
-### Técnicos
+```
+App_Data/uploads/conversaciones/{IdConversacion}/{guid}{ext}
+```
 
-La asignación principal de una conversación se resuelve con:
+El nombre físico es un GUID para evitar colisiones. El nombre original se persiste en `CONV_ADJUNTOS.NombreArchivo`.
 
-- `V_TA_Tecnicos.IdTecnico`
+### Tipos soportados
 
-Además, como `V_TA_Tecnicos` ya referencia a `TA_USUARIOS`, el módulo puede resolver auditoría y acciones del usuario real del sistema cuando haga falta.
+| TipoArchivo | Cómo se muestra |
+|---|---|
+| `IMAGE` | imagen inline con preview |
+| `AUDIO` | reproductor `<audio controls>` |
+| `VIDEO` | link de descarga (visualización futura) |
+| `DOCUMENT` | link de descarga con tamaño |
 
-### Contactos
+### Grabación de voz
 
-Se usa únicamente:
+El navegador captura audio via `MediaRecorder` (script `conversaciones.js`). Al detener la grabación, el blob se convierte a base64, se envía al servicio como `MemoryStream` y se guarda como `audio/webm`.
 
-- `MA_CONTACTOS`
+Tamaño máximo por archivo: **25 MB**.
 
-Esto simplifica el módulo y evita duplicar lógica entre contactos, clientes y contactos varios.
+## Endpoints
 
-### Clientes
+### Inbox y conversaciones
 
-La lectura funcional debe apoyarse en:
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/api/conversaciones` | lista con filtros (modo, search, técnico, estado, canal) |
+| GET | `/api/conversaciones/{id}` | detalle de una conversación |
+| GET | `/api/conversaciones/{id}/mensajes` | mensajes de una conversación |
+| POST | `/api/conversaciones/{id}/mensajes` | enviar mensaje (texto) |
+| POST | `/api/conversaciones/{id}/notas` | agregar nota interna |
+| POST | `/api/conversaciones/{id}/asignacion` | asignar técnico |
+| POST | `/api/conversaciones/{id}/estado` | cambiar estado |
 
-- `VT_CLIENTES`
+### Adjuntos
 
-La FK física del modelo nuevo puede seguir apoyándose en:
+| Método | Ruta | Descripción |
+|---|---|---|
+| POST | `/api/conversaciones/{id}/adjuntos` | subir archivo (multipart/form-data, campo `archivo`) |
+| GET | `/api/conversaciones/adjuntos/{idAdjunto}` | servir archivo para display o descarga |
 
-- `MA_CUENTAS.CODIGO`
+### Chat interno
 
-porque `VT_CLIENTES` es una vista.
+| Método | Ruta | Descripción |
+|---|---|---|
+| POST | `/api/conversaciones` | — (se crea desde Blazor via `CreateInternalThreadAsync`) |
 
-### Estados
+### WhatsApp webhook
 
-No se reutiliza `TA_ESTADOS`, porque ese catálogo corresponde a provincias.
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/api/conversaciones/whatsapp/webhook` | verificación del webhook (Meta) |
+| POST | `/api/conversaciones/whatsapp/webhook` | recepción de mensajes entrantes |
 
-Para conversaciones se propone un catálogo propio:
+## Puesta en marcha en una base nueva
 
-- `CONV_ESTADOS`
+Ejecutar antes de usar el módulo:
 
-## Endpoints backend preparados
+```
+docs/conversaciones_modelo_inicial.sql
+```
 
-Endpoints internos ya previstos:
+Si falta alguna tabla `CONV_*`, la aplicación registra el incidente en `AUX_ERR` y muestra un mensaje operativo con los pasos sugeridos.
 
-- `GET /api/conversaciones`
-- `GET /api/conversaciones/{id}`
-- `GET /api/conversaciones/{id}/mensajes`
-- `POST /api/conversaciones/{id}/mensajes`
-- `POST /api/conversaciones/{id}/notas`
-- `POST /api/conversaciones/{id}/asignacion`
-- `POST /api/conversaciones/{id}/estado`
-- `GET /api/conversaciones/whatsapp/webhook`
-- `POST /api/conversaciones/whatsapp/webhook`
+## Configuración del canal WhatsApp
+
+Pantalla disponible: `/conversaciones/configuracion`
+
+Persistencia: `TA_CONFIGURACION`
+
+Claves del módulo:
+
+- `CONV_WHATSAPP_VERIFY_TOKEN`
+- `CONV_WHATSAPP_ACCESS_TOKEN`
+- `CONV_WHATSAPP_PHONE_NUMBER_ID`
+- `CONV_WHATSAPP_BUSINESS_ACCOUNT_ID`
+- `CONV_WHATSAPP_APP_SECRET`
+- `CONV_WHATSAPP_API_VERSION`
+- `CONV_WHATSAPP_PUBLIC_BASE_URL`
+- `CONV_WHATSAPP_WEBHOOK_PATH`
+
+Manual operativo: `docs/conversaciones_whatsapp_conexion.md`
 
 ## Issues pendientes
 
-Por ahora dejo los issues en documento dentro del repo, porque:
-
-- quedan versionados junto al desarrollo
-- son fáciles de revisar antes de cada etapa
-- permiten moverlos luego a GitHub Issues si más adelante querés formalizar el tablero
-
-### Issue 1. Crear pantalla principal de inbox
-
-- Agregar página Blazor `Conversaciones`
-- Diseñar layout de tres paneles
-- Integrar filtros base
-- Mostrar lista de conversaciones y detalle
-
-### Issue 2. Agregar opción de menú
-
-- Incorporar `Conversaciones` al menú lateral
-- Definir ubicación dentro de la navegación actual
-- Mantener consistencia visual con el resto del sistema
-
-### Issue 3. Construir panel de lista de conversaciones
-
-- Mostrar técnico asignado, estado, cliente/contacto, teléfono y resumen
-- Resaltar conversación activa
-- Soportar filtros:
-  - Todas
-  - Sin asignar
-  - Asignadas a mí
-  - Pendientes
-  - Cerradas
-
-### Issue 4. Construir panel central de chat
-
-- Mostrar historial de mensajes en orden cronológico
-- Diferenciar:
-  - entrantes
-  - salientes
-  - notas internas
-- Agregar caja de respuesta
-- Agregar acción para nota interna
-
-### Issue 5. Construir panel lateral de contexto
-
-- Mostrar datos del contacto
-- Mostrar datos del cliente
-- Mostrar técnico asignado
-- Mostrar estado actual
-- Mostrar etiquetas futuras
-
-### Issue 6. Implementar selector de técnico
-
-- Listar técnicos desde `V_TA_Tecnicos`
-- Permitir asignar y reasignar
-- Registrar historial en `CONV_ASIGNACIONES`
-
-### Issue 7. Implementar gestión de estados
-
-- Alta inicial de estados del módulo
-- Cambio de estado desde UI
-- Cierre y reapertura de conversación
-
 ### Issue 8. Completar flujo de envío WhatsApp
 
-- Confirmar credenciales Meta reales
-- Validar formato final del payload
-- Manejar respuestas y errores de API
-- Persistir `whatsapp_message_id`
+- Confirmar credenciales Meta reales en producción
+- Validar formato final del payload contra API real
+- Manejar respuestas y errores de Meta con reintentos
+- Persistir `whatsapp_message_id` en respuestas exitosas
 
 ### Issue 9. Completar flujo de webhook
 
-- Validar payload real recibido desde Meta
-- Confirmar parseo de mensajes, contactos y eventos
-- Soportar más tipos de mensaje además de texto
+- Validar payload real recibido desde Meta con firma HMAC (`App Secret`)
+- Confirmar parseo de mensajes entrantes en todos los tipos (imagen, audio, documento)
+- Descargar y guardar en `CONV_ADJUNTOS` los adjuntos que envíe el cliente
 
-### Issue 10. Agregar soporte de adjuntos
-
-- Persistir metadata en `CONV_ADJUNTOS`
-- Mostrar adjuntos en la UI
-- Preparar descarga o vista previa
-
-### Issue 11. Preparar tiempo real
+### Issue 11. Tiempo real con SignalR
 
 - Evaluar incorporación de SignalR
 - Actualizar inbox y chat sin refresh manual
-- Notificar cambios de asignación y estado
+- Notificar cambios de asignación y estado en tiempo real
 
 ### Issue 12. Pruebas manuales y de integración
 
-- Alta de conversación entrante
-- Respuesta saliente
-- Cambio de técnico
-- Cambio de estado
-- Registro correcto en `AUX_ERR` ante fallos
+- Alta de conversación entrante por webhook real
+- Respuesta saliente contra Meta
+- Envío y recepción de adjuntos por WhatsApp
+- Chat interno entre dos técnicos con adjunto y audio
+- Cambio de técnico y estado
+- Verificar registro correcto en `AUX_ERR` ante fallos
 
-## Próxima etapa sugerida
+### Issue 13. Etiquetas
 
-La etapa 3 debería enfocarse en:
+- UI para alta y asignación de etiquetas desde el panel de contexto
+- Filtro por etiqueta en el inbox
+- La estructura de tablas (`CONV_ETIQUETAS`, `CONV_CONVERSACION_ETIQUETAS`) ya existe
 
-- UI Blazor del módulo
-- menú
-- integración de servicios backend ya creados
+### Issue 14. Mejoras de visualización de adjuntos
 
-Con eso el equipo ya podría empezar a usar un inbox funcional aunque la integración con Meta todavía esté en fase controlada.
+- Preview de video inline
+- Lightbox para imágenes
+- Indicador de progreso durante la subida de archivos grandes
