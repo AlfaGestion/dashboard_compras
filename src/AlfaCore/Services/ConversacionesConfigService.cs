@@ -122,19 +122,20 @@ public sealed class ConversacionesConfigService(
 
     private static async Task<string> ResolveDetailColumnAsync(SqlConnection cn, CancellationToken ct)
     {
+        // Acepta ValorAux / VALOR_AUX / valor_aux y cae en DESCRIPCION solo como último recurso.
         const string sql = """
             SELECT TOP (1) name
             FROM sys.columns
             WHERE object_id = OBJECT_ID(N'dbo.TA_CONFIGURACION')
-              AND name IN (N'VALOR_AUX', N'DESCRIPCION')
-            ORDER BY CASE WHEN name = N'VALOR_AUX' THEN 0 ELSE 1 END
+              AND LOWER(name) IN (N'valoraux', N'valor_aux', N'descripcion')
+            ORDER BY CASE WHEN LOWER(name) IN (N'valoraux', N'valor_aux') THEN 0 ELSE 1 END
             """;
 
         await using var cmd = new SqlCommand(sql, cn);
         var result = await cmd.ExecuteScalarAsync(ct);
         var column = Convert.ToString(result) ?? string.Empty;
         if (string.IsNullOrWhiteSpace(column))
-            throw new InvalidOperationException("TA_CONFIGURACION no tiene ni VALOR_AUX ni DESCRIPCION disponibles para guardar la configuración.");
+            throw new InvalidOperationException("TA_CONFIGURACION no tiene columna ValorAux ni DESCRIPCION disponibles para guardar la configuración extendida.");
 
         return column;
     }
