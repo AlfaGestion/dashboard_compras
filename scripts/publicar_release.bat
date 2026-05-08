@@ -33,6 +33,8 @@ echo Copiando documentacion y scripts de servidor...
 copy /Y .\README_INSTALACION.md %PUBLISH_DIR%\README_INSTALACION.md >nul
 copy /Y .\src\AlfaCore\appsettings.Server.sample.json %PUBLISH_DIR%\appsettings.Server.sample.json >nul
 copy /Y .\scripts\Abrir-Firewall.ps1 %PUBLISH_DIR%\Abrir-Firewall.ps1 >nul
+copy /Y .\scripts\instalar_servicio.bat %PUBLISH_DIR%\instalar_servicio.bat >nul
+copy /Y .\scripts\desinstalar_servicio.bat %PUBLISH_DIR%\desinstalar_servicio.bat >nul
 
 (
 echo @echo off
@@ -45,6 +47,7 @@ echo set "PUERTO=5055"
 echo if defined CONFIG_FILE ^(
 echo   for /f "usebackq delims=" %%%%P in ^(`powershell -NoProfile -Command "$cfg = Get-Content '%%CD%%\%%CONFIG_FILE%%' -Raw ^| ConvertFrom-Json; if ($cfg.ServidorWeb.Puerto) { $cfg.ServidorWeb.Puerto } else { 5055 }"`^) do set "PUERTO=%%%%P"
 echo ^)
+echo set "URL_LOCAL=http://localhost:%%PUERTO%%"
 echo echo ===============================================
 echo echo AlfaCore - Alfa Gestion
 echo echo Carpeta de trabajo: %%CD%%
@@ -53,12 +56,36 @@ echo   echo Configuracion detectada: %%CONFIG_FILE%%
 echo ^) else ^(
 echo   echo Configuracion detectada: no se encontro appsettings, se usaran valores por defecto.
 echo ^)
-echo echo URL local esperada: http://localhost:%%PUERTO%%
+echo echo URL local esperada: %%URL_LOCAL%%
 echo echo Si la app escucha en LAN, otras PCs podran entrar por:
 echo echo http://NOMBRE-PC:%%PUERTO%%
 echo echo ===============================================
+echo set "SERVICE_STATUS="
+echo for /f "usebackq delims=" %%%%S in ^(`powershell -NoProfile -ExecutionPolicy Bypass -Command "$svc = Get-Service AlfaCore -ErrorAction SilentlyContinue; if ($svc) { $svc.Status }" 2^^^>nul`^) do set "SERVICE_STATUS=%%%%S"
+echo if /i "%%SERVICE_STATUS%%"=="Running" goto :service_running
+echo set "PORT_PID="
+echo for /f "usebackq delims=" %%%%I in ^(`powershell -NoProfile -ExecutionPolicy Bypass -Command "$p = Get-NetTCPConnection -LocalPort %%PUERTO%% -State Listen -ErrorAction SilentlyContinue ^| Select-Object -First 1 -ExpandProperty OwningProcess; if ($p) { $p }" 2^^^>nul`^) do set "PORT_PID=%%%%I"
+echo if defined PORT_PID goto :port_busy
 echo echo Iniciando servidor...
 echo AlfaCore.exe
+echo goto :end
+echo :service_running
+echo echo AlfaCore ya esta corriendo como servicio de Windows.
+echo echo Abriendo %%URL_LOCAL%% ...
+echo start "" "%%URL_LOCAL%%"
+echo timeout /t 2 /nobreak ^>nul
+echo goto :end
+echo :port_busy
+echo echo.
+echo echo ===============================================
+echo echo No se inicia otra instancia porque el puerto %%PUERTO%% ya esta en uso.
+echo echo Proceso que escucha en el puerto: PID %%PORT_PID%%
+echo echo Si AlfaCore ya esta abierto como servicio, usa:
+echo echo %%URL_LOCAL%%
+echo echo ===============================================
+echo start "" "%%URL_LOCAL%%"
+echo pause
+echo :end
 echo endlocal
 ) > %PUBLISH_DIR%\iniciar_dashboard.bat
 

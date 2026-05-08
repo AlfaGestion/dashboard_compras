@@ -318,6 +318,7 @@ public class Program
 
         app.MapGet("/api/conversaciones/adjuntos/{idAdjunto:long}", async (
             long idAdjunto,
+            HttpRequest request,
             IConversacionesService svc,
             CancellationToken ct) =>
         {
@@ -325,8 +326,13 @@ public class Program
             if (adjunto is null || !File.Exists(adjunto.RutaLocal))
                 return Results.NotFound();
 
-            var mime = string.IsNullOrWhiteSpace(adjunto.MimeType) ? "application/octet-stream" : adjunto.MimeType;
-            return Results.File(adjunto.RutaLocal, mime, adjunto.NombreArchivo);
+            var mime = NormalizeAttachmentMime(adjunto.MimeType, adjunto.NombreArchivo);
+            var download = string.Equals(request.Query["download"].ToString(), "1", StringComparison.OrdinalIgnoreCase);
+            return Results.File(
+                adjunto.RutaLocal,
+                contentType: mime,
+                fileDownloadName: download ? adjunto.NombreArchivo : null,
+                enableRangeProcessing: true);
         });
 
         try
@@ -348,6 +354,29 @@ public class Program
         if (mimeType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase)) return "AUDIO";
         if (mimeType.StartsWith("video/", StringComparison.OrdinalIgnoreCase)) return "VIDEO";
         return "DOCUMENT";
+    }
+
+    private static string NormalizeAttachmentMime(string? mimeType, string? fileName)
+    {
+        if (!string.IsNullOrWhiteSpace(mimeType))
+            return mimeType.Trim();
+
+        var ext = Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant();
+        return ext switch
+        {
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            ".gif" => "image/gif",
+            ".webp" => "image/webp",
+            ".ogg" or ".oga" => "audio/ogg",
+            ".mp3" => "audio/mpeg",
+            ".wav" => "audio/wav",
+            ".m4a" or ".mp4" => "audio/mp4",
+            ".webm" => "audio/webm",
+            ".pdf" => "application/pdf",
+            ".txt" => "text/plain",
+            _ => "application/octet-stream"
+        };
     }
 
     private static void WriteStartupError(string message, Exception exception)

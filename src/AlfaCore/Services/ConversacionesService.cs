@@ -1,5 +1,6 @@
 using AlfaCore.Models;
 using Microsoft.Data.SqlClient;
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text;
@@ -16,6 +17,7 @@ public sealed class ConversacionesService(
     IWebHostEnvironment environment) : IConversacionesService
 {
     private readonly IAppEventService _appEvents = appEvents;
+    private static readonly ConcurrentDictionary<long, byte> MediaHydrationAttempts = new();
     private string UploadsBasePath => Path.Combine(environment.ContentRootPath, "App_Data", "uploads", "conversaciones");
     private string ConnectionString => sessionService.GetConnectionString().Length > 0
         ? sessionService.GetConnectionString()
@@ -275,6 +277,7 @@ public sealed class ConversacionesService(
                     ISNULL(m.SistemaAutor, ''),
                     ISNULL(m.IdTecnicoAutor, ''),
                     ISNULL(t.Nombre, ''),
+                    ISNULL(m.PayloadJson, ''),
                     CASE WHEN EXISTS (
                         SELECT 1
                         FROM dbo.CONV_ADJUNTOS a
@@ -288,6 +291,7 @@ public sealed class ConversacionesService(
                 """;
 
             var items = new List<ConversacionMensajeDto>();
+            var pendingMediaHydration = new List<PendingMediaHydration>();
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync(token);
             await using var cmd = new SqlCommand(sql, cn);
@@ -295,7 +299,7 @@ public sealed class ConversacionesService(
             await using var rd = await cmd.ExecuteReaderAsync(token);
             while (await rd.ReadAsync(token))
             {
-                items.Add(new ConversacionMensajeDto
+                var item = new ConversacionMensajeDto
                 {
                     IdMensaje = rd.GetInt64(0),
                     IdConversacion = rd.GetInt64(1),
@@ -311,9 +315,24 @@ public sealed class ConversacionesService(
                     SistemaAutor = GetString(rd, 11),
                     IdTecnicoAutor = GetString(rd, 12),
                     TecnicoAutorNombre = GetString(rd, 13),
-                    TieneAdjuntos = GetInt(rd, 14) == 1
-                });
+                    TieneAdjuntos = GetInt(rd, 15) == 1
+                };
+
+                var payloadJson = GetString(rd, 14);
+                if (ShouldHydrateIncomingMedia(item, payloadJson))
+                {
+                    pendingMediaHydration.Add(new PendingMediaHydration
+                    {
+                        Message = item,
+                        PayloadJson = payloadJson
+                    });
+                }
+
+                items.Add(item);
             }
+
+            if (pendingMediaHydration.Count > 0)
+                await HydrateMissingIncomingMediaAsync(pendingMediaHydration, token);
 
             return (IReadOnlyList<ConversacionMensajeDto>)items;
         }, "No se pudieron cargar los mensajes.", ct);
@@ -553,12 +572,15 @@ public sealed class ConversacionesService(
 
             var webhookLogId = await InsertWebhookLogAsync(payloadJson, headerJson, token);
             var parsedMessages = ParseIncomingMessages(request.Payload.RootElement);
+            var whatsAppConfig = parsedMessages.Any(x => x.Attachments.Count > 0)
+                ? await conversacionesConfigService.GetWhatsAppConfigAsync(token)
+                : null;
             var processed = 0;
 
             foreach (var incoming in parsedMessages)
             {
                 var conversationId = await EnsureConversationAsync(incoming, token);
-                await InsertMessageAsync(new PendingMessageInsert
+                var messageId = await InsertMessageAsync(new PendingMessageInsert
                 {
                     ConversationId = conversationId,
                     Phone = incoming.Phone,
@@ -573,6 +595,9 @@ public sealed class ConversacionesService(
                     IdTecnicoAutor = string.Empty,
                     WhatsAppMessageId = incoming.WhatsAppMessageId
                 }, token);
+
+                if (incoming.Attachments.Count > 0 && whatsAppConfig is not null)
+                    await StoreIncomingAttachmentsAsync(conversationId, messageId, incoming, whatsAppConfig, token);
 
                 await RefreshConversationAsync(conversationId, incoming.Timestamp, incoming.Text, token);
                 processed++;
@@ -809,6 +834,110 @@ public sealed class ConversacionesService(
             };
         }, "No se pudo obtener el adjunto.", ct);
 
+    private async Task<int> StoreIncomingAttachmentsAsync(
+        long conversationId,
+        long messageId,
+        IncomingWhatsAppMessage incoming,
+        ConversacionWhatsAppConfigDto config,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(config.AccessToken))
+            return 0;
+
+        var stored = 0;
+        foreach (var attachment in incoming.Attachments)
+        {
+            try
+            {
+                var media = await GetWhatsAppMediaAsync(config, attachment.MediaId, ct);
+                var bytes = await DownloadWhatsAppMediaAsync(config, media.Url, ct);
+                var mimeType = FirstNonEmpty(media.MimeType, attachment.MimeType, InferMimeFromType(attachment.TipoArchivo));
+                var fileName = BuildIncomingFileName(attachment, mimeType);
+                var rutaLocal = await SaveIncomingAttachmentAsync(conversationId, fileName, bytes, ct);
+
+                await InsertAttachmentRecordAsync(
+                    messageId,
+                    attachment.TipoArchivo,
+                    fileName,
+                    mimeType,
+                    rutaLocal,
+                    bytes.LongLength,
+                    JsonSerializer.Serialize(new
+                    {
+                        attachment.MediaId,
+                        media.Sha256,
+                        media.FileSize,
+                        media.MimeType
+                    }),
+                    ct);
+                stored++;
+            }
+            catch (Exception ex)
+            {
+                await _appEvents.LogErrorAsync(
+                    "Conversaciones",
+                    "DownloadIncomingAttachment",
+                    ex,
+                    "No se pudo descargar un adjunto entrante de WhatsApp.",
+                    new { incoming.WhatsAppMessageId, attachment.MediaId, attachment.TipoArchivo },
+                    AppEventSeverity.Warning,
+                    ct);
+            }
+        }
+
+        return stored;
+    }
+
+    private async Task HydrateMissingIncomingMediaAsync(List<PendingMediaHydration> pendingItems, CancellationToken ct)
+    {
+        ConversacionWhatsAppConfigDto? whatsAppConfig = null;
+
+        foreach (var item in pendingItems)
+        {
+            if (!MediaHydrationAttempts.TryAdd(item.Message.IdMensaje, 0))
+                continue;
+
+            try
+            {
+                using var doc = JsonDocument.Parse(item.PayloadJson);
+                var attachments = ExtractIncomingAttachments(doc.RootElement, item.Message.MessageType);
+                if (attachments.Count == 0)
+                    continue;
+
+                whatsAppConfig ??= await conversacionesConfigService.GetWhatsAppConfigAsync(ct);
+                var stored = await StoreIncomingAttachmentsAsync(
+                    item.Message.IdConversacion,
+                    item.Message.IdMensaje,
+                    new IncomingWhatsAppMessage
+                    {
+                        Phone = item.Message.TelefonoWhatsApp,
+                        MessageType = item.Message.MessageType,
+                        WhatsAppMessageId = item.Message.WhatsAppMessageId,
+                        Timestamp = item.Message.FechaHora,
+                        Text = item.Message.Texto,
+                        RawJson = item.PayloadJson,
+                        Attachments = attachments
+                    },
+                    whatsAppConfig,
+                    ct);
+
+                if (stored > 0)
+                    item.Message.TieneAdjuntos = true;
+            }
+            catch (Exception ex)
+            {
+                await _appEvents.LogErrorAsync(
+                    "Conversaciones",
+                    "HydrateMissingIncomingMedia",
+                    ex,
+                    "No se pudo completar un adjunto entrante previamente recibido.",
+                    new { item.Message.IdMensaje, item.Message.WhatsAppMessageId, item.Message.MessageType },
+                    AppEventSeverity.Warning,
+                    ct);
+            }
+        }
+    }
+
     private async Task<long> EnsureConversationAsync(IncomingWhatsAppMessage incoming, CancellationToken ct)
     {
         const string findSql = """
@@ -967,6 +1096,57 @@ public sealed class ConversacionesService(
         return Convert.ToInt64(result, CultureInfo.InvariantCulture);
     }
 
+    private async Task<long> InsertAttachmentRecordAsync(
+        long messageId,
+        string tipoArchivo,
+        string nombreArchivo,
+        string mimeType,
+        string rutaLocal,
+        long tamanoBytes,
+        string payloadJson,
+        CancellationToken ct)
+    {
+        const string sql = """
+            INSERT INTO dbo.CONV_ADJUNTOS
+            (
+                IdMensaje,
+                TipoArchivo,
+                NombreArchivo,
+                MimeType,
+                RutaLocal,
+                TamanoBytes,
+                PayloadJson,
+                FechaHora_Grabacion
+            )
+            VALUES
+            (
+                @IdMensaje,
+                @TipoArchivo,
+                @NombreArchivo,
+                @MimeType,
+                @RutaLocal,
+                @TamanoBytes,
+                @PayloadJson,
+                GETDATE()
+            );
+
+            SELECT CAST(SCOPE_IDENTITY() AS bigint);
+            """;
+
+        await using var cn = new SqlConnection(ConnectionString);
+        await cn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, cn);
+        cmd.Parameters.AddWithValue("@IdMensaje", messageId);
+        cmd.Parameters.AddWithValue("@TipoArchivo", NormalizeMessageType(tipoArchivo));
+        cmd.Parameters.AddWithValue("@NombreArchivo", nombreArchivo);
+        cmd.Parameters.AddWithValue("@MimeType", DbNullable(mimeType));
+        cmd.Parameters.AddWithValue("@RutaLocal", rutaLocal);
+        cmd.Parameters.AddWithValue("@TamanoBytes", tamanoBytes);
+        cmd.Parameters.AddWithValue("@PayloadJson", DbNullable(payloadJson));
+        var result = await cmd.ExecuteScalarAsync(ct);
+        return Convert.ToInt64(result, CultureInfo.InvariantCulture);
+    }
+
     private async Task RefreshConversationAsync(long idConversacion, DateTime fechaHora, string? text, CancellationToken ct)
     {
         const string sql = """
@@ -1045,6 +1225,49 @@ public sealed class ConversacionesService(
             WhatsAppMessageId = messageId,
             PayloadJson = responseBody
         };
+    }
+
+    private async Task<WhatsAppMediaInfo> GetWhatsAppMediaAsync(ConversacionWhatsAppConfigDto config, string mediaId, CancellationToken ct)
+    {
+        var url = $"https://graph.facebook.com/{config.ApiVersion}/{mediaId}";
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", config.AccessToken.Trim());
+
+        var client = httpClientFactory.CreateClient();
+        using var response = await client.SendAsync(request, ct);
+        var body = await response.Content.ReadAsStringAsync(ct);
+
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException($"Meta devolvio {(int)response.StatusCode} al obtener media: {body}");
+
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+        return new WhatsAppMediaInfo
+        {
+            Url = root.TryGetProperty("url", out var urlProp) ? urlProp.GetString() ?? string.Empty : string.Empty,
+            MimeType = root.TryGetProperty("mime_type", out var mimeProp) ? mimeProp.GetString() ?? string.Empty : string.Empty,
+            Sha256 = root.TryGetProperty("sha256", out var shaProp) ? shaProp.GetString() ?? string.Empty : string.Empty,
+            FileSize = root.TryGetProperty("file_size", out var sizeProp) && sizeProp.TryGetInt64(out var size) ? size : 0
+        };
+    }
+
+    private async Task<byte[]> DownloadWhatsAppMediaAsync(ConversacionWhatsAppConfigDto config, string mediaUrl, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(mediaUrl))
+            throw new InvalidOperationException("Meta no devolvio URL para descargar el adjunto.");
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, mediaUrl);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", config.AccessToken.Trim());
+
+        var client = httpClientFactory.CreateClient();
+        using var response = await client.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(ct);
+            throw new InvalidOperationException($"Meta devolvio {(int)response.StatusCode} al descargar media: {body}");
+        }
+
+        return await response.Content.ReadAsByteArrayAsync(ct);
     }
 
     private async Task<long> InsertWebhookLogAsync(string payloadJson, string headerJson, CancellationToken ct)
@@ -1215,6 +1438,7 @@ public sealed class ConversacionesService(
                     var messageId = message.TryGetProperty("id", out var idProp) ? idProp.GetString() ?? string.Empty : string.Empty;
                     var timestamp = message.TryGetProperty("timestamp", out var tsProp) ? ParseUnixTimestamp(tsProp.GetString()) : DateTime.Now;
                     var text = ExtractIncomingText(message, type);
+                    var attachments = ExtractIncomingAttachments(message, type);
 
                     items.Add(new IncomingWhatsAppMessage
                     {
@@ -1224,13 +1448,46 @@ public sealed class ConversacionesService(
                         WhatsAppMessageId = messageId,
                         Timestamp = timestamp,
                         Text = text,
-                        RawJson = message.GetRawText()
+                        RawJson = message.GetRawText(),
+                        Attachments = attachments
                     });
                 }
             }
         }
 
         return items;
+    }
+
+    private static List<IncomingWhatsAppAttachment> ExtractIncomingAttachments(JsonElement message, string type)
+    {
+        var normalizedType = NormalizeMessageType(type);
+        if (normalizedType is not ("IMAGE" or "AUDIO" or "STICKER" or "DOCUMENT" or "VIDEO"))
+            return [];
+
+        if (!TryGetMediaPayload(message, type, out var media))
+            return [];
+
+        var mediaId = media.TryGetProperty("id", out var idProp) ? idProp.GetString() ?? string.Empty : string.Empty;
+        if (string.IsNullOrWhiteSpace(mediaId))
+            return [];
+
+        return
+        [
+            new IncomingWhatsAppAttachment
+            {
+                MediaId = mediaId,
+                TipoArchivo = normalizedType,
+                MimeType = media.TryGetProperty("mime_type", out var mimeProp) ? mimeProp.GetString() ?? string.Empty : string.Empty,
+                FileName = media.TryGetProperty("filename", out var fileNameProp) ? fileNameProp.GetString() ?? string.Empty : string.Empty
+            }
+        ];
+    }
+
+    private static bool TryGetMediaPayload(JsonElement message, string type, out JsonElement media)
+    {
+        media = default;
+        var propertyName = string.IsNullOrWhiteSpace(type) ? string.Empty : type.Trim().ToLowerInvariant();
+        return propertyName.Length > 0 && message.TryGetProperty(propertyName, out media) && media.ValueKind == JsonValueKind.Object;
     }
 
     private static string ExtractIncomingText(JsonElement message, string type)
@@ -1240,8 +1497,86 @@ public sealed class ConversacionesService(
             text.TryGetProperty("body", out var body))
             return body.GetString() ?? string.Empty;
 
+        if (TryGetMediaPayload(message, type, out var media))
+        {
+            if (media.TryGetProperty("caption", out var caption))
+            {
+                var captionText = caption.GetString();
+                if (!string.IsNullOrWhiteSpace(captionText))
+                    return captionText;
+            }
+
+            if (media.TryGetProperty("filename", out var fileName))
+            {
+                var name = fileName.GetString();
+                if (!string.IsNullOrWhiteSpace(name))
+                    return $"[{type}] {name}";
+            }
+        }
+
         return $"[{type}]";
     }
+
+    private async Task<string> SaveIncomingAttachmentAsync(long conversationId, string fileName, byte[] bytes, CancellationToken ct)
+    {
+        var folder = Path.Combine(UploadsBasePath, conversationId.ToString(CultureInfo.InvariantCulture));
+        Directory.CreateDirectory(folder);
+
+        var rutaLocal = Path.Combine(folder, $"{Guid.NewGuid():N}{Path.GetExtension(fileName)}");
+        await File.WriteAllBytesAsync(rutaLocal, bytes, ct);
+        return rutaLocal;
+    }
+
+    private static string BuildIncomingFileName(IncomingWhatsAppAttachment attachment, string mimeType)
+    {
+        var baseName = string.IsNullOrWhiteSpace(attachment.FileName)
+            ? $"{attachment.TipoArchivo.ToLowerInvariant()}_{DateTime.Now:yyyyMMdd_HHmmss}"
+            : Path.GetFileName(attachment.FileName);
+
+        if (Path.HasExtension(baseName))
+            return baseName;
+
+        return $"{baseName}{InferExtension(mimeType, attachment.TipoArchivo)}";
+    }
+
+    private static string InferMimeFromType(string tipoArchivo)
+        => NormalizeMessageType(tipoArchivo) switch
+        {
+            "IMAGE" => "image/jpeg",
+            "STICKER" => "image/webp",
+            "AUDIO" => "audio/ogg",
+            "VIDEO" => "video/mp4",
+            _ => "application/octet-stream"
+        };
+
+    private static string InferExtension(string mimeType, string tipoArchivo)
+    {
+        var normalized = (mimeType ?? string.Empty).Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            "image/jpeg" => ".jpg",
+            "image/png" => ".png",
+            "image/gif" => ".gif",
+            "image/webp" => ".webp",
+            "audio/ogg" or "audio/ogg; codecs=opus" => ".ogg",
+            "audio/mpeg" => ".mp3",
+            "audio/mp4" => ".m4a",
+            "audio/webm" => ".webm",
+            "video/mp4" => ".mp4",
+            "application/pdf" => ".pdf",
+            _ => NormalizeMessageType(tipoArchivo) == "STICKER" ? ".webp" : ".bin"
+        };
+    }
+
+    private static string FirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))?.Trim() ?? string.Empty;
+
+    private static bool ShouldHydrateIncomingMedia(ConversacionMensajeDto message, string payloadJson)
+        => !message.TieneAdjuntos
+           && string.Equals(message.Direction, "ENTRANTE", StringComparison.OrdinalIgnoreCase)
+           && NormalizeMessageType(message.MessageType) is "IMAGE" or "AUDIO" or "STICKER" or "DOCUMENT" or "VIDEO"
+           && !string.IsNullOrWhiteSpace(payloadJson)
+           && !MediaHydrationAttempts.ContainsKey(message.IdMensaje);
 
     private static string ExtractSentMessageId(string responseBody)
     {
@@ -1454,6 +1789,29 @@ public sealed class ConversacionesService(
         public DateTime Timestamp { get; init; }
         public string Text { get; init; } = string.Empty;
         public string RawJson { get; init; } = string.Empty;
+        public List<IncomingWhatsAppAttachment> Attachments { get; init; } = [];
+    }
+
+    private sealed class PendingMediaHydration
+    {
+        public ConversacionMensajeDto Message { get; init; } = new();
+        public string PayloadJson { get; init; } = string.Empty;
+    }
+
+    private sealed class IncomingWhatsAppAttachment
+    {
+        public string MediaId { get; init; } = string.Empty;
+        public string TipoArchivo { get; init; } = string.Empty;
+        public string MimeType { get; init; } = string.Empty;
+        public string FileName { get; init; } = string.Empty;
+    }
+
+    private sealed class WhatsAppMediaInfo
+    {
+        public string Url { get; init; } = string.Empty;
+        public string MimeType { get; init; } = string.Empty;
+        public string Sha256 { get; init; } = string.Empty;
+        public long FileSize { get; init; }
     }
 
     private sealed class WhatsAppSendResult

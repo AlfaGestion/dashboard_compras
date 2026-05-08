@@ -32,3 +32,47 @@ window.conversacionesAudio = (function () {
         }
     };
 })();
+
+window.conversacionesUi = {
+    _threadWatchers: new WeakMap(),
+
+    isNearBottom: function (element) {
+        if (!element) return false;
+        const distance = element.scrollHeight - element.scrollTop - element.clientHeight;
+        return distance < 96;
+    },
+
+    scrollToBottom: function (element) {
+        if (!element) return;
+        element.scrollTop = element.scrollHeight;
+    },
+
+    watchThreadScroll: function (element, dotNetRef) {
+        if (!element || !dotNetRef) return false;
+
+        const previous = this._threadWatchers.get(element);
+        if (previous) {
+            element.removeEventListener('scroll', previous.handler);
+        }
+
+        let scheduled = false;
+        let lastAway = !this.isNearBottom(element);
+        const notify = () => {
+            scheduled = false;
+            const away = !window.conversacionesUi.isNearBottom(element);
+            if (away === lastAway) return;
+            lastAway = away;
+            dotNetRef.invokeMethodAsync('OnThreadScrollStateChanged', away).catch(() => {});
+        };
+
+        const handler = () => {
+            if (scheduled) return;
+            scheduled = true;
+            window.requestAnimationFrame(notify);
+        };
+
+        element.addEventListener('scroll', handler, { passive: true });
+        this._threadWatchers.set(element, { handler: handler });
+        return lastAway;
+    }
+};

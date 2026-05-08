@@ -339,21 +339,33 @@
         return colIndex < row.Count ? row[colIndex] : string.Empty;
     }
 
-    private static string FileSizeFmt(long bytes) => bytes switch
+    private static string FileSizeFmt(long bytes)
     {
-        < 1024 => $"{bytes} B",
-        < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
-        _ => $"{bytes / 1024.0 / 1024.0:F1} MB"
-    };
+        if (bytes < 1024)
+            return $"{bytes} B";
 
-    private string ImportStepLabel() => _importProgress switch
+        if (bytes < 1024 * 1024)
+            return $"{bytes / 1024.0:F1} KB";
+
+        return $"{bytes / 1024.0 / 1024.0:F1} MB";
+    }
+
+    private string ImportStepLabel()
     {
-        < 5 => "Iniciando…",
-        < 15 => "Guardando archivo…",
-        < 20 => "Leyendo filas…",
-        < 95 => "Insertando filas…",
-        _ => "Finalizando…"
-    };
+        if (_importProgress < 5)
+            return "Iniciando...";
+
+        if (_importProgress < 15)
+            return "Guardando archivo...";
+
+        if (_importProgress < 20)
+            return "Leyendo filas...";
+
+        if (_importProgress < 95)
+            return "Insertando filas...";
+
+        return "Finalizando...";
+    }
 
     private void CancelImport()
     {

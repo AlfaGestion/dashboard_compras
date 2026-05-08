@@ -1,10 +1,11 @@
 @page "/conversaciones"
 @inject AlfaCore.Services.IConversacionesService ConversacionesSvc
 @inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <PageTitle>Conversaciones | Alfa Gestión</PageTitle>
 
-<section class="page-grid">
+<section class="page-grid conversations-page">
     <div class="page-intro">
         <div>
             <h2 class="page-intro__title">Conversaciones</h2>
@@ -191,7 +192,8 @@
                         <div class="conversations-error">@_conversationError</div>
                     }
 
-                    <div class="conversations-thread">
+                    <div class="conversations-thread-shell">
+                    <div class="conversations-thread" @ref="_threadElement">
                         @if (_messages.Count == 0)
                         {
                             <div class="conversations-empty conversations-empty--center">
@@ -202,12 +204,19 @@
                         {
                             @foreach (var message in _messages)
                             {
+                                @if (_firstNewMessageId == message.IdMensaje)
+                                {
+                                    <div class="message-new-divider">
+                                        <span>Nuevo</span>
+                                    </div>
+                                }
+
                                 <article class="message-card @GetMessageClass(message)">
                                     <div class="message-card__meta">
                                         <span>@GetMessageAuthor(message)</span>
                                         <span>@message.FechaHora.ToString("dd/MM HH:mm")</span>
                                     </div>
-                                    @if (!string.IsNullOrWhiteSpace(message.Texto) && message.MessageType is not ("IMAGE" or "AUDIO" or "VIDEO" or "DOCUMENT"))
+                                    @if (ShouldShowMessageText(message))
                                     {
                                         <p class="message-card__text">@message.Texto</p>
                                     }
@@ -216,26 +225,46 @@
                                         <div class="message-attachments">
                                             @foreach (var adj in adjuntos)
                                             {
-                                                @if (adj.TipoArchivo == "IMAGE")
+                                                @if (IsImageAttachment(adj))
                                                 {
                                                     <div class="message-attachment message-attachment--image">
-                                                        <img src="/api/conversaciones/adjuntos/@adj.IdAdjunto" alt="@adj.NombreArchivo" loading="lazy" />
-                                                        <span class="attachment-name">@adj.NombreArchivo</span>
+                                                        <button type="button"
+                                                                class="attachment-preview-button"
+                                                                title="Ver imagen"
+                                                                @onclick="() => OpenAttachmentPreview(adj)">
+                                                            <img src="@GetAttachmentUrl(adj)" alt="@GetAttachmentLabel(adj)" loading="lazy" />
+                                                        </button>
+                                                        @if (!IsStickerAttachment(adj))
+                                                        {
+                                                            <span class="attachment-name">@adj.NombreArchivo</span>
+                                                        }
                                                     </div>
                                                 }
-                                                else if (adj.TipoArchivo == "AUDIO")
+                                                else if (IsAudioAttachment(adj))
                                                 {
                                                     <div class="message-attachment message-attachment--audio">
                                                         <audio controls preload="metadata">
-                                                            <source src="/api/conversaciones/adjuntos/@adj.IdAdjunto"
-                                                                    type="@(string.IsNullOrWhiteSpace(adj.MimeType) ? "audio/webm" : adj.MimeType)" />
+                                                            <source src="@GetAttachmentUrl(adj)" type="@GetAttachmentMime(adj)" />
+                                                            Tu navegador no puede reproducir este audio.
                                                         </audio>
+                                                        <button type="button"
+                                                                class="attachment-menu-button"
+                                                                title="Opciones"
+                                                                @onclick="() => ToggleAttachmentMenu(adj.IdAdjunto)">
+                                                            <i class="bi bi-three-dots-vertical"></i>
+                                                        </button>
+                                                        @if (_openAttachmentMenuId == adj.IdAdjunto)
+                                                        {
+                                                            <div class="attachment-menu">
+                                                                <a href="@GetAttachmentDownloadUrl(adj)" download="@adj.NombreArchivo">Descargar audio</a>
+                                                            </div>
+                                                        }
                                                     </div>
                                                 }
                                                 else
                                                 {
                                                     <div class="message-attachment message-attachment--file">
-                                                        <a class="attachment-link" href="/api/conversaciones/adjuntos/@adj.IdAdjunto" download="@adj.NombreArchivo">
+                                                        <a class="attachment-link" href="@GetAttachmentDownloadUrl(adj)" download="@adj.NombreArchivo">
                                                             <i class="bi bi-file-earmark-arrow-down"></i>
                                                             <span>@adj.NombreArchivo</span>
                                                             @if (adj.TamanoBytes > 0)
@@ -260,13 +289,30 @@
                         }
                     </div>
 
+                    @if (ShouldShowLatestButton)
+                    {
+                        <button type="button" class="conversations-latest-button" @onclick="ScrollToLatestAsync">
+                            @if (_newMessagesCount > 0)
+                            {
+                                <span>Nuevo</span>
+                                <strong>@_newMessagesCount</strong>
+                            }
+                            else
+                            {
+                                <span>Ir al final</span>
+                            }
+                            <i class="bi bi-arrow-down"></i>
+                        </button>
+                    }
+                    </div>
+
                     <div class="conversations-composer">
                         <div class="field">
                             <label for="conv-message">
                                 @(_selectedConversation.Canal == "INTERNO" ? "Mensaje al equipo" : "Responder")
                             </label>
                             <textarea id="conv-message"
-                                      rows="4"
+                                      rows="2"
                                       placeholder="@(_selectedConversation.Canal == "INTERNO" ? "Escribí un mensaje para el equipo…" : "Escribí una respuesta para WhatsApp…")"
                                       @bind="_replyText"></textarea>
                         </div>
@@ -292,7 +338,7 @@
                         <div class="field">
                             <label for="conv-note">Nota interna</label>
                             <textarea id="conv-note"
-                                      rows="3"
+                                      rows="1"
                                       placeholder="Escribí una nota interna visible solo para el equipo…"
                                       @bind="_internalNoteText"></textarea>
                         </div>
@@ -424,6 +470,28 @@
     </div>
 }
 
+@if (_previewAttachment is not null)
+{
+    <div class="attachment-preview-overlay" @onclick="CloseAttachmentPreview">
+        <div class="attachment-preview-modal" @onclick:stopPropagation>
+            <header class="attachment-preview-header">
+                <span>@GetAttachmentLabel(_previewAttachment)</span>
+                <div class="attachment-preview-actions">
+                    <a class="btn btn--ghost btn--sm"
+                       href="@GetAttachmentDownloadUrl(_previewAttachment)"
+                       download="@_previewAttachment.NombreArchivo">
+                        <i class="bi bi-download"></i> Descargar
+                    </a>
+                    <button type="button" class="btn btn--ghost btn--sm" @onclick="CloseAttachmentPreview">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+            </header>
+            <img src="@GetAttachmentUrl(_previewAttachment)" alt="@GetAttachmentLabel(_previewAttachment)" />
+        </div>
+    </div>
+}
+
 @code {
     private readonly (string Value, string Label)[] _modeOptions =
     [
@@ -462,15 +530,55 @@
     private string _internalNoteText = string.Empty;
     private string _assignmentTechnicianId = string.Empty;
     private string _statusCode = "ABIERTA";
+    private ElementReference _threadElement;
+    private DotNetObjectReference<Conversaciones>? _dotNetRef;
+    private CancellationTokenSource? _pollingCts;
+    private Task? _pollingTask;
+    private long? _scrollHandlerConversationId;
+    private long? _firstNewMessageId;
+    private int _newMessagesCount;
+    private bool _showReturnToLatest;
+    private bool _scrollThreadToBottomAfterRender;
+    private long? _openAttachmentMenuId;
+    private ConversacionAdjuntoDto? _previewAttachment;
+
+    private static readonly TimeSpan PollingInterval = TimeSpan.FromSeconds(5);
 
     private bool _canSendReply => !_busyAction && _selectedConversation is not null && !string.IsNullOrWhiteSpace(_replyText);
     private bool _canAddNote => !_busyAction && _selectedConversation is not null && !string.IsNullOrWhiteSpace(_internalNoteText);
+    private bool ShouldShowLatestButton => _showReturnToLatest || _newMessagesCount > 0;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadLookupsAsync();
         if (_loadError is null)
             await LoadInboxAsync();
+
+        StartPolling();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_selectedConversationId.HasValue && _scrollHandlerConversationId != _selectedConversationId)
+        {
+            _dotNetRef ??= DotNetObjectReference.Create(this);
+            _scrollHandlerConversationId = _selectedConversationId;
+
+            try
+            {
+                _showReturnToLatest = await JS.InvokeAsync<bool>("conversacionesUi.watchThreadScroll", _threadElement, _dotNetRef);
+            }
+            catch
+            {
+                _showReturnToLatest = false;
+            }
+        }
+
+        if (_scrollThreadToBottomAfterRender)
+        {
+            _scrollThreadToBottomAfterRender = false;
+            await ScrollThreadToBottomAsync();
+        }
     }
 
     private async Task LoadLookupsAsync()
@@ -509,8 +617,13 @@
     }
 
     private async Task LoadInboxAsync()
+        => await RefreshInboxAsync(showLoading: true, allowSelectionChange: true);
+
+    private async Task RefreshInboxAsync(bool showLoading, bool allowSelectionChange)
     {
-        _loadingInbox = true;
+        if (showLoading)
+            _loadingInbox = true;
+
         _loadError = null;
 
         try
@@ -520,9 +633,9 @@
             if (_selectedConversationId.HasValue && _inbox.Any(x => x.IdConversacion == _selectedConversationId.Value))
                 return;
 
-            if (_inbox.Count > 0)
+            if (allowSelectionChange && _inbox.Count > 0)
                 await SelectConversationAsync(_inbox[0].IdConversacion);
-            else
+            else if (allowSelectionChange)
                 ClearSelection();
         }
         catch (Exception ex)
@@ -531,17 +644,27 @@
         }
         finally
         {
-            _loadingInbox = false;
+            if (showLoading)
+                _loadingInbox = false;
         }
     }
 
     private async Task SelectConversationAsync(long idConversacion)
+        => await LoadConversationAsync(idConversacion, showLoading: true, clearActionState: true);
+
+    private async Task LoadConversationAsync(long idConversacion, bool showLoading, bool clearActionState)
     {
+        var conversationChanged = _selectedConversationId != idConversacion;
         _selectedConversationId = idConversacion;
-        _loadingConversation = true;
+        if (showLoading)
+            _loadingConversation = true;
+
         _conversationError = null;
-        _actionMessage = null;
-        _actionError = null;
+        if (clearActionState)
+        {
+            _actionMessage = null;
+            _actionError = null;
+        }
 
         try
         {
@@ -553,6 +676,14 @@
                 .ToDictionary(g => g.Key, g => g.ToList());
             _assignmentTechnicianId = _selectedConversation?.IdTecnico ?? string.Empty;
             _statusCode = _selectedConversation?.CodigoEstado ?? (_states.FirstOrDefault()?.CodigoEstado ?? "ABIERTA");
+
+            if (showLoading || clearActionState || conversationChanged)
+            {
+                ClearNewMessageState();
+                _showReturnToLatest = false;
+                _scrollThreadToBottomAfterRender = true;
+                _scrollHandlerConversationId = null;
+            }
         }
         catch (Exception ex)
         {
@@ -562,8 +693,131 @@
         }
         finally
         {
-            _loadingConversation = false;
+            if (showLoading)
+                _loadingConversation = false;
         }
+    }
+
+    private void StartPolling()
+    {
+        if (_pollingTask is not null)
+            return;
+
+        _pollingCts = new CancellationTokenSource();
+        _pollingTask = RunPollingAsync(_pollingCts.Token);
+    }
+
+    private async Task RunPollingAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(PollingInterval);
+
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+                await InvokeAsync(AutoRefreshAsync);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task AutoRefreshAsync()
+    {
+        if (ShouldSkipAutoRefresh())
+            return;
+
+        var selectedId = _selectedConversationId;
+        var shouldKeepAtBottom = await IsThreadNearBottomAsync();
+        var previousLastMessageId = GetLastMessageId();
+
+        await RefreshInboxAsync(showLoading: false, allowSelectionChange: false);
+
+        if (selectedId.HasValue && _selectedConversationId == selectedId)
+            await LoadConversationAsync(selectedId.Value, showLoading: false, clearActionState: false);
+
+        var currentLastMessageId = GetLastMessageId();
+        var hasNewMessages = previousLastMessageId.HasValue
+                             && currentLastMessageId.HasValue
+                             && currentLastMessageId > previousLastMessageId;
+
+        if (hasNewMessages && !shouldKeepAtBottom && previousLastMessageId is { } lastSeenMessageId)
+        {
+            var newMessages = _messages.Where(x => x.IdMensaje > lastSeenMessageId).ToList();
+            _firstNewMessageId = newMessages.FirstOrDefault()?.IdMensaje;
+            _newMessagesCount += newMessages.Count;
+            _showReturnToLatest = true;
+        }
+
+        StateHasChanged();
+
+        if (shouldKeepAtBottom)
+            await ScrollThreadToBottomAsync();
+    }
+
+    private bool ShouldSkipAutoRefresh()
+        => _loadingInbox
+           || _loadingConversation
+           || _busyAction
+           || _uploadingFile
+           || _uploadingAudio
+           || _recording
+           || _showNuevoHilo;
+
+    private async Task<bool> IsThreadNearBottomAsync()
+    {
+        if (_selectedConversationId is null)
+            return false;
+
+        try
+        {
+            return await JS.InvokeAsync<bool>("conversacionesUi.isNearBottom", _threadElement);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private async Task ScrollThreadToBottomAsync()
+    {
+        try
+        {
+            await Task.Yield();
+            await JS.InvokeVoidAsync("conversacionesUi.scrollToBottom", _threadElement);
+            ClearNewMessageState();
+            _showReturnToLatest = false;
+        }
+        catch
+        {
+        }
+    }
+
+    private async Task ScrollToLatestAsync()
+    {
+        await ScrollThreadToBottomAsync();
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public Task OnThreadScrollStateChanged(bool isAwayFromBottom)
+    {
+        if (_showReturnToLatest == isAwayFromBottom && (isAwayFromBottom || _newMessagesCount == 0))
+            return Task.CompletedTask;
+
+        _showReturnToLatest = isAwayFromBottom;
+        if (!isAwayFromBottom)
+            ClearNewMessageState();
+
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private long? GetLastMessageId()
+        => _messages.Count == 0 ? null : _messages.Max(x => x.IdMensaje);
+
+    private void ClearNewMessageState()
+    {
+        _firstNewMessageId = null;
+        _newMessagesCount = 0;
     }
 
     private async Task SendReplyAsync()
@@ -865,6 +1119,9 @@
         _replyText = string.Empty;
         _internalNoteText = string.Empty;
         _assignmentTechnicianId = string.Empty;
+        _scrollHandlerConversationId = null;
+        _showReturnToLatest = false;
+        ClearNewMessageState();
     }
 
     private static string GetDisplayName(ConversacionInboxItemDto item)
@@ -917,10 +1174,101 @@
         return "DOCUMENT";
     }
 
-    private static string FormatFileSize(long bytes) => bytes switch
+    private static bool IsImageAttachment(ConversacionAdjuntoDto adjunto)
+        => string.Equals(adjunto.TipoArchivo, "IMAGE", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(adjunto.TipoArchivo, "STICKER", StringComparison.OrdinalIgnoreCase)
+           || adjunto.MimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsStickerAttachment(ConversacionAdjuntoDto adjunto)
+        => string.Equals(adjunto.TipoArchivo, "STICKER", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(adjunto.MimeType, "image/webp", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsAudioAttachment(ConversacionAdjuntoDto adjunto)
+        => string.Equals(adjunto.TipoArchivo, "AUDIO", StringComparison.OrdinalIgnoreCase)
+           || adjunto.MimeType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase);
+
+    private bool ShouldShowMessageText(ConversacionMensajeDto message)
     {
-        < 1024 => $"{bytes} B",
-        < 1024 * 1024 => $"{bytes / 1024} KB",
-        _ => $"{bytes / (1024 * 1024)} MB"
-    };
+        if (string.IsNullOrWhiteSpace(message.Texto))
+            return false;
+
+        if (message.MessageType is "IMAGE" or "AUDIO" or "VIDEO" or "DOCUMENT" or "STICKER")
+        {
+            if (message.TieneAdjuntos)
+                return false;
+        }
+
+        return true;
+    }
+
+    private void ToggleAttachmentMenu(long idAdjunto)
+        => _openAttachmentMenuId = _openAttachmentMenuId == idAdjunto ? null : idAdjunto;
+
+    private void OpenAttachmentPreview(ConversacionAdjuntoDto adjunto)
+    {
+        _openAttachmentMenuId = null;
+        _previewAttachment = adjunto;
+    }
+
+    private void CloseAttachmentPreview()
+        => _previewAttachment = null;
+
+    private static string GetAttachmentUrl(ConversacionAdjuntoDto adjunto)
+        => $"/api/conversaciones/adjuntos/{adjunto.IdAdjunto}";
+
+    private static string GetAttachmentDownloadUrl(ConversacionAdjuntoDto adjunto)
+        => $"/api/conversaciones/adjuntos/{adjunto.IdAdjunto}?download=1";
+
+    private static string GetAttachmentMime(ConversacionAdjuntoDto adjunto)
+    {
+        if (!string.IsNullOrWhiteSpace(adjunto.MimeType))
+            return adjunto.MimeType;
+
+        if (string.Equals(adjunto.TipoArchivo, "STICKER", StringComparison.OrdinalIgnoreCase))
+            return "image/webp";
+
+        if (string.Equals(adjunto.TipoArchivo, "AUDIO", StringComparison.OrdinalIgnoreCase))
+            return "audio/webm";
+
+        if (string.Equals(adjunto.TipoArchivo, "IMAGE", StringComparison.OrdinalIgnoreCase))
+            return "image/jpeg";
+
+        return "application/octet-stream";
+    }
+
+    private static string GetAttachmentLabel(ConversacionAdjuntoDto adjunto)
+        => string.IsNullOrWhiteSpace(adjunto.NombreArchivo) ? "Adjunto" : adjunto.NombreArchivo;
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024)
+            return $"{bytes} B";
+
+        if (bytes < 1024 * 1024)
+            return $"{bytes / 1024} KB";
+
+        return $"{bytes / (1024 * 1024)} MB";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_pollingCts is null)
+            return;
+
+        await _pollingCts.CancelAsync();
+
+        if (_pollingTask is not null)
+        {
+            try
+            {
+                await _pollingTask;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+
+        _pollingCts.Dispose();
+        _dotNetRef?.Dispose();
+    }
 }
