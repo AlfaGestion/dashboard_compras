@@ -3,6 +3,7 @@ using AlfaCore.Configuration;
 using AlfaCore.Models;
 using AlfaCore.Repositories;
 using AlfaCore.Services;
+using System.Net;
 using System.Diagnostics;
 using System.Text.Json;
 
@@ -53,6 +54,8 @@ public class Program
         builder.Services.AddScoped<ICostosService, CostosService>();
         builder.Services.AddScoped<IConversacionesService, ConversacionesService>();
         builder.Services.AddScoped<IConversacionesConfigService, ConversacionesConfigService>();
+        builder.Services.AddScoped<IInterfacesService, InterfacesService>();
+        builder.Services.AddScoped<IInterfacesConfigService, InterfacesConfigService>();
         builder.Services.AddScoped<IAuditoriaService, AuditoriaService>();
         builder.Services.AddScoped<IGestionDashboardService, GestionDashboardService>();
         builder.Services.AddScoped<IAppUiOperationService, AppUiOperationService>();
@@ -102,6 +105,45 @@ public class Program
                 : "text/plain";
 
             return Results.File(path, contentType, Path.GetFileName(path));
+        });
+
+        app.MapGet("/api/interfaces/adjuntos/{idAdjunto:long}", async (
+            long idAdjunto,
+            IInterfacesService interfacesSvc,
+            IInterfacesConfigService interfacesConfigSvc,
+            CancellationToken ct) =>
+        {
+            var file = await interfacesSvc.GetAttachmentForServeAsync(idAdjunto, ct);
+            if (file is null) return Results.NotFound();
+
+            var contentType = string.IsNullOrWhiteSpace(file.MimeType)
+                ? "application/octet-stream"
+                : file.MimeType;
+
+            if (file.RutaCompleta.StartsWith("ftp://", StringComparison.OrdinalIgnoreCase))
+            {
+                var settings = await interfacesConfigSvc.GetUploadSettingsAsync(ct);
+#pragma warning disable SYSLIB0014
+                var request = (FtpWebRequest)WebRequest.Create(file.RutaCompleta);
+                request.Method = WebRequestMethods.Ftp.DownloadFile;
+                request.Credentials = new NetworkCredential(settings.FtpUsuario, settings.FtpClave);
+                request.UseBinary = true;
+                request.UsePassive = settings.FtpModoPasivo;
+                request.KeepAlive = false;
+
+                using var response = (FtpWebResponse)await request.GetResponseAsync();
+                await using var responseStream = response.GetResponseStream();
+                if (responseStream is null)
+                    return Results.NotFound("No se pudo abrir el archivo remoto.");
+
+                await using var ms = new MemoryStream();
+                await responseStream.CopyToAsync(ms, ct);
+#pragma warning restore SYSLIB0014
+                return Results.File(ms.ToArray(), contentType, file.NombreArchivo);
+            }
+
+            if (!File.Exists(file.RutaCompleta)) return Results.NotFound("El archivo ya no existe en el servidor.");
+            return Results.File(file.RutaCompleta, contentType, file.NombreArchivo);
         });
 
         app.MapGet("/consultas/{id:int}/descargar-excel", async (

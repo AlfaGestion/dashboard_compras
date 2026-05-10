@@ -102,6 +102,24 @@
                     </NavLink>
                 </nav>
             }
+            else if (_currentModule == "interfaces")
+            {
+                <a class="menu__back" href="/">
+                    <i class="bi bi-grid-3x3-gap-fill"></i>
+                    <span>Aplicaciones</span>
+                </a>
+                <p class="menu__section">Interfaces</p>
+                <nav class="menu__nav">
+                    <NavLink class="menu__link" href="/interfaces" Match="NavLinkMatch.All">
+                        <span class="menu__icon"><i class="bi bi-folder2-open"></i></span>
+                        <span>Recepción documental</span>
+                    </NavLink>
+                    <NavLink class="menu__link" href="/interfaces/configuracion" Match="NavLinkMatch.All">
+                        <span class="menu__icon"><i class="bi bi-sliders"></i></span>
+                        <span>Configuración</span>
+                    </NavLink>
+                </nav>
+            }
             else if (_currentModule == "ventas")
             {
                 <a class="menu__back" href="/">
@@ -248,7 +266,7 @@
         <header class="shell__header">
             <div>
                 <p class="shell__eyebrow">Alfa Gestión</p>
-                <h1 class="shell__title">@GetModuleTitle()</h1>
+                <p class="shell__module">@GetModuleTitle()</p>
             </div>
             <div class="shell__actions">
                 <button type="button" class="btn btn--ghost no-print" @onclick="ToggleThemeAsync" title="@(_isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro")">
@@ -409,6 +427,8 @@
             "auditoria/errores" => "Errores",
             "conversaciones" => "Conversaciones",
             "conversaciones/configuracion" => "Configuración de WhatsApp",
+            "interfaces" => "Recepción documental",
+            "interfaces/configuracion" => "Configuración de Interfaces",
             "compras" => "Inicio",
             "compras/proveedores" => "Proveedores",
             "compras/comprobantes" => "Comprobantes",
@@ -440,6 +460,7 @@
         "costos" => "Actualización de Costos",
         "auditoria" => "Auditoría",
         "conversaciones" => "Conversaciones",
+        "interfaces" => "Interfaces",
         _ => "Dashboard de Compras"
     };
 }

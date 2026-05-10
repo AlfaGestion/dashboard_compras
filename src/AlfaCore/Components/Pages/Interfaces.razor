@@ -1,0 +1,888 @@
+@page "/interfaces"
+@using AlfaCore.Models
+@using Microsoft.AspNetCore.Components.Forms
+@inject AlfaCore.Services.IInterfacesService InterfacesSvc
+@inject AlfaCore.Services.IInterfacesConfigService InterfacesConfigSvc
+@inject AlfaCore.Services.IAppUiOperationService UiOps
+
+<PageTitle>Interfaces | Alfa Gestión</PageTitle>
+
+<div class="page-grid">
+    <section class="page-intro">
+        <div>
+            <h2 class="page-intro__title">Recepción documental</h2>
+            <p class="page-intro__text">Registrá comprobantes, listas, liquidaciones y otros documentos con uno o varios adjuntos, estado y trazabilidad completa.</p>
+        </div>
+        <div class="actions">
+            <a class="btn btn--ghost" href="/interfaces/configuracion">
+                <i class="bi bi-sliders"></i> Configuración
+            </a>
+            <button type="button" class="btn btn--ghost" @onclick="RecargarAsync" disabled="_loading">
+                <i class="bi bi-arrow-clockwise"></i> Recargar
+            </button>
+        </div>
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <section class="panel-card">
+            <div class="editor-msg @(_isError ? "editor-msg--error" : "editor-msg--ok")">
+                <i class="bi @(_isError ? "bi-exclamation-circle" : "bi-check-circle")"></i> @_message
+            </div>
+        </section>
+    }
+
+    <section class="panel-card">
+        <div class="panel-card__header">
+            <div>
+                <h3 class="panel-card__title">Filtros</h3>
+                @if (_settings is not null)
+                {
+                    <p class="panel-card__subtitle">Destino: @_settings.GetDestinoResumen() · máximo @_settings.TamanoMaximoMb MB por archivo</p>
+                }
+            </div>
+        </div>
+
+        <div class="filters-grid">
+            <div class="field">
+                <label>Desde</label>
+                <input type="date" @bind="_filtersDesde" />
+            </div>
+            <div class="field">
+                <label>Hasta</label>
+                <input type="date" @bind="_filtersHasta" />
+            </div>
+            <div class="field">
+                <label>Estado</label>
+                <select @bind="_filters.IdEstado">
+                    <option value="">Todos</option>
+                    @foreach (var item in _states)
+                    {
+                        <option value="@item.IdEstado">@item.Descripcion</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label>Tipo</label>
+                <select @bind="_filters.IdTipoDocumento">
+                    <option value="">Todos</option>
+                    @foreach (var item in _documentTypes)
+                    {
+                        <option value="@item.IdTipoDocumento">@item.Descripcion</option>
+                    }
+                </select>
+            </div>
+            <div class="field field--wide">
+                <label>Buscar</label>
+                <input type="search" placeholder="Observación, usuario o número interno..." @bind="_filters.Texto" @bind:event="oninput" />
+            </div>
+            <div class="actions">
+                <button type="button" class="btn btn--primary" @onclick="BuscarAsync" disabled="_loading">
+                    <i class="bi bi-funnel"></i> Aplicar
+                </button>
+                <button type="button" class="btn btn--ghost" @onclick="LimpiarFiltros" disabled="_loading">
+                    <i class="bi bi-eraser"></i> Limpiar
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <div class="interfaces-layout">
+        <section class="panel-card interfaces-list">
+            <div class="panel-card__header">
+                <div>
+                    <h3 class="panel-card__title">Bandeja</h3>
+                    <p class="panel-card__subtitle">@_items.Count registro(s)</p>
+                </div>
+            </div>
+
+            @if (_loading)
+            {
+                <div class="loading">Cargando comprobantes...</div>
+            }
+            else if (_items.Count == 0)
+            {
+                <div class="conversations-empty">No hay documentos para los filtros seleccionados.</div>
+            }
+            else
+            {
+                <div class="interfaces-list__items">
+                    @foreach (var item in _items)
+                    {
+                        <button type="button"
+                                class="interfaces-row @(item.IdComprobanteRecibido == _selectedId ? "is-selected" : string.Empty)"
+                                @onclick="() => SeleccionarAsync(item.IdComprobanteRecibido)">
+                            <div class="interfaces-row__top">
+                                <strong>#@item.IdComprobanteRecibido</strong>
+                                <span>@item.FechaHoraGrabacion.ToString("dd/MM/yyyy HH:mm")</span>
+                            </div>
+                            <div class="interfaces-row__meta">
+                                <span>@item.TipoDocumentoDescripcion</span>
+                                <span>@item.EstadoDescripcion</span>
+                            </div>
+                            <p class="interfaces-row__text">@GetSummary(item.Observacion)</p>
+                            <div class="interfaces-row__footer">
+                                <span>@item.UsuarioAlta</span>
+                                <span>@item.CantidadAdjuntos adj.</span>
+                            </div>
+                        </button>
+                    }
+                </div>
+            }
+        </section>
+
+        <div class="interfaces-detail-column">
+            <section class="panel-card">
+                <div class="panel-card__header">
+                    <div>
+                        <h3 class="panel-card__title">Nuevo comprobante</h3>
+                        @if (_settings is not null && _settings.ExtensionesPermitidas.Count > 0)
+                        {
+                            <p class="panel-card__subtitle">Permitidos: @string.Join(", ", _settings.ExtensionesPermitidas)</p>
+                        }
+                    </div>
+                </div>
+
+                <div class="filters-grid">
+                    <div class="field">
+                        <label>Tipo documental</label>
+                        <select @bind="_nuevo.IdTipoDocumento" disabled="_saving">
+                            <option value="0">Seleccionar...</option>
+                            @foreach (var item in _documentTypes)
+                            {
+                                <option value="@item.IdTipoDocumento">@item.Descripcion</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field field--wide">
+                        <label>Observación</label>
+                        <textarea rows="4"
+                                  placeholder="Comentario, referencia o contexto del comprobante..."
+                                  @bind="_nuevo.Observacion"
+                                  disabled="_saving"></textarea>
+                    </div>
+                    <div class="field field--wide">
+                        <label>Archivos</label>
+                        <InputFile OnChange="HandleFilesSelectedAsync" multiple disabled="@_saving" />
+                    </div>
+                </div>
+
+                @if (_selectedFiles.Count > 0)
+                {
+                    <div class="interfaces-files">
+                        @foreach (var file in _selectedFiles)
+                        {
+                            <div class="interfaces-file-chip">
+                                <i class="bi bi-paperclip"></i>
+                                <span>@file.Name</span>
+                                <small>@FormatSize(file.Size)</small>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <div class="actions" style="margin-top:1rem;">
+                    <button type="button" class="btn btn--primary" @onclick="GuardarAsync" disabled="@(_saving || _selectedFiles.Count == 0)">
+                        <i class="bi bi-upload"></i>
+                        <span>@(_saving ? "Guardando..." : "Registrar comprobante")</span>
+                    </button>
+                    <button type="button" class="btn btn--ghost" @onclick="LimpiarFormulario" disabled="_saving">
+                        <i class="bi bi-x-circle"></i>
+                        <span>Limpiar</span>
+                    </button>
+                </div>
+            </section>
+
+            <section class="panel-card">
+                <div class="panel-card__header">
+                    <div>
+                        <h3 class="panel-card__title">Detalle</h3>
+                        <p class="panel-card__subtitle">@(_selectedDetail is null ? "Seleccioná un registro de la bandeja." : $"Comprobante #{_selectedDetail.IdComprobanteRecibido}")</p>
+                    </div>
+                </div>
+
+                @if (_selectedDetail is null)
+                {
+                    <div class="conversations-empty conversations-empty--center">
+                        A la derecha vas a ver los adjuntos, el historial y el cambio de estado del comprobante seleccionado.
+                    </div>
+                }
+                else
+                {
+                    <div class="interfaces-detail">
+                        <div class="interfaces-detail__grid">
+                            <div>
+                                <span class="interfaces-detail__label">Tipo</span>
+                                <strong>@_selectedDetail.TipoDocumentoDescripcion</strong>
+                            </div>
+                            <div>
+                                <span class="interfaces-detail__label">Estado</span>
+                                <strong>@_selectedDetail.EstadoDescripcion</strong>
+                            </div>
+                            <div>
+                                <span class="interfaces-detail__label">Alta</span>
+                                <strong>@_selectedDetail.FechaHoraGrabacion.ToString("dd/MM/yyyy HH:mm")</strong>
+                            </div>
+                            <div>
+                                <span class="interfaces-detail__label">Usuario</span>
+                                <strong>@_selectedDetail.UsuarioAlta</strong>
+                            </div>
+                        </div>
+
+                        @if (_selectedDetail.PermiteEdicion)
+                        {
+                            <div class="interfaces-detail__block">
+                                <div class="interfaces-detail__block-head">
+                                    <span class="interfaces-detail__label">Editar comprobante</span>
+                                </div>
+                                <div class="filters-grid">
+                                    <div class="field">
+                                        <label>Tipo documental</label>
+                                        <select @bind="_editForm.IdTipoDocumento" disabled="_savingEdit">
+                                            <option value="0">Seleccionar...</option>
+                                            @foreach (var item in _documentTypes)
+                                            {
+                                                <option value="@item.IdTipoDocumento">@item.Descripcion</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="field field--wide">
+                                        <label>Observación</label>
+                                        <textarea rows="3" @bind="_editForm.Observacion" disabled="_savingEdit"></textarea>
+                                    </div>
+                                </div>
+                                <div class="actions">
+                                    <button type="button" class="btn btn--secondary" @onclick="GuardarEdicionAsync" disabled="_savingEdit">
+                                        <i class="bi bi-save"></i>
+                                        <span>@(_savingEdit ? "Guardando..." : "Guardar cambios")</span>
+                                    </button>
+                                    <button type="button" class="btn btn--ghost" @onclick="ResetEditarDetalle" disabled="_savingEdit">
+                                        <i class="bi bi-arrow-counterclockwise"></i>
+                                        <span>Revertir</span>
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                        else if (!string.IsNullOrWhiteSpace(_selectedDetail.Observacion))
+                        {
+                            <div class="interfaces-detail__block">
+                                <span class="interfaces-detail__label">Observación</span>
+                                <p>@_selectedDetail.Observacion</p>
+                            </div>
+                        }
+
+                        <div class="interfaces-detail__block">
+                            <div class="interfaces-detail__block-head">
+                                <span class="interfaces-detail__label">Adjuntos</span>
+                                <strong>@_selectedDetail.Adjuntos.Count</strong>
+                            </div>
+                            @if (_selectedDetail.Adjuntos.Count == 0)
+                            {
+                                <p>Este comprobante todavía no tiene adjuntos activos.</p>
+                            }
+                            else
+                            {
+                                <div class="interfaces-attachments">
+                                    @foreach (var attachment in _selectedDetail.Adjuntos)
+                                    {
+                                        <div class="interfaces-attachment-shell">
+                                            <a class="interfaces-attachment"
+                                               href="@GetAttachmentDownloadUrl(attachment.IdAdjunto)"
+                                               target="_blank">
+                                                <i class="bi bi-file-earmark-arrow-down"></i>
+                                                <span>@attachment.NombreOriginal</span>
+                                                <small>@FormatSize(attachment.TamanoBytes)</small>
+                                            </a>
+                                            @if (_selectedDetail.PermiteEdicion)
+                                            {
+                                                <button type="button"
+                                                        class="btn btn--ghost btn--sm"
+                                                        @onclick="() => QuitarAdjuntoAsync(attachment.IdAdjunto)"
+                                                        disabled="@_removingAttachment">
+                                                    <i class="bi bi-trash3"></i>
+                                                    <span>Quitar</span>
+                                                </button>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        @if (_selectedDetail.PermiteEdicion)
+                        {
+                            <div class="interfaces-detail__block">
+                                <div class="interfaces-detail__block-head">
+                                    <span class="interfaces-detail__label">Agregar adjuntos</span>
+                                </div>
+                                <div class="filters-grid">
+                                    <div class="field field--wide">
+                                        <label>Archivos adicionales</label>
+                                        <InputFile OnChange="HandleExtraFilesSelectedAsync" multiple disabled="@_savingExtraAttachments" />
+                                    </div>
+                                </div>
+
+                                @if (_extraFiles.Count > 0)
+                                {
+                                    <div class="interfaces-files">
+                                        @foreach (var file in _extraFiles)
+                                        {
+                                            <div class="interfaces-file-chip">
+                                                <i class="bi bi-paperclip"></i>
+                                                <span>@file.Name</span>
+                                                <small>@FormatSize(file.Size)</small>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+
+                                <div class="actions">
+                                    <button type="button" class="btn btn--secondary" @onclick="AgregarAdjuntosAsync" disabled="@(_savingExtraAttachments || _extraFiles.Count == 0)">
+                                        <i class="bi bi-folder-plus"></i>
+                                        <span>@(_savingExtraAttachments ? "Agregando..." : "Agregar adjuntos")</span>
+                                    </button>
+                                </div>
+                            </div>
+                        }
+
+                        <div class="interfaces-detail__block">
+                            <div class="interfaces-detail__block-head">
+                                <span class="interfaces-detail__label">Cambiar estado</span>
+                            </div>
+                            <div class="filters-grid">
+                                <div class="field">
+                                    <label>Nuevo estado</label>
+                                    <select @bind="_statusChange.IdEstadoNuevo" disabled="_changingState">
+                                        <option value="0">Seleccionar...</option>
+                                        @foreach (var state in _states)
+                                        {
+                                            <option value="@state.IdEstado">@state.Descripcion</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="field field--wide">
+                                    <label>Observación del cambio</label>
+                                    <textarea rows="2" @bind="_statusChange.Observacion" disabled="_changingState"></textarea>
+                                </div>
+                            </div>
+                            <div class="actions">
+                                <button type="button" class="btn btn--secondary" @onclick="CambiarEstadoAsync" disabled="@(_changingState || _statusChange.IdEstadoNuevo == 0)">
+                                    <i class="bi bi-arrow-repeat"></i>
+                                    <span>@(_changingState ? "Actualizando..." : "Actualizar estado")</span>
+                                </button>
+                                @if (_selectedDetail.PermiteEdicion)
+                                {
+                                    <button type="button" class="btn btn--ghost" @onclick="AnularAsync" disabled="_changingState">
+                                        <i class="bi bi-slash-circle"></i>
+                                        <span>Anular comprobante</span>
+                                    </button>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="interfaces-detail__block">
+                            <div class="interfaces-detail__block-head">
+                                <span class="interfaces-detail__label">Historial</span>
+                                <strong>@_selectedDetail.Historial.Count</strong>
+                            </div>
+                            @if (_selectedDetail.Historial.Count == 0)
+                            {
+                                <p>No hay movimientos registrados.</p>
+                            }
+                            else
+                            {
+                                <div class="interfaces-history">
+                                    @foreach (var item in _selectedDetail.Historial)
+                                    {
+                                        <div class="interfaces-history__item">
+                                            <div class="interfaces-history__top">
+                                                <strong>@item.Accion</strong>
+                                                <span>@item.FechaHora.ToString("dd/MM/yyyy HH:mm")</span>
+                                            </div>
+                                            <div class="interfaces-history__meta">
+                                                <span>@item.Usuario</span>
+                                                <span>@item.Pc</span>
+                                            </div>
+                                            @if (!string.IsNullOrWhiteSpace(item.EstadoAnteriorDescripcion) || !string.IsNullOrWhiteSpace(item.EstadoNuevoDescripcion))
+                                            {
+                                                <div class="interfaces-history__meta">
+                                                    <span>@item.EstadoAnteriorDescripcion</span>
+                                                    <span>@item.EstadoNuevoDescripcion</span>
+                                                </div>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(item.Observacion))
+                                            {
+                                                <p>@item.Observacion</p>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </section>
+        </div>
+    </div>
+</div>
+
+@code {
+    private readonly InterfacesFilters _filters = new();
+    private readonly InterfacesCrearComprobanteRequest _nuevo = new();
+    private readonly InterfacesCambioEstadoRequest _statusChange = new();
+    private readonly List<IBrowserFile> _selectedFiles = [];
+    private readonly InterfacesActualizarComprobanteRequest _editForm = new();
+    private readonly List<IBrowserFile> _extraFiles = [];
+    private IReadOnlyList<InterfacesEstadoOptionDto> _states = [];
+    private IReadOnlyList<InterfacesTipoDocumentoOptionDto> _documentTypes = [];
+    private IReadOnlyList<InterfacesInboxItemDto> _items = [];
+    private InterfacesUploadSettingsDto? _settings;
+    private InterfacesDetalleDto? _selectedDetail;
+    private long? _selectedId;
+    private bool _loading;
+    private bool _saving;
+    private bool _savingEdit;
+    private bool _savingExtraAttachments;
+    private bool _removingAttachment;
+    private bool _changingState;
+    private string _message = string.Empty;
+    private bool _isError;
+
+    private DateTime? _filtersDesde = DateTime.Today.AddDays(-30);
+    private DateTime? _filtersHasta = DateTime.Today;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarInicialAsync();
+    }
+
+    private async Task CargarInicialAsync()
+    {
+        _loading = true;
+        try
+        {
+            var statesResult = await UiOps.RunAsync(() => InterfacesSvc.GetStatesAsync(), "No se pudieron cargar los estados.");
+            if (!statesResult.Success)
+            {
+                SetMessage(BuildFeedbackText(statesResult.Feedback), true);
+                return;
+            }
+
+            var typesResult = await UiOps.RunAsync(() => InterfacesSvc.GetDocumentTypesAsync(), "No se pudieron cargar los tipos documentales.");
+            if (!typesResult.Success)
+            {
+                SetMessage(BuildFeedbackText(typesResult.Feedback), true);
+                return;
+            }
+
+            var settingsResult = await UiOps.RunAsync(() => InterfacesConfigSvc.GetUploadSettingsAsync(), "No se pudo cargar la configuración de Interfaces.");
+            if (!settingsResult.Success)
+            {
+                SetMessage(BuildFeedbackText(settingsResult.Feedback), true);
+                return;
+            }
+
+            _states = statesResult.Value ?? [];
+            _documentTypes = typesResult.Value ?? [];
+            _settings = settingsResult.Value;
+
+            await BuscarAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task BuscarAsync()
+    {
+        _loading = true;
+        _filters.Desde = _filtersDesde;
+        _filters.Hasta = _filtersHasta;
+
+        try
+        {
+            var result = await UiOps.RunAsync(() => InterfacesSvc.SearchAsync(_filters), "No se pudieron cargar los comprobantes.");
+            if (!result.Success)
+            {
+                SetMessage(BuildFeedbackText(result.Feedback), true);
+                return;
+            }
+
+            _items = result.Value ?? [];
+            if (_selectedId.HasValue)
+            {
+                var stillExists = _items.Any(x => x.IdComprobanteRecibido == _selectedId.Value);
+                if (stillExists)
+                    await SeleccionarAsync(_selectedId.Value);
+                else
+                    _selectedDetail = null;
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SeleccionarAsync(long id)
+    {
+        _selectedId = id;
+        var result = await UiOps.RunAsync(() => InterfacesSvc.GetByIdAsync(id), "No se pudo cargar el detalle.");
+        if (!result.Success)
+        {
+            SetMessage(BuildFeedbackText(result.Feedback), true);
+            return;
+        }
+
+        _selectedDetail = result.Value;
+        _statusChange.IdComprobanteRecibido = id;
+        _statusChange.IdEstadoNuevo = 0;
+        _statusChange.Observacion = string.Empty;
+        ResetEditarDetalle();
+        _extraFiles.Clear();
+    }
+
+    private async Task HandleFilesSelectedAsync(InputFileChangeEventArgs e)
+    {
+        _selectedFiles.Clear();
+        _selectedFiles.AddRange(e.GetMultipleFiles(20));
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task HandleExtraFilesSelectedAsync(InputFileChangeEventArgs e)
+    {
+        _extraFiles.Clear();
+        _extraFiles.AddRange(e.GetMultipleFiles(20));
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (_settings is null)
+        {
+            SetMessage("No se pudo cargar la configuración de carga.", true);
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var attachments = new List<InterfacesCrearAdjuntoRequest>();
+            var openedStreams = new List<Stream>();
+
+            try
+            {
+                foreach (var file in _selectedFiles)
+                {
+                    var stream = file.OpenReadStream(_settings.TamanoMaximoBytes);
+                    openedStreams.Add(stream);
+                    attachments.Add(new InterfacesCrearAdjuntoRequest
+                    {
+                        NombreArchivo = file.Name,
+                        MimeType = file.ContentType,
+                        TamanoBytes = file.Size,
+                        Contenido = stream
+                    });
+                }
+
+                var request = new InterfacesCrearComprobanteRequest
+                {
+                    IdTipoDocumento = _nuevo.IdTipoDocumento,
+                    Observacion = _nuevo.Observacion,
+                    UsuarioAccion = Environment.UserName,
+                    PcAccion = Environment.MachineName,
+                    Adjuntos = attachments
+                };
+
+                var result = await UiOps.RunAsync(() => InterfacesSvc.CreateAsync(request), "No se pudo registrar el comprobante.");
+                if (!result.Success)
+                {
+                    SetMessage(BuildFeedbackText(result.Feedback), true);
+                    return;
+                }
+
+                var createdId = result.Value;
+                SetMessage($"Comprobante #{createdId} registrado correctamente.", false);
+                LimpiarFormulario();
+                await BuscarAsync();
+                await SeleccionarAsync(createdId);
+            }
+            finally
+            {
+                foreach (var stream in openedStreams)
+                    await stream.DisposeAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            SetMessage(BuildFeedbackText(UiOps.BuildMessage(ex, "No se pudo registrar el comprobante.")), true);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task CambiarEstadoAsync()
+    {
+        if (!_selectedId.HasValue)
+            return;
+
+        _changingState = true;
+        try
+        {
+            _statusChange.IdComprobanteRecibido = _selectedId.Value;
+            _statusChange.UsuarioAccion = Environment.UserName;
+            _statusChange.PcAccion = Environment.MachineName;
+
+            var result = await UiOps.RunAsync(async () =>
+            {
+                await InterfacesSvc.ChangeStatusAsync(_statusChange);
+                return true;
+            }, "No se pudo actualizar el estado.");
+
+            if (!result.Success)
+            {
+                SetMessage(BuildFeedbackText(result.Feedback), true);
+                return;
+            }
+
+            SetMessage("Estado actualizado correctamente.", false);
+            await BuscarAsync();
+            await SeleccionarAsync(_selectedId.Value);
+        }
+        finally
+        {
+            _changingState = false;
+        }
+    }
+
+    private async Task GuardarEdicionAsync()
+    {
+        if (_selectedDetail is null || !_selectedId.HasValue)
+            return;
+
+        _savingEdit = true;
+        try
+        {
+            _editForm.IdComprobanteRecibido = _selectedId.Value;
+            _editForm.UsuarioAccion = Environment.UserName;
+            _editForm.PcAccion = Environment.MachineName;
+
+            var result = await UiOps.RunAsync(async () =>
+            {
+                await InterfacesSvc.UpdateAsync(_editForm);
+                return true;
+            }, "No se pudo guardar el comprobante.");
+
+            if (!result.Success)
+            {
+                SetMessage(BuildFeedbackText(result.Feedback), true);
+                return;
+            }
+
+            SetMessage("Comprobante actualizado correctamente.", false);
+            await BuscarAsync();
+            await SeleccionarAsync(_selectedId.Value);
+        }
+        finally
+        {
+            _savingEdit = false;
+        }
+    }
+
+    private async Task AgregarAdjuntosAsync()
+    {
+        if (_selectedDetail is null || !_selectedId.HasValue || _settings is null)
+            return;
+
+        _savingExtraAttachments = true;
+        try
+        {
+            var attachments = new List<InterfacesCrearAdjuntoRequest>();
+            var openedStreams = new List<Stream>();
+
+            try
+            {
+                foreach (var file in _extraFiles)
+                {
+                    var stream = file.OpenReadStream(_settings.TamanoMaximoBytes);
+                    openedStreams.Add(stream);
+                    attachments.Add(new InterfacesCrearAdjuntoRequest
+                    {
+                        NombreArchivo = file.Name,
+                        MimeType = file.ContentType,
+                        TamanoBytes = file.Size,
+                        Contenido = stream
+                    });
+                }
+
+                var request = new InterfacesAgregarAdjuntosRequest
+                {
+                    IdComprobanteRecibido = _selectedId.Value,
+                    UsuarioAccion = Environment.UserName,
+                    PcAccion = Environment.MachineName,
+                    Adjuntos = attachments
+                };
+
+                var result = await UiOps.RunAsync(async () =>
+                {
+                    await InterfacesSvc.AddAttachmentsAsync(request);
+                    return true;
+                }, "No se pudieron agregar adjuntos.");
+
+                if (!result.Success)
+                {
+                    SetMessage(BuildFeedbackText(result.Feedback), true);
+                    return;
+                }
+
+                _extraFiles.Clear();
+                SetMessage("Adjuntos agregados correctamente.", false);
+                await BuscarAsync();
+                await SeleccionarAsync(_selectedId.Value);
+            }
+            finally
+            {
+                foreach (var stream in openedStreams)
+                    await stream.DisposeAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            SetMessage(BuildFeedbackText(UiOps.BuildMessage(ex, "No se pudieron agregar adjuntos.")), true);
+        }
+        finally
+        {
+            _savingExtraAttachments = false;
+        }
+    }
+
+    private async Task QuitarAdjuntoAsync(long idAdjunto)
+    {
+        if (_selectedDetail is null || !_selectedId.HasValue)
+            return;
+
+        _removingAttachment = true;
+        try
+        {
+            var request = new InterfacesEliminarAdjuntoRequest
+            {
+                IdAdjunto = idAdjunto,
+                UsuarioAccion = Environment.UserName,
+                PcAccion = Environment.MachineName,
+                Observacion = "Adjunto quitado desde la bandeja de Interfaces."
+            };
+
+            var result = await UiOps.RunAsync(async () =>
+            {
+                await InterfacesSvc.RemoveAttachmentAsync(request);
+                return true;
+            }, "No se pudo quitar el adjunto.");
+
+            if (!result.Success)
+            {
+                SetMessage(BuildFeedbackText(result.Feedback), true);
+                return;
+            }
+
+            SetMessage("Adjunto quitado correctamente.", false);
+            await BuscarAsync();
+            await SeleccionarAsync(_selectedId.Value);
+        }
+        finally
+        {
+            _removingAttachment = false;
+        }
+    }
+
+    private async Task AnularAsync()
+    {
+        if (_selectedDetail is null || !_selectedId.HasValue)
+            return;
+
+        var anuladoState = _states.FirstOrDefault(x => string.Equals(x.Codigo, "ANULADO", StringComparison.OrdinalIgnoreCase));
+        if (anuladoState is null)
+        {
+            SetMessage("No existe el estado ANULADO configurado para Interfaces.", true);
+            return;
+        }
+
+        _statusChange.IdEstadoNuevo = anuladoState.IdEstado;
+        if (string.IsNullOrWhiteSpace(_statusChange.Observacion))
+            _statusChange.Observacion = "Comprobante anulado desde la bandeja de Interfaces.";
+        await CambiarEstadoAsync();
+    }
+
+    private async Task RecargarAsync()
+    {
+        _message = string.Empty;
+        await BuscarAsync();
+    }
+
+    private void LimpiarFiltros()
+    {
+        _filtersDesde = DateTime.Today.AddDays(-30);
+        _filtersHasta = DateTime.Today;
+        _filters.IdEstado = null;
+        _filters.IdTipoDocumento = null;
+        _filters.Texto = string.Empty;
+    }
+
+    private void LimpiarFormulario()
+    {
+        _nuevo.IdTipoDocumento = 0;
+        _nuevo.Observacion = string.Empty;
+        _selectedFiles.Clear();
+    }
+
+    private void ResetEditarDetalle()
+    {
+        if (_selectedDetail is null)
+        {
+            _editForm.IdComprobanteRecibido = 0;
+            _editForm.IdTipoDocumento = 0;
+            _editForm.Observacion = string.Empty;
+            return;
+        }
+
+        _editForm.IdComprobanteRecibido = _selectedDetail.IdComprobanteRecibido;
+        _editForm.IdTipoDocumento = _selectedDetail.IdTipoDocumento;
+        _editForm.Observacion = _selectedDetail.Observacion;
+    }
+
+    private void SetMessage(string message, bool isError)
+    {
+        _message = message;
+        _isError = isError;
+    }
+
+    private static string GetSummary(string value)
+        => string.IsNullOrWhiteSpace(value) ? "Sin observación." : value.Length <= 140 ? value : value[..140] + "...";
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes < 1024)
+            return $"{bytes} B";
+        if (bytes < 1024 * 1024)
+            return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / 1024.0 / 1024.0:F1} MB";
+    }
+
+    private static string BuildFeedbackText(AppUiMessage? feedback)
+    {
+        if (feedback is null)
+            return string.Empty;
+
+        var parts = new List<string> { feedback.Message };
+        if (feedback.HasSuggestion)
+            parts.Add(feedback.Suggestion);
+        if (feedback.HasCode)
+            parts.Add($"Código: {feedback.Code}");
+        return string.Join(" ", parts.Where(static x => !string.IsNullOrWhiteSpace(x)));
+    }
+
+    private static string GetAttachmentDownloadUrl(long idAdjunto)
+        => $"/api/interfaces/adjuntos/{idAdjunto}";
+}

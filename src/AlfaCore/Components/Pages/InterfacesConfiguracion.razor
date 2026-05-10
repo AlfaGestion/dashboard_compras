@@ -1,0 +1,246 @@
+@page "/interfaces/configuracion"
+@using AlfaCore.Models
+@inject AlfaCore.Services.IInterfacesConfigService ConfigSvc
+@inject AlfaCore.Services.IAppUiOperationService UiOps
+
+<PageTitle>Configuración de Interfaces | Alfa Gestión</PageTitle>
+
+<section class="page-grid">
+    <div class="page-intro">
+        <div>
+            <h2 class="page-intro__title">Configuración de recepción documental</h2>
+            <p class="page-intro__text">Definí dónde se guardan los documentos recibidos por la bandeja de Interfaces. Esta configuración es independiente de <code>RutaDocumentosCompras</code>, que sigue reservada para documentos ya procesados en otros circuitos.</p>
+        </div>
+        <div class="actions">
+            <a class="btn btn--ghost" href="/interfaces">
+                <i class="bi bi-arrow-left"></i> Volver
+            </a>
+            <button type="button" class="btn btn--ghost" @onclick="LoadAsync" disabled="@(Loading || Saving)">
+                <i class="bi bi-arrow-clockwise"></i> Recargar
+            </button>
+        </div>
+    </div>
+
+    @if (_feedback is not null)
+    {
+        <div class="conversations-inline @GetFeedbackClass(_feedback)">
+            <strong>@_feedback.Title</strong>
+            <div>@_feedback.Message</div>
+            @if (_feedback.HasCode)
+            {
+                <div>Código: @_feedback.Code</div>
+            }
+            @if (_feedback.HasSuggestion)
+            {
+                <div>@_feedback.Suggestion</div>
+            }
+        </div>
+    }
+
+    <div class="conv-config-layout">
+        <section class="panel-card conv-config-form">
+            <div class="panel-card__header">
+                <div>
+                    <h3 class="panel-card__title">Destino de carga</h3>
+                    <p class="panel-card__subtitle">Se guarda en <code>TA_CONFIGURACION</code> y aplica a toda la base activa.</p>
+                </div>
+                <span class="panel-card__tag">INTERFACES</span>
+            </div>
+
+            <div class="conv-config-fields">
+                <div class="field">
+                    <label>Nombre del destino</label>
+                    <input @bind="_config.DestinoNombre" placeholder="Recepción principal" />
+                </div>
+
+                <div class="field">
+                    <label>Tipo de destino</label>
+                    <select @bind="_config.DestinoTipo">
+                        <option value="FTP">FTP</option>
+                        <option value="CARPETA">Carpeta compartida</option>
+                    </select>
+                </div>
+
+                <div class="field conv-config-fields__full">
+                    <label>@(_config.UsaFtp ? "Carpeta remota dentro del FTP" : "Ruta compartida o local")</label>
+                    <input @bind="_config.RutaBase" placeholder="@(_config.UsaFtp ? "/documentos-a-procesar/" : @"\\SERVIDOR\Carpeta\Subcarpeta")" />
+                </div>
+
+                @if (_config.UsaFtp)
+                {
+                    <div class="field">
+                        <label>Host FTP</label>
+                        <input @bind="_config.FtpHost" placeholder="alfanet.ddns.net" />
+                    </div>
+
+                    <div class="field">
+                        <label>Puerto</label>
+                        <input type="number" min="1" @bind="_config.FtpPuerto" />
+                    </div>
+
+                    <div class="field">
+                        <label>Usuario</label>
+                        <input @bind="_config.FtpUsuario" placeholder="ftpalfa" />
+                    </div>
+
+                    <div class="field">
+                        <label>Clave</label>
+                        <input @bind="_config.FtpClave" />
+                    </div>
+
+                    <div class="field">
+                        <label>Modo pasivo</label>
+                        <select @bind="_ftpPassiveText">
+                            <option value="SI">Sí</option>
+                            <option value="NO">No</option>
+                        </select>
+                    </div>
+                }
+
+                <div class="field">
+                    <label>Estado inicial</label>
+                    <input @bind="_config.EstadoInicialCodigo" placeholder="A_PROCESAR" />
+                </div>
+
+                <div class="field">
+                    <label>Tamaño máximo por archivo (MB)</label>
+                    <input type="number" min="1" @bind="_config.TamanoMaximoMb" />
+                </div>
+
+                <div class="field conv-config-fields__full">
+                    <label>Extensiones permitidas</label>
+                    <input @bind="_extensionesTexto" placeholder=".pdf,.jpg,.jpeg,.png,.xls,.xlsx,.csv,.txt" />
+                </div>
+            </div>
+
+            <div class="context-card">
+                <span class="context-card__label">Destino actual esperado</span>
+                <strong>@_config.GetDestinoResumen()</strong>
+                <span class="context-card__muted">Para documentos ya procesados seguí usando <code>RutaDocumentosCompras</code> en el otro circuito.</span>
+            </div>
+
+            <div class="actions">
+                <button type="button" class="btn btn--primary" @onclick="SaveAsync" disabled="@(Loading || Saving)">
+                    <i class="bi bi-floppy-fill"></i> Guardar configuración
+                </button>
+            </div>
+        </section>
+
+        <aside class="panel-card conv-config-help">
+            <div class="panel-card__header">
+                <div>
+                    <h3 class="panel-card__title">Sugerencia técnica</h3>
+                    <p class="panel-card__subtitle">Qué conviene usar según el escenario.</p>
+                </div>
+                <span class="panel-card__tag">Destino</span>
+            </div>
+
+            <div class="context-card">
+                <span class="context-card__label">Para esta etapa</span>
+                <strong>FTP funciona, pero no es lo ideal en seguridad.</strong>
+                <span class="context-card__muted">Como prueba y salida rápida está bien. A mediano plazo conviene migrar a <code>SFTP</code> o <code>FTPS</code>.</span>
+            </div>
+
+            <div class="context-card">
+                <span class="context-card__label">Si querés acceso desde celular</span>
+                <strong>Un destino remoto tiene mucho sentido.</strong>
+                <span class="context-card__muted">Te evita depender de una ruta de Windows y deja listo el camino para cargas externas.</span>
+            </div>
+
+            <div class="context-card">
+                <span class="context-card__label">Valores por defecto</span>
+                <strong>FTP precargado</strong>
+                <span class="context-card__muted">Host <code>alfanet.ddns.net</code>, puerto <code>21</code>, usuario <code>ftpalfa</code>.</span>
+            </div>
+        </aside>
+    </div>
+</section>
+
+@code {
+    private InterfacesUploadSettingsDto _config = new();
+    private bool Loading { get; set; }
+    private bool Saving { get; set; }
+    private AppUiMessage? _feedback;
+    private string _extensionesTexto = string.Empty;
+    private string _ftpPassiveText = "SI";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        Loading = true;
+        _feedback = null;
+
+        var result = await UiOps.RunAsync(
+            () => ConfigSvc.GetUploadSettingsAsync(),
+            "No se pudo cargar la configuración de Interfaces.");
+
+        if (result.Success && result.Value is not null)
+        {
+            _config = result.Value;
+            SyncUi();
+        }
+        else
+        {
+            SyncUi();
+            _feedback = result.Feedback;
+        }
+
+        Loading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        Saving = true;
+        _feedback = null;
+        _config.FtpModoPasivo = string.Equals(_ftpPassiveText, "SI", StringComparison.OrdinalIgnoreCase);
+        _config.ExtensionesPermitidas = ParseExtensions(_extensionesTexto);
+
+        var result = await UiOps.RunAsync(
+            () => ConfigSvc.SaveUploadSettingsAsync(_config),
+            "No se pudo guardar la configuración de Interfaces.");
+
+        if (result.Success)
+        {
+            _feedback = AppUiMessage.Success(
+                "Configuración guardada",
+                "El destino de recepción documental quedó actualizado para la base activa.");
+        }
+        else
+        {
+            _feedback = result.Feedback;
+        }
+
+        Saving = false;
+    }
+
+    private void SyncUi()
+    {
+        _ftpPassiveText = _config.FtpModoPasivo ? "SI" : "NO";
+        _extensionesTexto = string.Join(",", _config.ExtensionesPermitidas);
+    }
+
+    private static IReadOnlyList<string> ParseExtensions(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return [];
+
+        return value
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(static item => item.StartsWith('.') ? item.Trim().ToLowerInvariant() : "." + item.Trim().ToLowerInvariant())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static string GetFeedbackClass(AppUiMessage message)
+        => message.Severity switch
+        {
+            AppUiFeedbackSeverity.Success => "conversations-inline--ok",
+            AppUiFeedbackSeverity.Warning => "conversations-inline--error",
+            AppUiFeedbackSeverity.Error => "conversations-inline--error",
+            _ => "conversations-inline--ok"
+        };
+}
