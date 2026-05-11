@@ -79,6 +79,51 @@ Campos visibles previstos para la primera version:
 - `ConfirmacionContrasena`
 - imagen de usuario opcional
 
+## Patrón de validación adoptado
+
+El modulo `Usuarios` pasa a ser tambien el piloto del patrón de validaciones para ABM.
+
+La validacion queda separada en:
+
+- **UI**
+  - confirmacion de contrasena
+  - marcado visual de campos invalidos
+  - mensajes por campo
+  - conservacion del estado cargado
+
+- **Validador especifico**
+  - `UsuariosValidator`
+  - reglas funcionales del maestro
+  - formato de email
+  - reglas de grupo
+  - unicidad de nombre
+  - restricciones de imagen
+
+- **Servicio**
+  - `UsuariosService`
+  - normaliza el request
+  - invoca al validador
+  - persiste solo si la validacion es correcta
+
+- **SQL**
+  - integridad estructural que ya exista en la tabla
+  - PK actual
+  - defaults
+  - restricciones estables cuando se incorporen
+
+## Objetos tecnicos del patrón
+
+El piloto usa estos conceptos base:
+
+- `ValidationIssue`
+- `ValidationResult`
+- `AppValidationException`
+- `IEntitySaveValidator<T>`
+- `IUsuariosValidator`
+- `UsuariosValidator`
+
+Este patrón debe servir como referencia para otros maestros.
+
 ## Reglas funcionales confirmadas
 
 ### 1. Sistema fijo
@@ -106,6 +151,11 @@ Si:
 entonces:
 
 - no lleva contrasena
+
+Regla de validacion:
+
+- si `EsGrupo = 1`, no debe guardar contrasena
+- si `EsGrupo = 1`, no corresponde `CambiarProximoInicio = 1`
 
 La UI y el servicio deben contemplar esta excepcion en validaciones y persistencia.
 
@@ -147,6 +197,11 @@ Se recomienda encapsularla en un servicio especifico, por ejemplo:
 - puede existir accion explicita para mostrarla
 - la confirmacion debe ser obligatoria al crear o cambiar contrasena
 - al editar un usuario comun, la contrasena debe tratarse como campo sensible
+
+### Regla de validacion
+
+- la confirmacion de contrasena se controla en UI
+- la obligatoriedad y compatibilidad de la contrasena se controlan en `UsuariosValidator`
 
 ## Imagenes de usuario
 
@@ -235,6 +290,7 @@ El modulo `Usuarios` debe servir para validar:
 
 - el patron de grilla base
 - el patron de formulario
+- el patron de validacion por entidad
 - el manejo de baja logica
 - el tratamiento de campos sensibles
 - la integracion de imagenes por filesystem

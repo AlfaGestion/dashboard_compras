@@ -296,6 +296,63 @@ Ejemplos de campos o acciones que suelen requerir tratamiento específico:
 
 La meta no es crear un CRUD genérico académico, sino una base real, mantenible y repetible para módulos maestros del sistema.
 
+### 11.2 Regla específica para validaciones en ABM / CRUD
+
+Para formularios de alta, edición y acciones sensibles en módulos ABM:
+
+- no concentrar toda la validación en la UI
+- no depender de triggers como mecanismo principal de validación funcional
+- no mezclar todas las reglas dentro del servicio de persistencia sin una estructura clara
+
+El patrón esperado es por capas:
+
+- **UI**
+  - validaciones inmediatas de experiencia de usuario
+  - confirmaciones visuales
+  - marcado de campos
+  - conservación del estado ya cargado
+
+- **Validador de entidad**
+  - reglas funcionales del maestro
+  - obligatorios reales
+  - combinaciones inválidas
+  - unicidad funcional
+  - reglas condicionales
+
+- **Servicio del módulo**
+  - orquesta el guardado
+  - llama al validador
+  - persiste solo si la validación es correcta
+  - registra errores técnicos cuando corresponda
+
+- **SQL Server**
+  - integridad estructural
+  - PK
+  - FK
+  - `NOT NULL`
+  - `UNIQUE`
+  - `CHECK` simples y estables
+
+Reglas obligatorias para Codex:
+
+- si una validación es de experiencia o confirmación visual, resolverla en UI
+- si una validación define negocio o consistencia funcional, resolverla en un validador específico del módulo
+- si una validación es estructural y estable, llevarla a SQL cuando aplique
+- no usar triggers como primera opción para reglas que deben ser visibles, mantenibles y testeables desde la aplicación
+- cuando una validación falle, devolver errores por campo cuando sea posible, no solo un mensaje general
+
+Patrón recomendado inicial:
+
+- `ValidationIssue`
+- `ValidationResult`
+- excepción específica de validación para transportar errores funcionales
+- un validador por entidad, por ejemplo:
+  - `UsuariosValidator`
+  - `ClientesValidator`
+  - `ProveedoresValidator`
+
+La meta no es crear un motor de reglas genérico prematuro, sino una base repetible y clara para que cada maestro tenga validaciones mantenibles.
+
 ---
 
 ## 12. Regla de refactor

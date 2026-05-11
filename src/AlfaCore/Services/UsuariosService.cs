@@ -1,5 +1,8 @@
 using AlfaCore.Models;
 using Microsoft.Data.SqlClient;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 
 namespace AlfaCore.Services;
 
@@ -8,12 +11,15 @@ public sealed class UsuariosService(
     ISessionService sessionService,
     IAppEventService appEvents,
     IWebHostEnvironment env,
-    UsuariosPasswordCodec passwordCodec) : IUsuariosService
+    UsuariosPasswordCodec passwordCodec,
+    IUsuariosValidator validator) : IUsuariosService
 {
     private const string ModuleName = "Usuarios";
     private const string SistemaFijo = "CN000PR";
     private const string DefaultCaja = "1";
     private const string DefaultUnidadNegocio = "   1";
+    private const string ConfigGroup = "USUARIOS";
+    private const string ViewConfigPrefix = "USUVIEW-USUARIOS-";
 
     private string ConnectionString => sessionService.GetConnectionString().Length > 0
         ? sessionService.GetConnectionString()
@@ -24,13 +30,20 @@ public sealed class UsuariosService(
         => ExecuteLoggedAsync(ModuleName, "Search", async token =>
         {
             filters ??= new UsuariosFilters();
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+            var hasActivo = await HasActivoColumnAsync(cn, token);
+            var activoExpr = hasActivo ? "ISNULL(Activo, 1)" : "CAST(1 AS bit)";
+            var activoFilterSql = !hasActivo && filters.Activo == false
+                ? "AND 1 = 0"
+                : "AND (@Activo IS NULL OR " + activoExpr + " = @Activo)";
             var sql = $"""
                 SELECT TOP ({Math.Max(1, Math.Min(filters.MaxRows, 500))})
                     ISNULL(NOMBRE, ''),
                     ISNULL(email_de, ''),
                     ISNULL(EsGrupo, 0),
                     ISNULL(CambiarProximoInicio, 0),
-                    ISNULL(Activo, 1),
+                    {activoExpr},
                     FechaHora_Grabacion,
                     FechaHora_Modificacion
                 FROM dbo.TA_USUARIOS
@@ -40,14 +53,12 @@ public sealed class UsuariosService(
                         OR ISNULL(NOMBRE, '') LIKE '%' + @Texto + '%'
                         OR ISNULL(email_de, '') LIKE '%' + @Texto + '%'
                       )
-                  AND (@Activo IS NULL OR ISNULL(Activo, 1) = @Activo)
+                  {activoFilterSql}
                   AND (@EsGrupo IS NULL OR ISNULL(EsGrupo, 0) = @EsGrupo)
-                ORDER BY ISNULL(Activo, 1) DESC, NOMBRE ASC
+                ORDER BY {activoExpr} DESC, NOMBRE ASC
                 """;
 
             var rows = new List<UsuarioGridItemDto>();
-            await using var cn = new SqlConnection(ConnectionString);
-            await cn.OpenAsync(token);
             await using var cmd = new SqlCommand(sql, cn);
             cmd.Parameters.AddWithValue("@Sistema", SistemaFijo);
             cmd.Parameters.AddWithValue("@Texto", filters.Texto?.Trim() ?? string.Empty);
@@ -80,13 +91,17 @@ public sealed class UsuariosService(
             if (string.IsNullOrWhiteSpace(nombre))
                 return null;
 
-            const string sql = """
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+            var hasActivo = await HasActivoColumnAsync(cn, token);
+
+            var sql = $"""
                 SELECT
                     ISNULL(NOMBRE, ''),
                     ISNULL(email_de, ''),
                     ISNULL(EsGrupo, 0),
                     ISNULL(CambiarProximoInicio, 0),
-                    ISNULL(Activo, 1),
+                    {(hasActivo ? "ISNULL(Activo, 1)" : "CAST(1 AS bit)")},
                     ISNULL(PASSWORD, ''),
                     FechaHora_Grabacion,
                     FechaHora_Modificacion
@@ -94,9 +109,6 @@ public sealed class UsuariosService(
                 WHERE UPPER(LTRIM(RTRIM(SISTEMA))) = @Sistema
                   AND UPPER(LTRIM(RTRIM(NOMBRE))) = @Nombre
                 """;
-
-            await using var cn = new SqlConnection(ConnectionString);
-            await cn.OpenAsync(token);
             await using var cmd = new SqlCommand(sql, cn);
             cmd.Parameters.AddWithValue("@Sistema", SistemaFijo);
             cmd.Parameters.AddWithValue("@Nombre", nombre.Trim().ToUpperInvariant());
@@ -129,37 +141,24 @@ public sealed class UsuariosService(
         {
             ArgumentNullException.ThrowIfNull(request);
             var normalized = NormalizeRequest(request);
-            ValidateRequest(normalized);
+            var validation = await validator.ValidateForSaveAsync(normalized, token);
+            if (!validation.IsValid)
+                throw new AppValidationException("Revisá los datos del usuario antes de guardar.", validation);
 
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync(token);
+            var hasActivo = await HasActivoColumnAsync(cn, token);
 
             var isNew = string.IsNullOrWhiteSpace(normalized.NombreOriginal);
             var oldName = normalized.NombreOriginal.Trim();
             var newName = normalized.Nombre.Trim();
 
-            if (isNew)
-            {
-                if (await ExistsAsync(cn, newName, token))
-                    throw new InvalidOperationException("Ya existe un usuario con ese nombre en el sistema actual.");
-            }
-            else
-            {
-                if (!await ExistsAsync(cn, oldName, token))
-                    throw new InvalidOperationException("El usuario seleccionado ya no existe en la base activa.");
-
-                if (!string.Equals(oldName, newName, StringComparison.OrdinalIgnoreCase) &&
-                    await ExistsAsync(cn, newName, token))
-                {
-                    throw new InvalidOperationException("Ya existe otro usuario con ese nombre en el sistema actual.");
-                }
-            }
-
             await using var tx = await cn.BeginTransactionAsync(token);
 
             if (isNew)
             {
-                const string insertSql = """
+                var insertSql = hasActivo
+                    ? """
                     INSERT INTO dbo.TA_USUARIOS
                     (
                         Nombre,
@@ -189,6 +188,36 @@ public sealed class UsuariosService(
                         @Email,
                         @ModificaArt,
                         1
+                    );
+                    """
+                    : """
+                    INSERT INTO dbo.TA_USUARIOS
+                    (
+                        Nombre,
+                        Sistema,
+                        Password,
+                        FechaHora_Grabacion,
+                        FechaHora_Modificacion,
+                        CambiarProximoInicio,
+                        EsGrupo,
+                        IDCAJA,
+                        UNEGOCIO,
+                        email_de,
+                        V_ModificaArtLuegoDeCargado
+                    )
+                    VALUES
+                    (
+                        @Nombre,
+                        @Sistema,
+                        @Password,
+                        GETDATE(),
+                        GETDATE(),
+                        @CambiarProximoInicio,
+                        @EsGrupo,
+                        @IdCaja,
+                        @UNegocio,
+                        @Email,
+                        @ModificaArt
                     );
                     """;
 
@@ -249,6 +278,11 @@ public sealed class UsuariosService(
             if (string.IsNullOrWhiteSpace(nombre))
                 throw new InvalidOperationException("No se recibió el usuario a desactivar.");
 
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+            if (!await HasActivoColumnAsync(cn, token))
+                throw new InvalidOperationException("La base activa no tiene la columna Activo en TA_USUARIOS, por eso no se puede hacer baja lógica.");
+
             const string sql = """
                 UPDATE dbo.TA_USUARIOS
                 SET
@@ -258,8 +292,6 @@ public sealed class UsuariosService(
                   AND UPPER(LTRIM(RTRIM(Nombre))) = @Nombre;
                 """;
 
-            await using var cn = new SqlConnection(ConnectionString);
-            await cn.OpenAsync(token);
             await using var cmd = new SqlCommand(sql, cn);
             cmd.Parameters.AddWithValue("@Sistema", SistemaFijo);
             cmd.Parameters.AddWithValue("@Nombre", nombre.Trim().ToUpperInvariant());
@@ -276,6 +308,107 @@ public sealed class UsuariosService(
                 new { Nombre = nombre.Trim(), Activo = false },
                 token);
         }, "No se pudo dar de baja el usuario.", ct);
+
+    public Task<UsuariosViewSettingsDto> GetViewSettingsAsync(string userName, CancellationToken ct = default)
+        => ExecuteLoggedAsync(ModuleName, "GetViewSettings", async token =>
+        {
+            if (string.IsNullOrWhiteSpace(userName))
+                return CreateDefaultViewSettings();
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+            var detailColumn = await ResolveConfigDetailColumnAsync(cn, token);
+            var configKey = BuildViewConfigKey(userName);
+            var sql = $"""
+                SELECT TOP (1)
+                    ISNULL(VALOR, ''),
+                    ISNULL({detailColumn}, '')
+                FROM dbo.TA_CONFIGURACION
+                WHERE UPPER(LTRIM(RTRIM(CLAVE))) = @Clave;
+                """;
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.AddWithValue("@Clave", configKey.ToUpperInvariant());
+            await using var rd = await cmd.ExecuteReaderAsync(token);
+            if (!await rd.ReadAsync(token))
+                return CreateDefaultViewSettings();
+
+            var raw = ResolveStoredValue(GetString(rd, 0), GetString(rd, 1));
+            if (string.IsNullOrWhiteSpace(raw))
+                return CreateDefaultViewSettings();
+
+            var parsed = JsonSerializer.Deserialize<UsuariosViewSettingsDto>(raw, JsonOptions);
+            return NormalizeViewSettings(parsed);
+        }, "No se pudo cargar la configuración de vista.", ct);
+
+    public Task SaveViewSettingsAsync(string userName, UsuariosViewSettingsDto settings, CancellationToken ct = default)
+        => ExecuteLoggedAsync(ModuleName, "SaveViewSettings", async token =>
+        {
+            if (string.IsNullOrWhiteSpace(userName))
+                throw new InvalidOperationException("No hay un usuario logueado para guardar la vista.");
+
+            var normalized = NormalizeViewSettings(settings);
+            var serialized = JsonSerializer.Serialize(normalized, JsonOptions);
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+            var detailColumn = await ResolveConfigDetailColumnAsync(cn, token);
+            var stored = SplitStoredValue(serialized);
+            var configKey = BuildViewConfigKey(userName);
+            var sql = $"""
+                UPDATE dbo.TA_CONFIGURACION
+                SET
+                    VALOR = @Valor,
+                    {detailColumn} = @ValorAux,
+                    GRUPO = @Grupo,
+                    FechaHora_Modificacion = GETDATE()
+                WHERE UPPER(LTRIM(RTRIM(CLAVE))) = @ClaveNormalizada;
+
+                IF @@ROWCOUNT = 0
+                BEGIN
+                    INSERT INTO dbo.TA_CONFIGURACION
+                    (
+                        CLAVE,
+                        VALOR,
+                        {detailColumn},
+                        GRUPO,
+                        FechaHora_Grabacion,
+                        FechaHora_Modificacion
+                    )
+                    VALUES
+                    (
+                        @Clave,
+                        @Valor,
+                        @ValorAux,
+                        @Grupo,
+                        GETDATE(),
+                        GETDATE()
+                    );
+                END;
+                """;
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.AddWithValue("@ClaveNormalizada", configKey.ToUpperInvariant());
+            cmd.Parameters.AddWithValue("@Clave", configKey);
+            cmd.Parameters.AddWithValue("@Valor", DbNullable(stored.Value));
+            cmd.Parameters.AddWithValue("@ValorAux", DbNullable(stored.AuxValue));
+            cmd.Parameters.AddWithValue("@Grupo", ConfigGroup);
+            await cmd.ExecuteNonQueryAsync(token);
+
+            await appEvents.LogAuditAsync(
+                ModuleName,
+                "SaveViewSettings",
+                "TA_CONFIGURACION",
+                configKey,
+                "Configuración de vista de usuarios actualizada.",
+                new
+                {
+                    UserName = userName.Trim(),
+                    normalized.AgruparPor,
+                    Columnas = normalized.Columnas
+                },
+                token);
+        }, "No se pudo guardar la configuración de vista.", ct);
 
     public Task<UsuarioPhotoServeDto?> GetPhotoForServeAsync(string nombre, CancellationToken ct = default)
         => ExecuteLoggedAsync(ModuleName, "GetPhotoForServe", async token =>
@@ -362,50 +495,6 @@ public sealed class UsuariosService(
             QuitarFoto = request.QuitarFoto
         };
 
-    private static void ValidateRequest(UsuarioSaveRequest request)
-    {
-        if (string.IsNullOrWhiteSpace(request.Nombre))
-            throw new InvalidOperationException("El nombre de usuario es obligatorio.");
-
-        if (request.Nombre.Length > 50)
-            throw new InvalidOperationException("El nombre de usuario no puede superar los 50 caracteres.");
-
-        if (request.Email.Length > 150)
-            throw new InvalidOperationException("El email no puede superar los 150 caracteres.");
-
-        if (!request.EsGrupo)
-        {
-            if (string.IsNullOrWhiteSpace(request.Contrasena))
-                throw new InvalidOperationException("La contraseña es obligatoria para usuarios comunes.");
-
-            if (request.Contrasena.Length > 13)
-                throw new InvalidOperationException("La contraseña no puede superar los 13 caracteres por compatibilidad con la base actual.");
-        }
-
-        if (request.FotoContenido is { Length: > 0 })
-        {
-            var extension = Path.GetExtension(request.FotoNombreOriginal ?? string.Empty).Trim().ToLowerInvariant();
-            if (extension is not ".jpg" and not ".jpeg")
-                throw new InvalidOperationException("La imagen del usuario debe estar en formato JPG.");
-        }
-    }
-
-    private async Task<bool> ExistsAsync(SqlConnection cn, string nombre, CancellationToken ct)
-    {
-        const string sql = """
-            SELECT COUNT(1)
-            FROM dbo.TA_USUARIOS
-            WHERE UPPER(LTRIM(RTRIM(SISTEMA))) = @Sistema
-              AND UPPER(LTRIM(RTRIM(NOMBRE))) = @Nombre;
-            """;
-
-        await using var cmd = new SqlCommand(sql, cn);
-        cmd.Parameters.AddWithValue("@Sistema", SistemaFijo);
-        cmd.Parameters.AddWithValue("@Nombre", nombre.Trim().ToUpperInvariant());
-        var result = await cmd.ExecuteScalarAsync(ct);
-        return Convert.ToInt32(result) > 0;
-    }
-
     private async Task<bool> PhotoExistsAsync(string nombre, CancellationToken ct)
     {
         var path = await TryResolvePhotoPathAsync(nombre, ct);
@@ -439,7 +528,7 @@ public sealed class UsuariosService(
     {
         await using var cn = new SqlConnection(ConnectionString);
         await cn.OpenAsync(ct);
-        var detailColumn = await ResolveDetailColumnAsync(cn, ct);
+        var detailColumn = await ResolveConfigDetailColumnAsync(cn, ct);
 
         var sql = $"""
             SELECT TOP (1)
@@ -457,14 +546,14 @@ public sealed class UsuariosService(
         return ResolveStoredValue(GetString(rd, 0), GetString(rd, 1));
     }
 
-    private static async Task<string> ResolveDetailColumnAsync(SqlConnection cn, CancellationToken ct)
+    private static async Task<string> ResolveConfigDetailColumnAsync(SqlConnection cn, CancellationToken ct)
     {
         const string sql = """
             SELECT TOP (1) name
             FROM sys.columns
             WHERE object_id = OBJECT_ID(N'dbo.TA_CONFIGURACION')
-              AND LOWER(name) IN (N'valoraux', N'valor_aux')
-            ORDER BY name
+              AND LOWER(name) IN (N'valoraux', N'valor_aux', N'descripcion')
+            ORDER BY CASE WHEN LOWER(name) IN (N'valoraux', N'valor_aux') THEN 0 ELSE 1 END, name
             """;
 
         await using var cmd = new SqlCommand(sql, cn);
@@ -473,8 +562,119 @@ public sealed class UsuariosService(
         return string.IsNullOrWhiteSpace(column) ? "DESCRIPCION" : column;
     }
 
+    private static async Task<bool> HasActivoColumnAsync(SqlConnection cn, CancellationToken ct)
+    {
+        const string sql = """
+            SELECT COUNT(1)
+            FROM sys.columns
+            WHERE object_id = OBJECT_ID(N'dbo.TA_USUARIOS')
+              AND LOWER(name) = N'activo';
+            """;
+
+        await using var cmd = new SqlCommand(sql, cn);
+        var result = await cmd.ExecuteScalarAsync(ct);
+        return Convert.ToInt32(result) > 0;
+    }
+
     private static string ResolveStoredValue(string value, string auxValue)
         => !string.IsNullOrWhiteSpace(value) ? value.Trim() : auxValue.Trim();
+
+    private static (string Value, string AuxValue) SplitStoredValue(string? value)
+    {
+        var normalized = string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+        if (normalized.Length > 150)
+            return (string.Empty, normalized);
+
+        return (normalized, string.Empty);
+    }
+
+    private static string BuildViewConfigKey(string userName)
+    {
+        var normalized = userName.Trim().ToUpperInvariant();
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalized)));
+        return $"{ViewConfigPrefix}{hash[..24]}";
+    }
+
+    private static UsuariosViewSettingsDto CreateDefaultViewSettings()
+        => new()
+        {
+            AgruparPor = UsuariosViewGroupKeys.None,
+            Columnas =
+            [
+                new() { Key = UsuariosViewColumnKeys.Nombre, Label = "Nombre", Visible = true, Order = 0 },
+                new() { Key = UsuariosViewColumnKeys.Email, Label = "Email", Visible = true, Order = 1 },
+                new() { Key = UsuariosViewColumnKeys.Tipo, Label = "Tipo", Visible = true, Order = 2 },
+                new() { Key = UsuariosViewColumnKeys.CambiarClave, Label = "Clave próximo inicio", Visible = true, Order = 3 },
+                new() { Key = UsuariosViewColumnKeys.Activo, Label = "Activo", Visible = true, Order = 4 },
+                new() { Key = UsuariosViewColumnKeys.Alta, Label = "Alta", Visible = false, Order = 5 },
+                new() { Key = UsuariosViewColumnKeys.Modificacion, Label = "Modificación", Visible = true, Order = 6 }
+            ]
+        };
+
+    private static UsuariosViewSettingsDto NormalizeViewSettings(UsuariosViewSettingsDto? settings)
+    {
+        var defaults = CreateDefaultViewSettings();
+        if (settings is null)
+            return defaults;
+
+        var incoming = settings.Columnas
+            .Where(c => !string.IsNullOrWhiteSpace(c.Key))
+            .ToDictionary(c => c.Key.Trim(), StringComparer.OrdinalIgnoreCase);
+
+        var normalized = new UsuariosViewSettingsDto
+        {
+            AgruparPor = NormalizeGroupKey(settings.AgruparPor),
+            Columnas = defaults.Columnas
+                .Select(defaultCol =>
+                {
+                    if (!incoming.TryGetValue(defaultCol.Key, out var source))
+                    {
+                        return new UsuarioViewColumnDto
+                        {
+                            Key = defaultCol.Key,
+                            Label = defaultCol.Label,
+                            Visible = defaultCol.Visible,
+                            Order = defaultCol.Order
+                        };
+                    }
+
+                    return new UsuarioViewColumnDto
+                    {
+                        Key = defaultCol.Key,
+                        Label = defaultCol.Label,
+                        Visible = source.Visible,
+                        Order = source.Order
+                    };
+                })
+                .OrderBy(c => c.Order)
+                .ThenBy(c => c.Label, StringComparer.CurrentCultureIgnoreCase)
+                .Select((column, index) =>
+                {
+                    column.Order = index;
+                    return column;
+                })
+                .ToList()
+        };
+
+        if (!normalized.Columnas.Any(c => c.Visible))
+            normalized.Columnas[0].Visible = true;
+
+        return normalized;
+    }
+
+    private static string NormalizeGroupKey(string? groupKey)
+        => groupKey?.Trim() switch
+        {
+            UsuariosViewGroupKeys.Tipo => UsuariosViewGroupKeys.Tipo,
+            UsuariosViewGroupKeys.Activo => UsuariosViewGroupKeys.Activo,
+            UsuariosViewGroupKeys.CambiarClave => UsuariosViewGroupKeys.CambiarClave,
+            _ => UsuariosViewGroupKeys.None
+        };
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
 
     private static string GetString(SqlDataReader rd, int index)
         => rd.IsDBNull(index) ? string.Empty : Convert.ToString(rd.GetValue(index)) ?? string.Empty;

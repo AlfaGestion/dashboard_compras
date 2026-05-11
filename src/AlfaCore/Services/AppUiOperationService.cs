@@ -35,6 +35,17 @@ public sealed class AppUiOperationService : IAppUiOperationService
 
     public AppUiMessage BuildMessage(Exception exception, string fallbackTitle)
     {
+        if (exception is AppValidationException validationEx)
+        {
+            return new AppUiMessage
+            {
+                Severity = AppUiFeedbackSeverity.Warning,
+                Title = fallbackTitle,
+                Message = validationEx.UserMessage,
+                Suggestion = "Revisá los campos marcados y volvé a intentar."
+            };
+        }
+
         if (exception is AppUserFacingException appEx)
             return BuildFromKnownException(appEx.UserMessage, appEx.ErrorCode, appEx.InnerException, fallbackTitle);
 

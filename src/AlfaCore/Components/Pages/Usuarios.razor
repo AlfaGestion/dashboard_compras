@@ -1,8 +1,11 @@
 @page "/usuarios"
 @using AlfaCore.Models
+@using AlfaCore.Services
 @using Microsoft.AspNetCore.Components.Forms
 @inject AlfaCore.Services.IUsuariosService UsuariosSvc
 @inject AlfaCore.Services.IAppUiOperationService UiOps
+@inject AlfaCore.Services.IAppUserSessionService AppUserSession
+@implements IDisposable
 
 <PageTitle>Usuarios | Alfa Gestión</PageTitle>
 
@@ -85,6 +88,59 @@
         </div>
     </section>
 
+    @if (_showViewSettings && !_showEditor)
+    {
+        <section class="panel-card">
+            <div class="panel-card__header">
+                <div>
+                    <h3 class="panel-card__title">Configuración de vista</h3>
+                    <p class="panel-card__subtitle">Elegí columnas visibles, orden y agrupación para tu grilla de usuarios.</p>
+                </div>
+            </div>
+
+            <div class="usuarios-view-settings">
+                <div class="field">
+                    <label>Agrupar por</label>
+                    <select @bind="_draftAgruparPor">
+                        <option value="@UsuariosViewGroupKeys.None">Sin agrupar</option>
+                        <option value="@UsuariosViewGroupKeys.Tipo">Tipo</option>
+                        <option value="@UsuariosViewGroupKeys.Activo">Activo</option>
+                        <option value="@UsuariosViewGroupKeys.CambiarClave">Clave próximo inicio</option>
+                    </select>
+                </div>
+
+                <div class="usuarios-view-settings__list">
+                    @foreach (var column in _viewSettingsDraft.OrderBy(c => c.Order))
+                    {
+                        <div class="usuarios-view-settings__item">
+                            <label class="checkbox">
+                                <input type="checkbox" checked="@column.Visible" @onchange="args => ToggleViewColumn(column.Key, args)" />
+                                <span>@column.Label</span>
+                            </label>
+                            <div class="actions">
+                                <button type="button" class="btn btn--ghost btn--sm" @onclick="() => MoveViewColumn(column.Key, -1)">
+                                    <i class="bi bi-arrow-up"></i>
+                                </button>
+                                <button type="button" class="btn btn--ghost btn--sm" @onclick="() => MoveViewColumn(column.Key, 1)">
+                                    <i class="bi bi-arrow-down"></i>
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <div class="actions">
+                    <button type="button" class="btn btn--primary" @onclick="GuardarConfiguracionVistaAsync">
+                        <i class="bi bi-floppy"></i> Guardar vista
+                    </button>
+                    <button type="button" class="btn btn--ghost" @onclick="CancelarConfiguracionVista">
+                        <i class="bi bi-x-circle"></i> Cancelar
+                    </button>
+                </div>
+            </div>
+        </section>
+    }
+
     @if (_showEditor)
     {
         <section class="panel-card">
@@ -138,6 +194,10 @@
                             <span>Quitar</span>
                         </button>
                     </div>
+                    @if (HasFieldError("foto"))
+                    {
+                        <small class="usuarios-field-error">@GetFieldError("foto")</small>
+                    }
                     <p class="usuarios-photo-hint">La imagen se guarda como JPG en `RutaImagenes\USUARIOS\&lt;Nombre&gt;.jpg`.</p>
                 </div>
 
@@ -146,16 +206,26 @@
                         <div class="field">
                             <label>Nombre de usuario</label>
                             <input type="text"
+                                   class="@GetFieldInputClass("nombre")"
                                    maxlength="50"
                                    @bind="_form.Nombre"
                                    disabled="@_saving" />
+                            @if (HasFieldError("nombre"))
+                            {
+                                <small class="usuarios-field-error">@GetFieldError("nombre")</small>
+                            }
                         </div>
                         <div class="field">
                             <label>Email</label>
                             <input type="email"
+                                   class="@GetFieldInputClass("email")"
                                    maxlength="150"
                                    @bind="_form.Email"
                                    disabled="@_saving" />
+                            @if (HasFieldError("email"))
+                            {
+                                <small class="usuarios-field-error">@GetFieldError("email")</small>
+                            }
                         </div>
                     </div>
 
@@ -169,6 +239,10 @@
                             <span>Cambiar contraseña en el próximo inicio</span>
                         </label>
                     </div>
+                    @if (HasFieldError("cambiar-proximo-inicio"))
+                    {
+                        <small class="usuarios-field-error">@GetFieldError("cambiar-proximo-inicio")</small>
+                    }
 
                     @if (_form.EsGrupo)
                     {
@@ -193,16 +267,26 @@
                                 <div class="field">
                                     <label>Contraseña</label>
                                     <input type="@(_showPassword ? "text" : "password")"
+                                           class="@GetFieldInputClass("contrasena")"
                                            maxlength="13"
                                            @bind="_form.Contrasena"
                                            disabled="@_saving" />
+                                    @if (HasFieldError("contrasena"))
+                                    {
+                                        <small class="usuarios-field-error">@GetFieldError("contrasena")</small>
+                                    }
                                 </div>
                                 <div class="field">
                                     <label>Confirmación</label>
                                     <input type="@(_showPassword ? "text" : "password")"
+                                           class="@GetFieldInputClass("confirmacion")"
                                            maxlength="13"
                                            @bind="_confirmacionContrasena"
                                            disabled="@_saving" />
+                                    @if (HasFieldError("confirmacion"))
+                                    {
+                                        <small class="usuarios-field-error">@GetFieldError("confirmacion")</small>
+                                    }
                                 </div>
                             </div>
                         </div>
@@ -239,11 +323,20 @@
     }
     else
     {
+        var visibleColumns = GetVisibleColumns();
+        var groups = BuildGridGroups();
+
         <section class="panel-card">
             <div class="panel-card__header">
                 <div>
                     <h3 class="panel-card__title">Usuarios</h3>
                     <p class="panel-card__subtitle">@_items.Count registro(s) · doble clic para abrir la ficha.</p>
+                </div>
+                <div class="actions">
+                    <button type="button" class="btn btn--ghost" @onclick="AbrirConfiguracionVista">
+                        <i class="bi bi-sliders"></i> Configurar vista
+                    </button>
+                    <span class="panel-card__subtitle">Agrupación: @GetGroupingLabel(_viewSettings.AgruparPor)</span>
                 </div>
             </div>
 
@@ -261,45 +354,74 @@
                     <table class="data-table usuarios-table">
                         <thead>
                             <tr>
-                                <th>Nombre</th>
-                                <th>Email</th>
-                                <th>Tipo</th>
-                                <th>Clave próximo inicio</th>
-                                <th>Activo</th>
-                                <th>Modificación</th>
+                                @foreach (var column in visibleColumns)
+                                {
+                                    <th>@column.Label</th>
+                                }
                             </tr>
                         </thead>
-                        <tbody>
-                            @foreach (var item in _items)
-                            {
-                                <tr class="@(IsSelected(item) ? "usuarios-table__row is-selected" : "usuarios-table__row")"
-                                    @onclick="() => SeleccionarFila(item.Nombre)"
-                                    @ondblclick="() => AbrirEditorAsync(item.Nombre)">
-                                    <td>
-                                        <div class="usuarios-table__name">
-                                            @if (item.TieneFoto)
-                                            {
-                                                <span class="usuarios-table__avatar usuarios-table__avatar--filled">
-                                                    <i class="bi bi-person-badge"></i>
-                                                </span>
-                                            }
-                                            else
-                                            {
-                                                <span class="usuarios-table__avatar">
-                                                    <i class="bi bi-person"></i>
-                                                </span>
-                                            }
-                                            <strong>@item.Nombre</strong>
-                                        </div>
-                                    </td>
-                                    <td>@(string.IsNullOrWhiteSpace(item.Email) ? "—" : item.Email)</td>
-                                    <td>@(item.EsGrupo ? "Grupo" : "Usuario")</td>
-                                    <td>@(item.EsGrupo ? "No aplica" : item.CambiarProximoInicio ? "Sí" : "No")</td>
-                                    <td>@(item.Activo ? "Sí" : "No")</td>
-                                    <td>@FormatDate(item.FechaHoraModificacion ?? item.FechaHoraGrabacion)</td>
-                                </tr>
-                            }
-                        </tbody>
+                        @foreach (var group in groups)
+                        {
+                            <tbody>
+                                @if (group.ShowHeader)
+                                {
+                                    <tr class="usuarios-group-row">
+                                        <td colspan="@visibleColumns.Count">@group.Label</td>
+                                    </tr>
+                                }
+
+                                @foreach (var item in group.Items)
+                                {
+                                    <tr class="@(IsSelected(item) ? "usuarios-table__row is-selected" : "usuarios-table__row")"
+                                        @onclick="() => SeleccionarFila(item.Nombre)"
+                                        @ondblclick="() => AbrirEditorAsync(item.Nombre)">
+                                        @foreach (var column in visibleColumns)
+                                        {
+                                            <td>
+                                                @switch (column.Key)
+                                                {
+                                                    case UsuariosViewColumnKeys.Nombre:
+                                                        <div class="usuarios-table__name">
+                                                            @if (item.TieneFoto)
+                                                            {
+                                                                <span class="usuarios-table__avatar usuarios-table__avatar--filled">
+                                                                    <i class="bi bi-person-badge"></i>
+                                                                </span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="usuarios-table__avatar">
+                                                                    <i class="bi bi-person"></i>
+                                                                </span>
+                                                            }
+                                                            <strong>@item.Nombre</strong>
+                                                        </div>
+                                                        break;
+                                                    case UsuariosViewColumnKeys.Email:
+                                                        @(string.IsNullOrWhiteSpace(item.Email) ? "—" : item.Email)
+                                                        break;
+                                                    case UsuariosViewColumnKeys.Tipo:
+                                                        @(item.EsGrupo ? "Grupo" : "Usuario")
+                                                        break;
+                                                    case UsuariosViewColumnKeys.CambiarClave:
+                                                        @(item.EsGrupo ? "No aplica" : item.CambiarProximoInicio ? "Sí" : "No")
+                                                        break;
+                                                    case UsuariosViewColumnKeys.Activo:
+                                                        @(item.Activo ? "Sí" : "No")
+                                                        break;
+                                                    case UsuariosViewColumnKeys.Alta:
+                                                        @FormatDate(item.FechaHoraGrabacion)
+                                                        break;
+                                                    case UsuariosViewColumnKeys.Modificacion:
+                                                        @FormatDate(item.FechaHoraModificacion ?? item.FechaHoraGrabacion)
+                                                        break;
+                                                }
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        }
                     </table>
                 </div>
             }
@@ -311,20 +433,27 @@
     private readonly UsuariosFilters _filters = new();
     private readonly UsuarioSaveRequest _form = new();
     private readonly List<UsuarioGridItemDto> _items = [];
+    private readonly List<UsuarioViewColumnDto> _viewSettingsDraft = [];
+    private readonly Dictionary<string, string> _fieldErrors = new(StringComparer.OrdinalIgnoreCase);
     private AppUiMessage? _feedback;
     private PendingUserPhoto? _pendingPhoto;
+    private UsuariosViewSettingsDto _viewSettings = BuildDefaultViewSettings();
     private bool _loadingList;
     private bool _saving;
     private bool _isNewMode = true;
     private bool _showEditor;
     private bool _showPassword;
     private bool _selectedActivo = true;
+    private bool _showViewSettings;
+    private bool _viewSettingsLoaded;
     private int _photoPickerVersion;
     private string _selectedNombre = string.Empty;
     private string _confirmacionContrasena = string.Empty;
     private string _activoFiltro = "1";
     private string _grupoFiltro = string.Empty;
     private string _existingPhotoCacheToken = string.Empty;
+    private string _draftAgruparPor = UsuariosViewGroupKeys.None;
+    private string _viewSettingsUserName = string.Empty;
     private DateTime? _selectedAlta;
     private DateTime? _selectedModificacion;
 
@@ -339,11 +468,17 @@
 
     protected override async Task OnInitializedAsync()
     {
+        AppUserSession.StateChanged += OnAppUserSessionChanged;
+        await EnsureViewSettingsLoadedAsync();
         await BuscarAsync();
     }
 
+    public void Dispose()
+        => AppUserSession.StateChanged -= OnAppUserSessionChanged;
+
     private async Task RecargarAsync()
     {
+        await EnsureViewSettingsLoadedAsync(force: true);
         await BuscarAsync();
 
         if (!_isNewMode && !string.IsNullOrWhiteSpace(_selectedNombre))
@@ -403,7 +538,9 @@
 
     private void BeginNew()
     {
+        ClearFieldErrors();
         _showEditor = true;
+        _showViewSettings = false;
         _isNewMode = true;
         _selectedNombre = string.Empty;
         _selectedAlta = null;
@@ -429,6 +566,7 @@
 
     private void CerrarEditor()
     {
+        ClearFieldErrors();
         _showEditor = false;
         _showPassword = false;
         _pendingPhoto = null;
@@ -437,6 +575,7 @@
 
     private void ResetForm()
     {
+        ClearFieldErrors();
         if (_isNewMode)
         {
             BeginNew();
@@ -448,13 +587,15 @@
 
     private async Task GuardarAsync()
     {
+        ClearFieldErrors();
         if (!_form.EsGrupo && !string.Equals(_form.Contrasena, _confirmacionContrasena, StringComparison.Ordinal))
         {
+            SetFieldError("confirmacion", "La confirmación de la contraseña no coincide.");
             SetFeedback(new AppUiMessage
             {
                 Severity = AppUiFeedbackSeverity.Warning,
-                Title = "Confirmación inválida",
-                Message = "La confirmación de la contraseña no coincide."
+                Title = "Revisá los datos del usuario",
+                Message = "Corregí los campos marcados antes de guardar."
             });
             return;
         }
@@ -467,16 +608,28 @@
             _form.FotoNombreOriginal = _pendingPhoto?.NombreArchivo ?? string.Empty;
             _form.FotoMimeType = _pendingPhoto?.MimeType ?? string.Empty;
 
-            var result = await UiOps.RunAsync(() => UsuariosSvc.SaveAsync(_form), "No se pudo guardar el usuario.");
-            if (!result.Success || string.IsNullOrWhiteSpace(result.Value))
+            try
             {
-                SetFeedback(result.Feedback);
-                return;
+                var savedName = await UsuariosSvc.SaveAsync(_form);
+                SetFeedback(AppUiMessage.Success("Usuario guardado", $"El usuario {savedName} se guardó correctamente."));
+                await BuscarAsync();
+                await SeleccionarAsync(savedName);
             }
-
-            SetFeedback(AppUiMessage.Success("Usuario guardado", $"El usuario {result.Value} se guardó correctamente."));
-            await BuscarAsync();
-            await SeleccionarAsync(result.Value);
+            catch (AppValidationException validationEx)
+            {
+                ApplyFieldErrors(validationEx.Validation);
+                SetFeedback(new AppUiMessage
+                {
+                    Severity = AppUiFeedbackSeverity.Warning,
+                    Title = "Revisá los datos del usuario",
+                    Message = validationEx.UserMessage,
+                    Suggestion = "Corregí los campos marcados y volvé a intentar."
+                });
+            }
+            catch (Exception ex)
+            {
+                SetFeedback(UiOps.BuildMessage(ex, "No se pudo guardar el usuario."));
+            }
         }
         finally
         {
@@ -492,6 +645,7 @@
     private async Task AbrirEditorAsync(string nombre)
     {
         _showEditor = true;
+        _showViewSettings = false;
         await SeleccionarAsync(nombre);
     }
 
@@ -512,6 +666,7 @@
 
             SetFeedback(AppUiMessage.Success("Usuario dado de baja", $"El usuario {_selectedNombre} quedó inactivo."));
             BeginNew();
+            _showEditor = false;
             await BuscarAsync();
         }
         finally
@@ -581,6 +736,7 @@
 
     private void MapDetailToForm(UsuarioDetailDto detail)
     {
+        ClearFieldErrors();
         _isNewMode = false;
         _showEditor = true;
         _selectedNombre = detail.Nombre;
@@ -606,8 +762,295 @@
         _confirmacionContrasena = detail.ContrasenaDecodificada;
     }
 
+    private async Task EnsureViewSettingsLoadedAsync(bool force = false)
+    {
+        var currentUser = AppUserSession.GetCurrentUserName(string.Empty).Trim();
+        if (!force && _viewSettingsLoaded && string.Equals(_viewSettingsUserName, currentUser, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        if (string.IsNullOrWhiteSpace(currentUser))
+        {
+            ApplyViewSettings(BuildDefaultViewSettings(), string.Empty);
+            return;
+        }
+
+        var result = await UiOps.RunAsync(() => UsuariosSvc.GetViewSettingsAsync(currentUser), "No se pudo cargar la configuración de vista.");
+        if (!result.Success || result.Value is null)
+        {
+            SetFeedback(result.Feedback);
+            ApplyViewSettings(BuildDefaultViewSettings(), currentUser);
+            return;
+        }
+
+        ApplyViewSettings(result.Value, currentUser);
+    }
+
+    private void AbrirConfiguracionVista()
+    {
+        _showViewSettings = true;
+        _draftAgruparPor = _viewSettings.AgruparPor;
+        _viewSettingsDraft.Clear();
+        _viewSettingsDraft.AddRange(CloneColumns(_viewSettings.Columnas));
+    }
+
+    private void CancelarConfiguracionVista()
+    {
+        _showViewSettings = false;
+        _draftAgruparPor = _viewSettings.AgruparPor;
+        _viewSettingsDraft.Clear();
+        _viewSettingsDraft.AddRange(CloneColumns(_viewSettings.Columnas));
+    }
+
+    private void ToggleViewColumn(string key, ChangeEventArgs args)
+    {
+        var column = _viewSettingsDraft.FirstOrDefault(c => string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase));
+        if (column is null)
+            return;
+
+        column.Visible = args.Value is bool flag && flag;
+        if (!_viewSettingsDraft.Any(c => c.Visible))
+            column.Visible = true;
+    }
+
+    private void MoveViewColumn(string key, int offset)
+    {
+        var ordered = _viewSettingsDraft.OrderBy(c => c.Order).ToList();
+        var index = ordered.FindIndex(c => string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+            return;
+
+        var target = index + offset;
+        if (target < 0 || target >= ordered.Count)
+            return;
+
+        (ordered[index], ordered[target]) = (ordered[target], ordered[index]);
+        for (var i = 0; i < ordered.Count; i++)
+            ordered[i].Order = i;
+
+        _viewSettingsDraft.Clear();
+        _viewSettingsDraft.AddRange(ordered);
+    }
+
+    private async Task GuardarConfiguracionVistaAsync()
+    {
+        var currentUser = AppUserSession.GetCurrentUserName(string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(currentUser))
+        {
+            SetFeedback(new AppUiMessage
+            {
+                Severity = AppUiFeedbackSeverity.Warning,
+                Title = "Sesión requerida",
+                Message = "Necesitás iniciar sesión para guardar la configuración de vista."
+            });
+            return;
+        }
+
+        var settings = new UsuariosViewSettingsDto
+        {
+            AgruparPor = _draftAgruparPor,
+            Columnas = CloneColumns(_viewSettingsDraft)
+        };
+
+        var result = await UiOps.RunAsync(async () =>
+        {
+            await UsuariosSvc.SaveViewSettingsAsync(currentUser, settings);
+            return true;
+        }, "No se pudo guardar la configuración de vista.");
+
+        if (!result.Success)
+        {
+            SetFeedback(result.Feedback);
+            return;
+        }
+
+        ApplyViewSettings(settings, currentUser);
+        _showViewSettings = false;
+        SetFeedback(AppUiMessage.Success("Vista guardada", "La configuración de la grilla quedó actualizada para tu usuario."));
+    }
+
+    private void ApplyViewSettings(UsuariosViewSettingsDto settings, string userName)
+    {
+        _viewSettings = NormalizeViewSettings(settings);
+        _viewSettingsUserName = userName;
+        _viewSettingsLoaded = true;
+        _draftAgruparPor = _viewSettings.AgruparPor;
+        _viewSettingsDraft.Clear();
+        _viewSettingsDraft.AddRange(CloneColumns(_viewSettings.Columnas));
+    }
+
+    private void OnAppUserSessionChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            await EnsureViewSettingsLoadedAsync(force: true);
+            StateHasChanged();
+        });
+    }
+
+    private IReadOnlyList<UsuarioViewColumnDto> GetVisibleColumns()
+        => _viewSettings.Columnas
+            .Where(c => c.Visible)
+            .OrderBy(c => c.Order)
+            .ToList();
+
+    private IReadOnlyList<UsuarioGridGroup> BuildGridGroups()
+    {
+        if (_viewSettings.AgruparPor == UsuariosViewGroupKeys.None)
+        {
+            return
+            [
+                new UsuarioGridGroup
+                {
+                    Label = string.Empty,
+                    ShowHeader = false,
+                    Items = _items.ToList()
+                }
+            ];
+        }
+
+        return _items
+            .GroupBy(item => ResolveGroupValue(item, _viewSettings.AgruparPor))
+            .OrderBy(group => group.Key, StringComparer.CurrentCultureIgnoreCase)
+            .Select(group => new UsuarioGridGroup
+            {
+                Label = group.Key,
+                ShowHeader = true,
+                Items = group.ToList()
+            })
+            .ToList();
+    }
+
+    private static string ResolveGroupValue(UsuarioGridItemDto item, string grouping)
+        => grouping switch
+        {
+            UsuariosViewGroupKeys.Tipo => item.EsGrupo ? "Grupos" : "Usuarios",
+            UsuariosViewGroupKeys.Activo => item.Activo ? "Activos" : "Inactivos",
+            UsuariosViewGroupKeys.CambiarClave => item.EsGrupo ? "No aplica" : item.CambiarProximoInicio ? "Cambiar clave" : "Sin cambio de clave",
+            _ => string.Empty
+        };
+
+    private static string GetGroupingLabel(string grouping)
+        => grouping switch
+        {
+            UsuariosViewGroupKeys.Tipo => "Tipo",
+            UsuariosViewGroupKeys.Activo => "Activo",
+            UsuariosViewGroupKeys.CambiarClave => "Clave próximo inicio",
+            _ => "Sin agrupar"
+        };
+
+    private static UsuariosViewSettingsDto BuildDefaultViewSettings()
+        => new()
+        {
+            AgruparPor = UsuariosViewGroupKeys.None,
+            Columnas =
+            [
+                new() { Key = UsuariosViewColumnKeys.Nombre, Label = "Nombre", Visible = true, Order = 0 },
+                new() { Key = UsuariosViewColumnKeys.Email, Label = "Email", Visible = true, Order = 1 },
+                new() { Key = UsuariosViewColumnKeys.Tipo, Label = "Tipo", Visible = true, Order = 2 },
+                new() { Key = UsuariosViewColumnKeys.CambiarClave, Label = "Clave próximo inicio", Visible = true, Order = 3 },
+                new() { Key = UsuariosViewColumnKeys.Activo, Label = "Activo", Visible = true, Order = 4 },
+                new() { Key = UsuariosViewColumnKeys.Alta, Label = "Alta", Visible = false, Order = 5 },
+                new() { Key = UsuariosViewColumnKeys.Modificacion, Label = "Modificación", Visible = true, Order = 6 }
+            ]
+        };
+
+    private static UsuariosViewSettingsDto NormalizeViewSettings(UsuariosViewSettingsDto settings)
+    {
+        var defaults = BuildDefaultViewSettings();
+        var incoming = settings.Columnas
+            .Where(c => !string.IsNullOrWhiteSpace(c.Key))
+            .ToDictionary(c => c.Key.Trim(), StringComparer.OrdinalIgnoreCase);
+
+        var normalizedColumns = defaults.Columnas
+            .Select(defaultCol =>
+            {
+                if (!incoming.TryGetValue(defaultCol.Key, out var source))
+                {
+                    return new UsuarioViewColumnDto
+                    {
+                        Key = defaultCol.Key,
+                        Label = defaultCol.Label,
+                        Visible = defaultCol.Visible,
+                        Order = defaultCol.Order
+                    };
+                }
+
+                return new UsuarioViewColumnDto
+                {
+                    Key = defaultCol.Key,
+                    Label = defaultCol.Label,
+                    Visible = source.Visible,
+                    Order = source.Order
+                };
+            })
+            .OrderBy(c => c.Order)
+            .Select((column, index) =>
+            {
+                column.Order = index;
+                return column;
+            })
+            .ToList();
+
+        if (!normalizedColumns.Any(c => c.Visible))
+            normalizedColumns[0].Visible = true;
+
+        return new UsuariosViewSettingsDto
+        {
+            AgruparPor = settings.AgruparPor switch
+            {
+                UsuariosViewGroupKeys.Tipo => UsuariosViewGroupKeys.Tipo,
+                UsuariosViewGroupKeys.Activo => UsuariosViewGroupKeys.Activo,
+                UsuariosViewGroupKeys.CambiarClave => UsuariosViewGroupKeys.CambiarClave,
+                _ => UsuariosViewGroupKeys.None
+            },
+            Columnas = normalizedColumns
+        };
+    }
+
+    private static List<UsuarioViewColumnDto> CloneColumns(IEnumerable<UsuarioViewColumnDto> columns)
+        => columns
+            .OrderBy(c => c.Order)
+            .Select(c => new UsuarioViewColumnDto
+            {
+                Key = c.Key,
+                Label = c.Label,
+                Visible = c.Visible,
+                Order = c.Order
+            })
+            .ToList();
+
     private static string FormatDate(DateTime? value)
         => value.HasValue ? value.Value.ToString("dd/MM/yyyy HH:mm") : "—";
+
+    private void ClearFieldErrors()
+        => _fieldErrors.Clear();
+
+    private void SetFieldError(string key, string message)
+    {
+        if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(message))
+            return;
+
+        _fieldErrors[key.Trim()] = message.Trim();
+    }
+
+    private void ApplyFieldErrors(ValidationResult validation)
+    {
+        ClearFieldErrors();
+        foreach (var issue in validation.Issues)
+        {
+            if (!string.IsNullOrWhiteSpace(issue.FieldKey))
+                _fieldErrors[issue.FieldKey.Trim()] = issue.Message;
+        }
+    }
+
+    private bool HasFieldError(string key)
+        => !string.IsNullOrWhiteSpace(key) && _fieldErrors.ContainsKey(key.Trim());
+
+    private string GetFieldError(string key)
+        => HasFieldError(key) ? _fieldErrors[key.Trim()] : string.Empty;
+
+    private string GetFieldInputClass(string key)
+        => HasFieldError(key) ? "usuarios-input usuarios-input--invalid" : "usuarios-input";
 
     private bool IsSelected(UsuarioGridItemDto item)
         => !_isNewMode && string.Equals(_selectedNombre, item.Nombre, StringComparison.OrdinalIgnoreCase);
@@ -631,5 +1074,12 @@
         public string MimeType { get; init; } = string.Empty;
         public byte[] Contenido { get; init; } = [];
         public string PreviewUrl { get; init; } = string.Empty;
+    }
+
+    private sealed class UsuarioGridGroup
+    {
+        public string Label { get; init; } = string.Empty;
+        public bool ShowHeader { get; init; }
+        public List<UsuarioGridItemDto> Items { get; init; } = [];
     }
 }

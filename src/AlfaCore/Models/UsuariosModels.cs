@@ -54,3 +54,47 @@ public sealed class UsuarioPhotoServeDto
     public string MimeType { get; set; } = "image/jpeg";
     public string NombreArchivo { get; set; } = string.Empty;
 }
+
+public sealed class UsuariosViewSettingsDto
+{
+    public string AgruparPor { get; set; } = UsuariosViewGroupKeys.None;
+    public List<UsuarioViewColumnDto> Columnas { get; set; } = [];
+}
+
+public sealed class UsuarioViewColumnDto
+{
+    public string Key { get; set; } = string.Empty;
+    public string Label { get; set; } = string.Empty;
+    public bool Visible { get; set; }
+    public int Order { get; set; }
+}
+
+public static class UsuariosViewColumnKeys
+{
+    public const string Nombre = "nombre";
+    public const string Email = "email";
+    public const string Tipo = "tipo";
+    public const string CambiarClave = "cambiar-clave";
+    public const string Activo = "activo";
+    public const string Alta = "alta";
+    public const string Modificacion = "modificacion";
+
+    public static readonly IReadOnlyList<string> All =
+    [
+        Nombre,
+        Email,
+        Tipo,
+        CambiarClave,
+        Activo,
+        Alta,
+        Modificacion
+    ];
+}
+
+public static class UsuariosViewGroupKeys
+{
+    public const string None = "none";
+    public const string Tipo = "tipo";
+    public const string Activo = "activo";
+    public const string CambiarClave = "cambiar-clave";
+}

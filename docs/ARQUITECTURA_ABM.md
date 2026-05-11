@@ -87,7 +87,7 @@ Responsable de:
 
 - orquestar casos de uso
 - aplicar reglas del maestro
-- validar datos
+- invocar validadores especificos de la entidad
 - coordinar alta, edicion y baja logica
 - traducir errores funcionales para UI
 
@@ -164,6 +164,93 @@ Regla:
 
 - manejar estos casos desde acciones o servicios especificos
 - evitar mostrarlos o persistirlos de manera ingenua
+
+## Arquitectura recomendada de validaciones
+
+Para nuevos ABM, la validacion no debe quedar resuelta solo con:
+
+- `required` en la UI
+- `if` dispersos dentro del servicio
+- triggers como regla principal
+
+El criterio recomendado es por capas:
+
+### 1. UI
+
+Responsable de:
+
+- validaciones inmediatas
+- confirmaciones visuales
+- feedback por campo
+- no perder los datos ya cargados por el usuario
+
+Ejemplos:
+
+- confirmacion de contrasena
+- longitud visible en inputs
+- formato basico antes de enviar
+
+### 2. Validador especifico de entidad
+
+Responsable de:
+
+- obligatorios reales
+- combinaciones invalidas
+- unicidad funcional
+- reglas condicionales
+- restricciones del maestro que no deben vivir en la pantalla
+
+Patron esperado:
+
+- `ValidationIssue`
+- `ValidationResult`
+- una excepcion especifica de validacion para transportar errores funcionales
+- un validador por entidad
+
+Ejemplos:
+
+- `UsuariosValidator`
+- `ClientesValidator`
+- `ProveedoresValidator`
+
+### 3. Servicio del modulo
+
+Responsable de:
+
+- normalizar el request
+- llamar al validador
+- abortar la persistencia si la validacion falla
+- guardar solo cuando la validacion es correcta
+
+### 4. SQL Server
+
+Responsable de:
+
+- PK
+- FK
+- `NOT NULL`
+- `UNIQUE`
+- `CHECK` estables
+
+Regla:
+
+- las restricciones estructurales deben vivir en SQL cuando aplique
+- las reglas funcionales deben quedar visibles en la aplicacion
+
+## Resultado esperado en UI
+
+Cuando una validacion falle:
+
+- mostrar un mensaje general claro
+- marcar los campos afectados
+- devolver errores por campo cuando sea posible
+- conservar el estado del formulario para corregir y reintentar
+
+No dejar como unico feedback:
+
+- una excepcion general
+- un mensaje tecnico crudo
+- un reinicio completo del formulario
 
 ## Imagenes y archivos
 
