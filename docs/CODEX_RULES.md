@@ -267,6 +267,35 @@ Cada nueva pantalla debe integrarse al estilo general del sistema:
 
 No crear páginas “aisladas” que parezcan otra aplicación distinta.
 
+### 11.1 Regla específica para ABM / CRUD
+
+Cuando el sistema necesite altas, bajas, modificaciones y listados sobre tablas maestras o catálogos:
+
+- priorizar una **base reutilizable de ABM** antes que pantallas aisladas por tabla
+- evitar una rutina “universal ciega” que intente guardar cualquier tabla sin reglas por entidad
+- separar claramente:
+  - grilla / listado
+  - formulario
+  - servicio de aplicación
+  - acceso a datos
+  - validaciones
+- resolver cada maestro con:
+  - infraestructura común reutilizable
+  - definición específica por entidad
+  - servicio específico cuando haya reglas propias
+- usar **baja lógica por defecto** cuando el dominio lo permita, antes que borrado físico
+- cuando existan campos sensibles o reglas especiales, tratarlos como acciones específicas y no como simples campos genéricos
+
+Ejemplos de campos o acciones que suelen requerir tratamiento específico:
+
+- contraseñas
+- permisos
+- relaciones dependientes
+- imágenes o archivos
+- auditoría de cambios
+
+La meta no es crear un CRUD genérico académico, sino una base real, mantenible y repetible para módulos maestros del sistema.
+
 ---
 
 ## 12. Regla de refactor

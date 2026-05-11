@@ -2,6 +2,7 @@
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 @inject AlfaCore.Services.ISessionService SessionSvc
+@inject AlfaCore.Services.IAppUserSessionService AppUserSession
 @implements IDisposable
 
 <div class="shell @(_sidebarCollapsed ? "shell--collapsed" : string.Empty)">
@@ -117,6 +118,20 @@
                     <NavLink class="menu__link" href="/interfaces/configuracion" Match="NavLinkMatch.All">
                         <span class="menu__icon"><i class="bi bi-sliders"></i></span>
                         <span>Configuración</span>
+                    </NavLink>
+                </nav>
+            }
+            else if (_currentModule == "usuarios")
+            {
+                <a class="menu__back" href="/">
+                    <i class="bi bi-grid-3x3-gap-fill"></i>
+                    <span>Aplicaciones</span>
+                </a>
+                <p class="menu__section">Usuarios</p>
+                <nav class="menu__nav">
+                    <NavLink class="menu__link" href="/usuarios" Match="NavLinkMatch.All">
+                        <span class="menu__icon"><i class="bi bi-people-fill"></i></span>
+                        <span>Gestión de usuarios</span>
                     </NavLink>
                 </nav>
             }
@@ -284,6 +299,14 @@
                     <span class="session-chip__text">@(_activeSession?.Servidor ?? "—") · @(_activeSession?.BaseDatos ?? "—")</span>
                     <i class="bi bi-chevron-down"></i>
                 </button>
+                @if (AppUserSession.IsAuthenticated && AppUserSession.CurrentUser is not null)
+                {
+                    <button type="button" class="session-chip no-print" @onclick="LogoutAppUser" title="Cerrar sesión del sistema">
+                        <span class="session-chip__dot"></span>
+                        <span class="session-chip__text">@AppUserSession.CurrentUser.UserName</span>
+                        <i class="bi bi-box-arrow-right"></i>
+                    </button>
+                }
                 <div class="shell__status">
                     <span class="shell__dot"></span>
                     <span>Actualizado en tiempo real</span>
@@ -309,6 +332,18 @@
 </div>
 
 <SessionDrawer Open="_drawerOpen" OnClose="() => _drawerOpen = false" />
+<AppLoginOverlay Open="@(!AppUserSession.IsAuthenticated)"
+                 SqlSessionLabel="@GetSqlSessionLabel()"
+                 UserName="@_loginUserName"
+                 Password="@_loginPassword"
+                 ErrorMessage="@_loginError"
+                 IsBusy="@_loginBusy"
+                 ShowPassword="@_loginShowPassword"
+                 UserNameChanged="@(value => _loginUserName = value)"
+                 PasswordChanged="@(value => _loginPassword = value)"
+                 ShowPasswordChanged="@(value => _loginShowPassword = value)"
+                 OnSubmit="LoginAsync"
+                 OnOpenSqlSessions="OpenSqlSessionDrawerAsync" />
 
 @code {
     private bool _sidebarCollapsed;
@@ -316,6 +351,11 @@
     private bool _isDark = false;
     private bool _drawerOpen;
     private AlfaCore.Models.SessionDto? _activeSession;
+    private string _loginUserName = string.Empty;
+    private string _loginPassword = string.Empty;
+    private string _loginError = string.Empty;
+    private bool _loginBusy;
+    private bool _loginShowPassword;
     private string CurrentPageTitle => GetCurrentPageTitle();
 
     private string _currentModule = string.Empty;
@@ -324,15 +364,35 @@
     {
         _activeSession = SessionSvc.GetActiveSession();
         SessionSvc.SessionChanged += OnSessionChanged;
+        AppUserSession.StateChanged += OnAppUserStateChanged;
     }
 
     private void OnSessionChanged()
     {
         _activeSession = SessionSvc.GetActiveSession();
+        AppUserSession.HandleSqlSessionChanged();
+        _loginPassword = string.Empty;
+        _loginShowPassword = false;
+        _loginError = string.Empty;
         InvokeAsync(StateHasChanged);
     }
 
-    public void Dispose() => SessionSvc.SessionChanged -= OnSessionChanged;
+    private void OnAppUserStateChanged()
+    {
+        if (!AppUserSession.IsAuthenticated)
+        {
+            _loginPassword = string.Empty;
+            _loginShowPassword = false;
+        }
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        SessionSvc.SessionChanged -= OnSessionChanged;
+        AppUserSession.StateChanged -= OnAppUserStateChanged;
+    }
 
     protected override void OnParametersSet()
     {
@@ -401,6 +461,46 @@
         await JS.InvokeVoidAsync("dashboardExport.printCurrentPage", CurrentPageTitle);
     }
 
+    private async Task LoginAsync()
+    {
+        _loginBusy = true;
+        _loginError = string.Empty;
+
+        try
+        {
+            var session = await AppUserSession.LoginAsync(_loginUserName, _loginPassword);
+            _loginUserName = session.UserName;
+            _loginPassword = string.Empty;
+            _loginShowPassword = false;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _loginError = ex.Message;
+        }
+        finally
+        {
+            _loginBusy = false;
+            StateHasChanged();
+        }
+    }
+
+    private void LogoutAppUser()
+    {
+        AppUserSession.Logout();
+        _loginError = string.Empty;
+    }
+
+    private Task OpenSqlSessionDrawerAsync()
+    {
+        _drawerOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private string GetSqlSessionLabel()
+        => _activeSession is null
+            ? "Sin base activa"
+            : $"{_activeSession.Nombre} · {_activeSession.Servidor} · {_activeSession.BaseDatos}";
+
     private string GetCurrentPageTitle()
     {
         var relative = Nav.ToBaseRelativePath(Nav.Uri);
@@ -429,6 +529,7 @@
             "conversaciones/configuracion" => "Configuración de WhatsApp",
             "interfaces" => "Recepción documental",
             "interfaces/configuracion" => "Configuración de Interfaces",
+            "usuarios" => "Usuarios",
             "compras" => "Inicio",
             "compras/proveedores" => "Proveedores",
             "compras/comprobantes" => "Comprobantes",
@@ -461,6 +562,7 @@
         "auditoria" => "Auditoría",
         "conversaciones" => "Conversaciones",
         "interfaces" => "Interfaces",
+        "usuarios" => "Usuarios",
         _ => "Dashboard de Compras"
     };
 }

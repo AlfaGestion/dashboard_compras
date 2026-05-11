@@ -1,0 +1,164 @@
+using AlfaCore.Models;
+using Microsoft.Data.SqlClient;
+
+namespace AlfaCore.Services;
+
+public sealed class AppUserSessionService(
+    IConfiguration configuration,
+    ISessionService sessionService,
+    IAppEventService appEvents,
+    UsuariosPasswordCodec passwordCodec) : IAppUserSessionService
+{
+    private const string SistemaFijo = "CN000PR";
+    private AppUserSessionInfo? _currentUser;
+
+    private string ConnectionString => sessionService.GetConnectionString().Length > 0
+        ? sessionService.GetConnectionString()
+        : configuration.GetConnectionString("AlfaGestion")
+          ?? throw new InvalidOperationException("No se configuró la cadena de conexión 'ConnectionStrings:AlfaGestion'.");
+
+    public event Action? StateChanged;
+
+    public bool IsAuthenticated => _currentUser is not null;
+    public AppUserSessionInfo? CurrentUser => _currentUser;
+
+    public async Task<AppUserSessionInfo> LoginAsync(string userName, string password, CancellationToken ct = default)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(userName))
+                throw new InvalidOperationException("Ingresá el usuario del sistema.");
+
+            if (string.IsNullOrWhiteSpace(password))
+                throw new InvalidOperationException("Ingresá la contraseña del sistema.");
+
+            var activeSqlSession = sessionService.GetActiveSession()
+                ?? throw new InvalidOperationException("No hay una sesión SQL activa seleccionada.");
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(ct);
+
+            var hasActivo = await HasActivoColumnAsync(cn, ct);
+            var sql = $"""
+                SELECT
+                    ISNULL(NOMBRE, ''),
+                    ISNULL(PASSWORD, ''),
+                    ISNULL(email_de, ''),
+                    ISNULL(EsGrupo, 0),
+                    {(hasActivo ? "ISNULL(Activo, 1)" : "CAST(1 AS bit)")}
+                FROM dbo.TA_USUARIOS
+                WHERE UPPER(LTRIM(RTRIM(SISTEMA))) = @Sistema
+                  AND UPPER(LTRIM(RTRIM(NOMBRE))) = @Nombre;
+                """;
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.AddWithValue("@Sistema", SistemaFijo);
+            cmd.Parameters.AddWithValue("@Nombre", userName.Trim().ToUpperInvariant());
+            await using var rd = await cmd.ExecuteReaderAsync(ct);
+
+            if (!await rd.ReadAsync(ct))
+                throw new InvalidOperationException("El usuario no existe en la base activa.");
+
+            var canonicalUser = GetString(rd, 0);
+            var storedPassword = GetString(rd, 1);
+            var email = GetString(rd, 2);
+            var esGrupo = GetBool(rd, 3);
+            var activo = GetBool(rd, 4);
+
+            if (!activo)
+                throw new InvalidOperationException("El usuario está inactivo en la base activa.");
+
+            if (esGrupo)
+                throw new InvalidOperationException("Los grupos no pueden iniciar sesión en AlfaCore.");
+
+            var encodedCandidate = passwordCodec.Encode(password.Trim());
+            var decodedStored = passwordCodec.Decode(storedPassword);
+            var passwordMatches =
+                string.Equals(storedPassword.Trim(), encodedCandidate, StringComparison.Ordinal) ||
+                string.Equals(decodedStored, password.Trim(), StringComparison.Ordinal);
+
+            if (!passwordMatches)
+                throw new InvalidOperationException("La contraseña del sistema no es válida.");
+
+            _currentUser = new AppUserSessionInfo
+            {
+                UserName = canonicalUser,
+                Email = email,
+                SystemCode = SistemaFijo,
+                LoginAt = DateTime.Now,
+                SqlSessionId = activeSqlSession.Id,
+                SqlSessionName = activeSqlSession.Nombre
+            };
+
+            StateChanged?.Invoke();
+            return _currentUser;
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            var incidentId = await appEvents.LogErrorAsync(
+                "Seguridad",
+                "Login",
+                ex,
+                "No se pudo validar el usuario en la base activa.",
+                new
+                {
+                    UserName = userName?.Trim(),
+                    Sistema = SistemaFijo,
+                    SqlSession = sessionService.GetActiveSession()?.Nombre
+                },
+                AppEventSeverity.Warning,
+                ct);
+
+            throw new InvalidOperationException($"No se pudo validar el usuario en la base activa. Código: {incidentId}", ex);
+        }
+    }
+
+    public void Logout()
+    {
+        if (_currentUser is null)
+            return;
+
+        _currentUser = null;
+        StateChanged?.Invoke();
+    }
+
+    public void HandleSqlSessionChanged()
+    {
+        if (_currentUser is null)
+            return;
+
+        var activeSqlSession = sessionService.GetActiveSession();
+        if (activeSqlSession is null || activeSqlSession.Id != _currentUser.SqlSessionId)
+        {
+            _currentUser = null;
+            StateChanged?.Invoke();
+        }
+    }
+
+    public string GetCurrentUserName(string fallback = "")
+        => _currentUser?.UserName ?? fallback;
+
+    private static async Task<bool> HasActivoColumnAsync(SqlConnection cn, CancellationToken ct)
+    {
+        const string sql = """
+            SELECT COUNT(1)
+            FROM sys.columns
+            WHERE object_id = OBJECT_ID(N'dbo.TA_USUARIOS')
+              AND LOWER(name) = N'activo';
+            """;
+
+        await using var cmd = new SqlCommand(sql, cn);
+        var result = await cmd.ExecuteScalarAsync(ct);
+        return Convert.ToInt32(result) > 0;
+    }
+
+    private static string GetString(SqlDataReader rd, int index)
+        => rd.IsDBNull(index) ? string.Empty : Convert.ToString(rd.GetValue(index)) ?? string.Empty;
+
+    private static bool GetBool(SqlDataReader rd, int index)
+        => !rd.IsDBNull(index) && Convert.ToBoolean(rd.GetValue(index));
+}

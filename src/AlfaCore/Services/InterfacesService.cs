@@ -1236,8 +1236,7 @@ public sealed class InterfacesService(
 
     private static string BuildComprobanteFolder(DateTime fechaHoraGrabacion, long idComprobanteRecibido)
         => Path.Combine(
-            fechaHoraGrabacion.ToString("yyyy", CultureInfo.InvariantCulture),
-            fechaHoraGrabacion.ToString("MM", CultureInfo.InvariantCulture),
+            fechaHoraGrabacion.ToString("yyyy_MM", CultureInfo.InvariantCulture),
             idComprobanteRecibido.ToString(CultureInfo.InvariantCulture));
 
     private static async Task SaveAttachmentAsync(

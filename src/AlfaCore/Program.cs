@@ -56,6 +56,9 @@ public class Program
         builder.Services.AddScoped<IConversacionesConfigService, ConversacionesConfigService>();
         builder.Services.AddScoped<IInterfacesService, InterfacesService>();
         builder.Services.AddScoped<IInterfacesConfigService, InterfacesConfigService>();
+        builder.Services.AddScoped<IUsuariosService, UsuariosService>();
+        builder.Services.AddScoped<IAppUserSessionService, AppUserSessionService>();
+        builder.Services.AddSingleton<UsuariosPasswordCodec>();
         builder.Services.AddScoped<IAuditoriaService, AuditoriaService>();
         builder.Services.AddScoped<IGestionDashboardService, GestionDashboardService>();
         builder.Services.AddScoped<IAppUiOperationService, AppUiOperationService>();
@@ -144,6 +147,18 @@ public class Program
 
             if (!File.Exists(file.RutaCompleta)) return Results.NotFound("El archivo ya no existe en el servidor.");
             return Results.File(file.RutaCompleta, contentType, file.NombreArchivo);
+        });
+
+        app.MapGet("/api/usuarios/{nombre}/foto", async (
+            string nombre,
+            IUsuariosService usuariosSvc,
+            CancellationToken ct) =>
+        {
+            var photo = await usuariosSvc.GetPhotoForServeAsync(nombre, ct);
+            if (photo is null || !File.Exists(photo.RutaCompleta))
+                return Results.NotFound();
+
+            return Results.File(photo.RutaCompleta, photo.MimeType, photo.NombreArchivo);
         });
 
         app.MapGet("/consultas/{id:int}/descargar-excel", async (

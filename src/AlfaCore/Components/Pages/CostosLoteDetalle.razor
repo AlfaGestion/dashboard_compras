@@ -2,6 +2,7 @@
 @using AlfaCore.Models
 @inject AlfaCore.Services.ICostosService CostosSvc
 @inject AlfaCore.Services.IAppUiOperationService UiOps
+@inject AlfaCore.Services.IAppUserSessionService AppUserSession
 
 <PageTitle>Lote de Costos | Alfa Gestión</PageTitle>
 
@@ -423,7 +424,7 @@ else
 
         try
         {
-            await CostosSvc.ProcessMatchingAsync(Id, Environment.UserName, progress, _matchingCts.Token);
+            await CostosSvc.ProcessMatchingAsync(Id, CurrentUserName, progress, _matchingCts.Token);
             await ReloadAsync();
             _message = "Matching procesado correctamente.";
         }
@@ -498,7 +499,7 @@ else
         _isError = false;
         try
         {
-            await CostosSvc.ConfirmRowAsync(Id, _selectedRow.RowNumber, _selectedCandidate?.ArticleId, Environment.UserName);
+            await CostosSvc.ConfirmRowAsync(Id, _selectedRow.RowNumber, _selectedCandidate?.ArticleId, CurrentUserName);
             await ReloadAsync();
             if (_selectedRow is not null)
             {
@@ -529,7 +530,7 @@ else
         _isError = false;
         try
         {
-            await CostosSvc.DiscardRowAsync(Id, _selectedRow.RowNumber, Environment.UserName);
+            await CostosSvc.DiscardRowAsync(Id, _selectedRow.RowNumber, CurrentUserName);
             _checkedRows.Remove(_selectedRow.RowNumber);
             await ReloadAsync();
             _message = $"Fila {_selectedRow.RowNumber} descartada.";
@@ -554,7 +555,7 @@ else
         _isError = false;
         try
         {
-            var result = await CostosSvc.ApplySelectedRowsAsync(Id, _checkedRows.ToArray(), Environment.UserName);
+            var result = await CostosSvc.ApplySelectedRowsAsync(Id, _checkedRows.ToArray(), CurrentUserName);
             await ReloadAsync();
             _message = $"Aplicación finalizada. Actualizadas: {result.Updated}, sin cambio: {result.Same}, errores: {result.Errors}. Estado: {result.Status}.";
         }
@@ -577,7 +578,7 @@ else
         _isError = false;
         try
         {
-            var result = await CostosSvc.UndoLastApplyAsync(Id, Environment.UserName);
+            var result = await CostosSvc.UndoLastApplyAsync(Id, CurrentUserName);
             await ReloadAsync();
             _message = $"Deshacer finalizado. Revertidas: {result.Reverted}, errores: {result.Errors}. Estado: {result.Status}.";
         }
@@ -792,4 +793,6 @@ else
             parts.Add($"Código: {feedback.Code}");
         return string.Join(" ", parts.Where(static part => !string.IsNullOrWhiteSpace(part)));
     }
+
+    private string CurrentUserName => AppUserSession.GetCurrentUserName(Environment.UserName);
 }

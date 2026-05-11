@@ -1,0 +1,635 @@
+@page "/usuarios"
+@using AlfaCore.Models
+@using Microsoft.AspNetCore.Components.Forms
+@inject AlfaCore.Services.IUsuariosService UsuariosSvc
+@inject AlfaCore.Services.IAppUiOperationService UiOps
+
+<PageTitle>Usuarios | Alfa Gestión</PageTitle>
+
+<div class="page-grid">
+    <section class="page-intro">
+        <div>
+            <h2 class="page-intro__title">Usuarios</h2>
+            <p class="page-intro__text">Administrá usuarios y grupos del sistema actual, con baja lógica, contraseña compatible e imagen opcional por archivo.</p>
+        </div>
+        <div class="actions">
+            <button type="button" class="btn btn--primary" @onclick="BeginNew">
+                <i class="bi bi-plus-circle"></i> Nuevo usuario
+            </button>
+            <button type="button" class="btn btn--ghost" @onclick="RecargarAsync" disabled="@_loadingList">
+                <i class="bi bi-arrow-clockwise"></i> Recargar
+            </button>
+        </div>
+    </section>
+
+    @if (_feedback is not null)
+    {
+        <section class="panel-card">
+            <div class="editor-msg @GetFeedbackClass(_feedback)">
+                <div>
+                    <strong>@_feedback.Title</strong>
+                    <p>@_feedback.Message</p>
+                    @if (_feedback.HasSuggestion)
+                    {
+                        <small>@_feedback.Suggestion</small>
+                    }
+                    @if (_feedback.HasCode)
+                    {
+                        <small>Código: @_feedback.Code</small>
+                    }
+                </div>
+            </div>
+        </section>
+    }
+
+    <section class="panel-card">
+        <div class="panel-card__header">
+            <div>
+                <h3 class="panel-card__title">Filtros</h3>
+                <p class="panel-card__subtitle">La búsqueda trabaja sobre el sistema fijo `CN000PR` y lista activos por defecto.</p>
+            </div>
+        </div>
+
+        <div class="filters-grid">
+            <div class="field field--wide">
+                <label>Buscar</label>
+                <input type="search"
+                       placeholder="Nombre o email..."
+                       @bind="_filters.Texto"
+                       @bind:event="oninput" />
+            </div>
+            <div class="field">
+                <label>Estado</label>
+                <select @bind="_activoFiltro">
+                    <option value="1">Activos</option>
+                    <option value="">Todos</option>
+                    <option value="0">Inactivos</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>Tipo</label>
+                <select @bind="_grupoFiltro">
+                    <option value="">Todos</option>
+                    <option value="0">Usuarios</option>
+                    <option value="1">Grupos</option>
+                </select>
+            </div>
+            <div class="actions">
+                <button type="button" class="btn btn--primary" @onclick="BuscarAsync" disabled="@_loadingList">
+                    <i class="bi bi-funnel"></i> Aplicar
+                </button>
+                <button type="button" class="btn btn--ghost" @onclick="LimpiarFiltros" disabled="@_loadingList">
+                    <i class="bi bi-eraser"></i> Limpiar
+                </button>
+            </div>
+        </div>
+    </section>
+
+    @if (_showEditor)
+    {
+        <section class="panel-card">
+            <div class="panel-card__header">
+                <div>
+                    <h3 class="panel-card__title">@(_isNewMode ? "Nuevo usuario" : $"Editar {_form.Nombre}")</h3>
+                    <p class="panel-card__subtitle">@(_isNewMode ? "Completá los datos básicos del usuario o grupo." : $"Sistema fijo: CN000PR · Estado: {(_selectedActivo ? "Activo" : "Inactivo")}")</p>
+                </div>
+                <div class="actions">
+                    <button type="button" class="btn btn--ghost" @onclick="CerrarEditor" disabled="@_saving">
+                        <i class="bi bi-arrow-left"></i>
+                        <span>Volver al listado</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="usuarios-editor">
+                <div class="usuarios-photo-card">
+                    <InputFile id="usuarios-photo-picker"
+                               @key="@($"usuarios-photo-{_photoPickerVersion}")"
+                               style="display:none"
+                               OnChange="HandlePhotoSelectedAsync"
+                               accept=".jpg,.jpeg,image/jpeg"
+                               disabled="@_saving" />
+
+                    <div class="usuarios-photo-preview">
+                        @if (!string.IsNullOrWhiteSpace(CurrentPhotoUrl))
+                        {
+                            <img src="@CurrentPhotoUrl" alt="Foto del usuario" class="usuarios-photo-preview__img" />
+                        }
+                        else
+                        {
+                            <div class="usuarios-photo-preview__empty">
+                                <i class="bi bi-person-bounding-box"></i>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="usuarios-photo-actions">
+                        <label class="btn btn--secondary interfaces-file-trigger @(_saving ? "is-disabled" : string.Empty)"
+                               for="usuarios-photo-picker"
+                               aria-disabled="@_saving">
+                            <i class="bi bi-image"></i>
+                            <span>@(HasExistingOrPendingPhoto ? "Cambiar foto" : "Agregar foto")</span>
+                        </label>
+                        <button type="button"
+                                class="btn btn--ghost"
+                                @onclick="QuitarFoto"
+                                disabled="@(_saving || !HasExistingOrPendingPhoto)">
+                            <i class="bi bi-trash"></i>
+                            <span>Quitar</span>
+                        </button>
+                    </div>
+                    <p class="usuarios-photo-hint">La imagen se guarda como JPG en `RutaImagenes\USUARIOS\&lt;Nombre&gt;.jpg`.</p>
+                </div>
+
+                <div class="usuarios-editor__form">
+                    <div class="usuarios-editor__grid">
+                        <div class="field">
+                            <label>Nombre de usuario</label>
+                            <input type="text"
+                                   maxlength="50"
+                                   @bind="_form.Nombre"
+                                   disabled="@_saving" />
+                        </div>
+                        <div class="field">
+                            <label>Email</label>
+                            <input type="email"
+                                   maxlength="150"
+                                   @bind="_form.Email"
+                                   disabled="@_saving" />
+                        </div>
+                    </div>
+
+                    <div class="usuarios-toggle-row">
+                        <label class="checkbox">
+                            <input type="checkbox" @bind="_form.EsGrupo" disabled="@_saving" />
+                            <span>Usuario de referencia para grupo</span>
+                        </label>
+                        <label class="checkbox">
+                            <input type="checkbox" @bind="_form.CambiarProximoInicio" disabled="@(_saving || _form.EsGrupo)" />
+                            <span>Cambiar contraseña en el próximo inicio</span>
+                        </label>
+                    </div>
+
+                    @if (_form.EsGrupo)
+                    {
+                        <div class="usuarios-empty">
+                            Los grupos no usan contraseña en esta primera versión.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="usuarios-password-card">
+                            <div class="usuarios-password-card__head">
+                                <div>
+                                    <span class="interfaces-detail__label">Contraseña</span>
+                                    <p class="panel-card__subtitle">Compatible con la codificación actual del sistema de escritorio.</p>
+                                </div>
+                                <button type="button" class="btn btn--ghost btn--sm" @onclick="TogglePasswordVisibility">
+                                    <i class="bi @(_showPassword ? "bi-eye-slash" : "bi-eye")"></i>
+                                    <span>@(_showPassword ? "Ocultar" : "Mostrar")</span>
+                                </button>
+                            </div>
+                            <div class="usuarios-editor__grid">
+                                <div class="field">
+                                    <label>Contraseña</label>
+                                    <input type="@(_showPassword ? "text" : "password")"
+                                           maxlength="13"
+                                           @bind="_form.Contrasena"
+                                           disabled="@_saving" />
+                                </div>
+                                <div class="field">
+                                    <label>Confirmación</label>
+                                    <input type="@(_showPassword ? "text" : "password")"
+                                           maxlength="13"
+                                           @bind="_confirmacionContrasena"
+                                           disabled="@_saving" />
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="actions usuarios-editor__actions">
+                        <button type="button" class="btn btn--primary" @onclick="GuardarAsync" disabled="@_saving">
+                            <i class="bi bi-floppy"></i>
+                            <span>@(_saving ? "Guardando..." : "Guardar usuario")</span>
+                        </button>
+                        <button type="button" class="btn btn--ghost" @onclick="ResetForm" disabled="@_saving">
+                            <i class="bi bi-eraser"></i>
+                            <span>@(_isNewMode ? "Limpiar" : "Revertir")</span>
+                        </button>
+                        @if (!_isNewMode && _selectedActivo)
+                        {
+                            <button type="button" class="btn btn--ghost usuarios-btn-danger" @onclick="DarDeBajaAsync" disabled="@_saving">
+                                <i class="bi bi-person-dash"></i>
+                                <span>Dar de baja</span>
+                            </button>
+                        }
+                    </div>
+
+                    @if (!_isNewMode)
+                    {
+                        <div class="usuarios-editor__meta">
+                            <span>Alta: @FormatDate(_selectedAlta)</span>
+                            <span>Modificación: @FormatDate(_selectedModificacion)</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </section>
+    }
+    else
+    {
+        <section class="panel-card">
+            <div class="panel-card__header">
+                <div>
+                    <h3 class="panel-card__title">Usuarios</h3>
+                    <p class="panel-card__subtitle">@_items.Count registro(s) · doble clic para abrir la ficha.</p>
+                </div>
+            </div>
+
+            @if (_loadingList)
+            {
+                <div class="usuarios-empty">Cargando usuarios...</div>
+            }
+            else if (_items.Count == 0)
+            {
+                <div class="usuarios-empty">No hay usuarios para los filtros seleccionados.</div>
+            }
+            else
+            {
+                <div class="usuarios-table-wrap">
+                    <table class="data-table usuarios-table">
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Email</th>
+                                <th>Tipo</th>
+                                <th>Clave próximo inicio</th>
+                                <th>Activo</th>
+                                <th>Modificación</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in _items)
+                            {
+                                <tr class="@(IsSelected(item) ? "usuarios-table__row is-selected" : "usuarios-table__row")"
+                                    @onclick="() => SeleccionarFila(item.Nombre)"
+                                    @ondblclick="() => AbrirEditorAsync(item.Nombre)">
+                                    <td>
+                                        <div class="usuarios-table__name">
+                                            @if (item.TieneFoto)
+                                            {
+                                                <span class="usuarios-table__avatar usuarios-table__avatar--filled">
+                                                    <i class="bi bi-person-badge"></i>
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="usuarios-table__avatar">
+                                                    <i class="bi bi-person"></i>
+                                                </span>
+                                            }
+                                            <strong>@item.Nombre</strong>
+                                        </div>
+                                    </td>
+                                    <td>@(string.IsNullOrWhiteSpace(item.Email) ? "—" : item.Email)</td>
+                                    <td>@(item.EsGrupo ? "Grupo" : "Usuario")</td>
+                                    <td>@(item.EsGrupo ? "No aplica" : item.CambiarProximoInicio ? "Sí" : "No")</td>
+                                    <td>@(item.Activo ? "Sí" : "No")</td>
+                                    <td>@FormatDate(item.FechaHoraModificacion ?? item.FechaHoraGrabacion)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    private readonly UsuariosFilters _filters = new();
+    private readonly UsuarioSaveRequest _form = new();
+    private readonly List<UsuarioGridItemDto> _items = [];
+    private AppUiMessage? _feedback;
+    private PendingUserPhoto? _pendingPhoto;
+    private bool _loadingList;
+    private bool _saving;
+    private bool _isNewMode = true;
+    private bool _showEditor;
+    private bool _showPassword;
+    private bool _selectedActivo = true;
+    private int _photoPickerVersion;
+    private string _selectedNombre = string.Empty;
+    private string _confirmacionContrasena = string.Empty;
+    private string _activoFiltro = "1";
+    private string _grupoFiltro = string.Empty;
+    private string _existingPhotoCacheToken = string.Empty;
+    private DateTime? _selectedAlta;
+    private DateTime? _selectedModificacion;
+
+    private string CurrentPhotoUrl
+        => _pendingPhoto?.PreviewUrl
+           ?? (HasExistingPhoto
+               ? $"/api/usuarios/{Uri.EscapeDataString(_selectedNombre)}/foto?v={Uri.EscapeDataString(_existingPhotoCacheToken)}"
+               : string.Empty);
+
+    private bool HasExistingPhoto => !_form.QuitarFoto && !_isNewMode && !string.IsNullOrWhiteSpace(_selectedNombre) && !string.IsNullOrWhiteSpace(_existingPhotoCacheToken);
+    private bool HasExistingOrPendingPhoto => _pendingPhoto is not null || HasExistingPhoto;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await BuscarAsync();
+    }
+
+    private async Task RecargarAsync()
+    {
+        await BuscarAsync();
+
+        if (!_isNewMode && !string.IsNullOrWhiteSpace(_selectedNombre))
+            await SeleccionarAsync(_selectedNombre);
+    }
+
+    private async Task BuscarAsync()
+    {
+        _loadingList = true;
+        SyncFilters();
+
+        try
+        {
+            var result = await UiOps.RunAsync(() => UsuariosSvc.SearchAsync(_filters), "No se pudieron cargar los usuarios.");
+            if (!result.Success || result.Value is null)
+            {
+                SetFeedback(result.Feedback);
+                return;
+            }
+
+            _items.Clear();
+            _items.AddRange(result.Value);
+        }
+        finally
+        {
+            _loadingList = false;
+        }
+    }
+
+    private async Task SeleccionarAsync(string nombre)
+    {
+        if (string.IsNullOrWhiteSpace(nombre))
+            return;
+
+        var result = await UiOps.RunAsync(() => UsuariosSvc.GetByIdAsync(nombre), "No se pudo cargar el usuario.");
+        if (!result.Success)
+        {
+            SetFeedback(result.Feedback);
+            return;
+        }
+
+        if (result.Value is null)
+        {
+            SetFeedback(new AppUiMessage
+            {
+                Severity = AppUiFeedbackSeverity.Warning,
+                Title = "Usuario no disponible",
+                Message = "El usuario seleccionado ya no existe en la base activa."
+            });
+            await BuscarAsync();
+            BeginNew();
+            return;
+        }
+
+        MapDetailToForm(result.Value);
+    }
+
+    private void BeginNew()
+    {
+        _showEditor = true;
+        _isNewMode = true;
+        _selectedNombre = string.Empty;
+        _selectedAlta = null;
+        _selectedModificacion = null;
+        _selectedActivo = true;
+        _existingPhotoCacheToken = string.Empty;
+        _showPassword = false;
+        _confirmacionContrasena = string.Empty;
+        _pendingPhoto = null;
+        _photoPickerVersion++;
+
+        _form.NombreOriginal = string.Empty;
+        _form.Nombre = string.Empty;
+        _form.Email = string.Empty;
+        _form.EsGrupo = false;
+        _form.CambiarProximoInicio = false;
+        _form.Contrasena = string.Empty;
+        _form.FotoContenido = null;
+        _form.FotoNombreOriginal = string.Empty;
+        _form.FotoMimeType = string.Empty;
+        _form.QuitarFoto = false;
+    }
+
+    private void CerrarEditor()
+    {
+        _showEditor = false;
+        _showPassword = false;
+        _pendingPhoto = null;
+        _photoPickerVersion++;
+    }
+
+    private void ResetForm()
+    {
+        if (_isNewMode)
+        {
+            BeginNew();
+            return;
+        }
+
+        _ = SeleccionarAsync(_selectedNombre);
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (!_form.EsGrupo && !string.Equals(_form.Contrasena, _confirmacionContrasena, StringComparison.Ordinal))
+        {
+            SetFeedback(new AppUiMessage
+            {
+                Severity = AppUiFeedbackSeverity.Warning,
+                Title = "Confirmación inválida",
+                Message = "La confirmación de la contraseña no coincide."
+            });
+            return;
+        }
+
+        _saving = true;
+
+        try
+        {
+            _form.FotoContenido = _pendingPhoto?.Contenido;
+            _form.FotoNombreOriginal = _pendingPhoto?.NombreArchivo ?? string.Empty;
+            _form.FotoMimeType = _pendingPhoto?.MimeType ?? string.Empty;
+
+            var result = await UiOps.RunAsync(() => UsuariosSvc.SaveAsync(_form), "No se pudo guardar el usuario.");
+            if (!result.Success || string.IsNullOrWhiteSpace(result.Value))
+            {
+                SetFeedback(result.Feedback);
+                return;
+            }
+
+            SetFeedback(AppUiMessage.Success("Usuario guardado", $"El usuario {result.Value} se guardó correctamente."));
+            await BuscarAsync();
+            await SeleccionarAsync(result.Value);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void SeleccionarFila(string nombre)
+    {
+        _selectedNombre = nombre?.Trim() ?? string.Empty;
+    }
+
+    private async Task AbrirEditorAsync(string nombre)
+    {
+        _showEditor = true;
+        await SeleccionarAsync(nombre);
+    }
+
+    private async Task DarDeBajaAsync()
+    {
+        if (_isNewMode || string.IsNullOrWhiteSpace(_selectedNombre))
+            return;
+
+        _saving = true;
+        try
+        {
+            var result = await UiOps.RunAsync(() => UsuariosSvc.DeactivateAsync(_selectedNombre), "No se pudo dar de baja el usuario.");
+            if (!result.Success)
+            {
+                SetFeedback(result.Feedback);
+                return;
+            }
+
+            SetFeedback(AppUiMessage.Success("Usuario dado de baja", $"El usuario {_selectedNombre} quedó inactivo."));
+            BeginNew();
+            await BuscarAsync();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task HandlePhotoSelectedAsync(InputFileChangeEventArgs args)
+    {
+        var file = args.File;
+        if (file is null)
+            return;
+
+        await using var stream = file.OpenReadStream(5 * 1024 * 1024);
+        await using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+
+        var bytes = ms.ToArray();
+        _pendingPhoto = new PendingUserPhoto
+        {
+            NombreArchivo = file.Name,
+            MimeType = string.IsNullOrWhiteSpace(file.ContentType) ? "image/jpeg" : file.ContentType,
+            Contenido = bytes,
+            PreviewUrl = $"data:{(string.IsNullOrWhiteSpace(file.ContentType) ? "image/jpeg" : file.ContentType)};base64,{Convert.ToBase64String(bytes)}"
+        };
+
+        _form.QuitarFoto = false;
+        _photoPickerVersion++;
+    }
+
+    private void QuitarFoto()
+    {
+        _pendingPhoto = null;
+        _photoPickerVersion++;
+        _form.FotoContenido = null;
+        _form.FotoNombreOriginal = string.Empty;
+        _form.FotoMimeType = string.Empty;
+        _form.QuitarFoto = HasExistingPhoto;
+    }
+
+    private void TogglePasswordVisibility() => _showPassword = !_showPassword;
+
+    private void LimpiarFiltros()
+    {
+        _filters.Texto = string.Empty;
+        _activoFiltro = "1";
+        _grupoFiltro = string.Empty;
+    }
+
+    private void SyncFilters()
+    {
+        _filters.Activo = _activoFiltro switch
+        {
+            "1" => true,
+            "0" => false,
+            _ => null
+        };
+
+        _filters.EsGrupo = _grupoFiltro switch
+        {
+            "1" => true,
+            "0" => false,
+            _ => null
+        };
+    }
+
+    private void MapDetailToForm(UsuarioDetailDto detail)
+    {
+        _isNewMode = false;
+        _showEditor = true;
+        _selectedNombre = detail.Nombre;
+        _selectedAlta = detail.FechaHoraGrabacion;
+        _selectedModificacion = detail.FechaHoraModificacion;
+        _selectedActivo = detail.Activo;
+        _existingPhotoCacheToken = detail.TieneFoto ? detail.FotoCacheToken : string.Empty;
+        _showPassword = false;
+        _pendingPhoto = null;
+        _photoPickerVersion++;
+
+        _form.NombreOriginal = detail.Nombre;
+        _form.Nombre = detail.Nombre;
+        _form.Email = detail.Email;
+        _form.EsGrupo = detail.EsGrupo;
+        _form.CambiarProximoInicio = detail.CambiarProximoInicio;
+        _form.Contrasena = detail.ContrasenaDecodificada;
+        _form.FotoContenido = null;
+        _form.FotoNombreOriginal = string.Empty;
+        _form.FotoMimeType = string.Empty;
+        _form.QuitarFoto = false;
+
+        _confirmacionContrasena = detail.ContrasenaDecodificada;
+    }
+
+    private static string FormatDate(DateTime? value)
+        => value.HasValue ? value.Value.ToString("dd/MM/yyyy HH:mm") : "—";
+
+    private bool IsSelected(UsuarioGridItemDto item)
+        => !_isNewMode && string.Equals(_selectedNombre, item.Nombre, StringComparison.OrdinalIgnoreCase);
+
+    private void SetFeedback(AppUiMessage? message)
+    {
+        _feedback = message;
+    }
+
+    private static string GetFeedbackClass(AppUiMessage message)
+        => message.Severity switch
+        {
+            AppUiFeedbackSeverity.Success => "editor-msg--ok",
+            AppUiFeedbackSeverity.Warning => "editor-msg--warning",
+            _ => "editor-msg--error"
+        };
+
+    private sealed class PendingUserPhoto
+    {
+        public string NombreArchivo { get; init; } = string.Empty;
+        public string MimeType { get; init; } = string.Empty;
+        public byte[] Contenido { get; init; } = [];
+        public string PreviewUrl { get; init; } = string.Empty;
+    }
+}

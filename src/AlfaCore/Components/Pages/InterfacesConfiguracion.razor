@@ -9,7 +9,7 @@
     <div class="page-intro">
         <div>
             <h2 class="page-intro__title">Configuración de recepción documental</h2>
-            <p class="page-intro__text">Definí dónde se guardan los documentos recibidos por la bandeja de Interfaces. Esta configuración es independiente de <code>RutaDocumentosCompras</code>, que sigue reservada para documentos ya procesados en otros circuitos.</p>
+            <p class="page-intro__text">Definí dónde se guardan los documentos recibidos por la bandeja de Interfaces y qué reglas de carga aplica la base activa.</p>
         </div>
         <div class="actions">
             <a class="btn btn--ghost" href="/interfaces">
@@ -116,7 +116,7 @@
             <div class="context-card">
                 <span class="context-card__label">Destino actual esperado</span>
                 <strong>@_config.GetDestinoResumen()</strong>
-                <span class="context-card__muted">Para documentos ya procesados seguí usando <code>RutaDocumentosCompras</code> en el otro circuito.</span>
+                <span class="context-card__muted">Este destino se usa para la recepción documental del módulo Interfaces en la base activa.</span>
             </div>
 
             <div class="actions">

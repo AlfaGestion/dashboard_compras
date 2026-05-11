@@ -124,11 +124,17 @@ Acciones iniciales previstas:
 
 Estas claves quedan previstas en `TA_CONFIGURACION`:
 
-- `RutaDocumentosCompras`
+- `InterfacesRecepcionTipo`
+- `InterfacesRecepcionNombre`
+- `InterfacesRecepcionRuta`
+- `InterfacesFtpHost`
+- `InterfacesFtpPuerto`
+- `InterfacesFtpUsuario`
+- `InterfacesFtpClave`
+- `InterfacesFtpPasivo`
 - `InterfacesEstadoInicial`
 - `InterfacesTamanoMaximoMb`
 - `InterfacesExtensionesPermitidas`
-- `InterfacesPermiteEliminarFisico`
 
 ### Criterio de lectura
 
@@ -177,15 +183,15 @@ Para valores:
 
 Ruta base:
 
-- `RutaDocumentosCompras`
+- `InterfacesRecepcionRuta`
 
 Estructura recomendada:
 
-- `YYYY\MM\IdComprobanteRecibido\`
+- `YYYY_MM\IdComprobanteRecibido\`
 
 Ejemplo:
 
-- `C:\DocumentosCompras\2026\05\125\`
+- `C:\DocumentosCompras\2026_05\125\`
 
 Ventajas:
 

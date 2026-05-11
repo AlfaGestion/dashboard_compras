@@ -2,6 +2,7 @@
 @using Microsoft.AspNetCore.Components.Forms
 @inject AlfaCore.Services.ICostosService CostosSvc
 @inject AlfaCore.Services.IAppUiOperationService UiOps
+@inject AlfaCore.Services.IAppUserSessionService AppUserSession
 @inject NavigationManager Nav
 
 <PageTitle>Nueva Importación de Costos | Alfa Gestión</PageTitle>
@@ -399,7 +400,7 @@
 
             await using var stream = _upload.OpenReadStream(25 * 1024 * 1024);
             _result = await CostosSvc.ImportStructuredFileAsync(
-                _profileId, _upload.Name, stream, Environment.UserName,
+                _profileId, _upload.Name, stream, CurrentUserName,
                 _notes, priceColOverride, progress, _importCts.Token);
             _message = $"Corrida #{_result.Batch.Id} creada correctamente — {_result.Rows.Count} filas.";
         }
@@ -445,4 +446,6 @@
             parts.Add($"Código: {feedback.Code}");
         return string.Join(" ", parts.Where(static part => !string.IsNullOrWhiteSpace(part)));
     }
+
+    private string CurrentUserName => AppUserSession.GetCurrentUserName(Environment.UserName);
 }
