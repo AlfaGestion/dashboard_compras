@@ -56,7 +56,7 @@
                     <span>Incluir inactivas</span>
                     <input type="checkbox" @bind="_filters.IncluirInactivas" />
                 </label>
-                <button type="button" class="btn btn--primary" @onclick="LoadTemplatesAsync" disabled="_loading">
+                <button type="button" class="btn btn--primary" @onclick="LoadTemplatesAsync" disabled="@_loading">
                     <i class="bi bi-funnel"></i> Aplicar
                 </button>
             </div>
@@ -156,7 +156,7 @@
                         <input type="checkbox" @bind="_form.Activa" />
                     </label>
                     <div class="conversations-composer__actions">
-                        <button type="button" class="btn btn--primary" @onclick="SaveAsync" disabled="_busy">
+                        <button type="button" class="btn btn--primary" @onclick="SaveAsync" disabled="@(!CanSaveDraft)">
                             <i class="bi bi-save-fill"></i> Guardar borrador
                         </button>
                         <button type="button" class="btn btn--ghost" @onclick="SubmitAsync" disabled="@(_busy || _selectedId <= 0)">
@@ -222,6 +222,11 @@
     private string? _error;
 
     private string PreviewBody => RenderPreview(_form.CuerpoTexto, ParseExamples(_examplesText));
+    private bool CanSaveDraft
+        => !_busy
+           && !string.IsNullOrWhiteSpace(_form.NombreVisible)
+           && !string.IsNullOrWhiteSpace(_form.NombreMeta)
+           && !string.IsNullOrWhiteSpace(_form.CuerpoTexto);
 
     protected override async Task OnInitializedAsync()
         => await LoadTemplatesAsync();
