@@ -685,11 +685,28 @@ public sealed class ConversacionesService(
 
             var template = await GetTemplateAsync(request.IdPlantilla, token)
                 ?? throw new InvalidOperationException("La plantilla indicada no existe.");
-            if (!string.Equals(template.EstadoMeta, "APPROVED", StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("Solo se pueden enviar plantillas aprobadas por Meta.");
 
             var values = NormalizeTemplateValues(request.ValoresVariables);
             var config = await conversacionesConfigService.GetWhatsAppConfigAsync(token);
+            if (!string.Equals(template.EstadoMeta, "APPROVED", StringComparison.OrdinalIgnoreCase))
+            {
+                var meta = await GetMetaTemplateStatusAsync(config, template, token);
+                await UpdateTemplateMetaStateAsync(
+                    template.IdPlantilla,
+                    ConversacionPlantillaEstadosLocales.Sincronizada,
+                    meta.EstadoMeta,
+                    string.IsNullOrWhiteSpace(meta.MetaTemplateId) ? template.MetaTemplateId : meta.MetaTemplateId,
+                    meta.PayloadJson,
+                    meta.RechazoMotivo,
+                    token);
+
+                template.EstadoMeta = meta.EstadoMeta;
+                template.MetaTemplateId = string.IsNullOrWhiteSpace(meta.MetaTemplateId) ? template.MetaTemplateId : meta.MetaTemplateId;
+            }
+
+            if (!string.Equals(template.EstadoMeta, "APPROVED", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Solo se pueden enviar plantillas aprobadas por Meta.");
+
             var now = DateTime.Now;
             var previewText = RenderTemplatePreview(template.CuerpoTexto, values);
 
