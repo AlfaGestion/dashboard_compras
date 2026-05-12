@@ -216,6 +216,44 @@ BEGIN
 END;
 GO
 
+IF OBJECT_ID(N'dbo.CONV_PLANTILLAS', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.CONV_PLANTILLAS
+    (
+        IdPlantilla bigint IDENTITY(1,1) NOT NULL,
+        NombreVisible nvarchar(120) NOT NULL,
+        NombreMeta nvarchar(512) NOT NULL,
+        Categoria nvarchar(30) NOT NULL CONSTRAINT DF_CONV_PLANTILLAS_Categoria DEFAULT (N'MARKETING'),
+        Idioma nvarchar(20) NOT NULL CONSTRAINT DF_CONV_PLANTILLAS_Idioma DEFAULT (N'es_AR'),
+        EncabezadoTexto nvarchar(60) NULL,
+        CuerpoTexto nvarchar(max) NOT NULL,
+        PieTexto nvarchar(60) NULL,
+        EjemplosVariablesJson nvarchar(max) NULL,
+        EstadoLocal nvarchar(20) NOT NULL CONSTRAINT DF_CONV_PLANTILLAS_EstadoLocal DEFAULT (N'BORRADOR'),
+        EstadoMeta nvarchar(30) NOT NULL CONSTRAINT DF_CONV_PLANTILLAS_EstadoMeta DEFAULT (N'DRAFT'),
+        MetaTemplateId nvarchar(100) NULL,
+        MetaPayloadJson nvarchar(max) NULL,
+        MetaRechazoMotivo nvarchar(500) NULL,
+        Activa bit NOT NULL CONSTRAINT DF_CONV_PLANTILLAS_Activa DEFAULT (1),
+        UsuarioAccion nvarchar(50) NULL,
+        SistemaAccion nvarchar(50) NULL,
+        FechaHoraSincronizacion datetime NULL,
+        FechaHora_Grabacion datetime NOT NULL CONSTRAINT DF_CONV_PLANTILLAS_FhGrab DEFAULT (GETDATE()),
+        FechaHora_Modificacion datetime NULL,
+        CONSTRAINT PK_CONV_PLANTILLAS PRIMARY KEY CLUSTERED (IdPlantilla),
+        CONSTRAINT UQ_CONV_PLANTILLAS_NombreMeta_Idioma UNIQUE (NombreMeta, Idioma),
+        CONSTRAINT CK_CONV_PLANTILLAS_Categoria CHECK (Categoria IN (N'MARKETING', N'UTILITY')),
+        CONSTRAINT CK_CONV_PLANTILLAS_UsuarioAccion CHECK (
+            (UsuarioAccion IS NULL AND SistemaAccion IS NULL)
+            OR
+            (UsuarioAccion IS NOT NULL AND SistemaAccion IS NOT NULL)
+        ),
+        CONSTRAINT FK_CONV_PLANTILLAS_USUARIO FOREIGN KEY (UsuarioAccion, SistemaAccion)
+            REFERENCES dbo.TA_USUARIOS (NOMBRE, SISTEMA)
+    );
+END;
+GO
+
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_CONV_CONVERSACIONES_Telefono' AND object_id = OBJECT_ID(N'dbo.CONV_CONVERSACIONES'))
     CREATE NONCLUSTERED INDEX IX_CONV_CONVERSACIONES_Telefono
         ON dbo.CONV_CONVERSACIONES (TelefonoWhatsApp, FechaHoraUltimoMensaje DESC);
@@ -250,4 +288,9 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_CONV_WEBHOOK_LOG_MessageId' AND object_id = OBJECT_ID(N'dbo.CONV_WEBHOOK_LOG'))
     CREATE NONCLUSTERED INDEX IX_CONV_WEBHOOK_LOG_MessageId
         ON dbo.CONV_WEBHOOK_LOG (WhatsAppMessageId, FechaHoraRecepcion DESC);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_CONV_PLANTILLAS_EstadoMeta' AND object_id = OBJECT_ID(N'dbo.CONV_PLANTILLAS'))
+    CREATE NONCLUSTERED INDEX IX_CONV_PLANTILLAS_EstadoMeta
+        ON dbo.CONV_PLANTILLAS (EstadoMeta, Activa, FechaHora_Grabacion DESC);
 GO

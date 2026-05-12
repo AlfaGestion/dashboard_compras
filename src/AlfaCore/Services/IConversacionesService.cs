@@ -10,6 +10,12 @@ public interface IConversacionesService
     Task<ConversacionDetalleDto?> GetConversationAsync(long conversationId, CancellationToken ct = default);
     Task<IReadOnlyList<ConversacionMensajeDto>> GetMessagesAsync(long conversationId, CancellationToken ct = default);
     Task<ConversacionMessageResultDto> SendMessageAsync(ConversacionSendMessageRequest request, CancellationToken ct = default);
+    Task<IReadOnlyList<ConversacionPlantillaDto>> GetTemplatesAsync(ConversacionPlantillaFilters filters, CancellationToken ct = default);
+    Task<ConversacionPlantillaDto?> GetTemplateAsync(long idPlantilla, CancellationToken ct = default);
+    Task<long> SaveTemplateDraftAsync(ConversacionPlantillaSaveRequest request, CancellationToken ct = default);
+    Task SubmitTemplateForApprovalAsync(ConversacionPlantillaSubmitRequest request, CancellationToken ct = default);
+    Task SyncTemplateStatusAsync(long idPlantilla, CancellationToken ct = default);
+    Task<ConversacionPlantillaMessageResultDto> SendTemplateMessageAsync(ConversacionPlantillaSendRequest request, CancellationToken ct = default);
     Task<long> AddInternalNoteAsync(ConversacionNotaInternaRequest request, CancellationToken ct = default);
     Task AssignConversationAsync(ConversacionAsignacionRequest request, CancellationToken ct = default);
     Task ChangeStatusAsync(ConversacionEstadoRequest request, CancellationToken ct = default);
