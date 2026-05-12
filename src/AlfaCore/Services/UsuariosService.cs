@@ -26,10 +26,14 @@ public sealed class UsuariosService(
         : configuration.GetConnectionString("AlfaGestion")
           ?? throw new InvalidOperationException("No se configuró la cadena de conexión 'ConnectionStrings:AlfaGestion'.");
 
-    public Task<IReadOnlyList<UsuarioGridItemDto>> SearchAsync(UsuariosFilters filters, CancellationToken ct = default)
+    public Task<PagedResult<UsuarioGridItemDto>> SearchAsync(UsuariosFilters filters, CancellationToken ct = default)
         => ExecuteLoggedAsync(ModuleName, "Search", async token =>
         {
             filters ??= new UsuariosFilters();
+            var pageSize   = Math.Max(1, Math.Min(filters.PageSize, 200));
+            var pageNumber = Math.Max(1, filters.PageNumber);
+            var skip       = (pageNumber - 1) * pageSize;
+
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync(token);
             var hasActivo = await HasActivoColumnAsync(cn, token);
@@ -37,8 +41,12 @@ public sealed class UsuariosService(
             var activoFilterSql = !hasActivo && filters.Activo == false
                 ? "AND 1 = 0"
                 : "AND (@Activo IS NULL OR " + activoExpr + " = @Activo)";
+            var orderBySql = hasActivo
+                ? $"{activoExpr} DESC, NOMBRE ASC"
+                : "NOMBRE ASC";
+
             var sql = $"""
-                SELECT TOP ({Math.Max(1, Math.Min(filters.MaxRows, 500))})
+                SELECT
                     ISNULL(NOMBRE, ''),
                     ISNULL(email_de, ''),
                     ISNULL(EsGrupo, 0),
@@ -55,7 +63,19 @@ public sealed class UsuariosService(
                       )
                   {activoFilterSql}
                   AND (@EsGrupo IS NULL OR ISNULL(EsGrupo, 0) = @EsGrupo)
-                ORDER BY {activoExpr} DESC, NOMBRE ASC
+                ORDER BY {orderBySql}
+                OFFSET @Skip ROWS FETCH NEXT @PageSize ROWS ONLY;
+
+                SELECT COUNT(*)
+                FROM dbo.TA_USUARIOS
+                WHERE UPPER(LTRIM(RTRIM(SISTEMA))) = @Sistema
+                  AND (
+                        @Texto = ''
+                        OR ISNULL(NOMBRE, '') LIKE '%' + @Texto + '%'
+                        OR ISNULL(email_de, '') LIKE '%' + @Texto + '%'
+                      )
+                  {activoFilterSql}
+                  AND (@EsGrupo IS NULL OR ISNULL(EsGrupo, 0) = @EsGrupo);
                 """;
 
             var rows = new List<UsuarioGridItemDto>();
@@ -64,6 +84,8 @@ public sealed class UsuariosService(
             cmd.Parameters.AddWithValue("@Texto", filters.Texto?.Trim() ?? string.Empty);
             cmd.Parameters.AddWithValue("@Activo", filters.Activo.HasValue ? filters.Activo.Value : DBNull.Value);
             cmd.Parameters.AddWithValue("@EsGrupo", filters.EsGrupo.HasValue ? filters.EsGrupo.Value : DBNull.Value);
+            cmd.Parameters.AddWithValue("@Skip", skip);
+            cmd.Parameters.AddWithValue("@PageSize", pageSize);
 
             await using var rd = await cmd.ExecuteReaderAsync(token);
             while (await rd.ReadAsync(token))
@@ -82,7 +104,17 @@ public sealed class UsuariosService(
                 });
             }
 
-            return (IReadOnlyList<UsuarioGridItemDto>)rows;
+            var total = 0;
+            if (await rd.NextResultAsync(token) && await rd.ReadAsync(token))
+                total = rd.IsDBNull(0) ? 0 : Convert.ToInt32(rd.GetValue(0));
+
+            return new PagedResult<UsuarioGridItemDto>
+            {
+                Items      = rows,
+                Total      = total,
+                PageNumber = pageNumber,
+                PageSize   = pageSize
+            };
         }, "No se pudieron cargar los usuarios.", ct);
 
     public Task<UsuarioDetailDto?> GetByIdAsync(string nombre, CancellationToken ct = default)

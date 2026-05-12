@@ -58,6 +58,8 @@ public class Program
         builder.Services.AddScoped<IInterfacesConfigService, InterfacesConfigService>();
         builder.Services.AddScoped<IUsuariosService, UsuariosService>();
         builder.Services.AddScoped<IUsuariosValidator, UsuariosValidator>();
+        builder.Services.AddScoped<IContactosService, ContactosService>();
+        builder.Services.AddScoped<IContactosValidator, ContactosValidator>();
         builder.Services.AddScoped<IAppUserSessionService, AppUserSessionService>();
         builder.Services.AddSingleton<UsuariosPasswordCodec>();
         builder.Services.AddScoped<IAuditoriaService, AuditoriaService>();

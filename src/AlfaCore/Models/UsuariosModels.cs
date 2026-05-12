@@ -2,10 +2,11 @@ namespace AlfaCore.Models;
 
 public sealed class UsuariosFilters
 {
-    public string Texto { get; set; } = string.Empty;
-    public bool? Activo { get; set; } = true;
-    public bool? EsGrupo { get; set; }
-    public int MaxRows { get; set; } = 250;
+    public string Texto      { get; set; } = string.Empty;
+    public bool?  Activo     { get; set; } = true;
+    public bool?  EsGrupo    { get; set; }
+    public int    PageNumber { get; set; } = 1;
+    public int    PageSize   { get; set; } = 50;
 }
 
 public sealed class UsuarioGridItemDto

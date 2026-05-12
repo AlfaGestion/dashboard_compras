@@ -1821,7 +1821,8 @@ html[data-theme="light"] .resumen-alicuota-table tr.row-subtotal td {
 .app-card__icon--caja     { background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: #fff; }
 .app-card__icon--contabilidad { background: linear-gradient(135deg, #ec4899, #db2777); color: #fff; }
 .app-card__icon--consultas { background: linear-gradient(135deg, #14b8a6, #0d9488); color: #fff; }
-.app-card__icon--usuarios { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; }
+.app-card__icon--usuarios  { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; }
+.app-card__icon--contactos { background: linear-gradient(135deg, #f97316, #ea580c); color: #fff; }
 
 .app-card__name {
     font-size: 1rem;

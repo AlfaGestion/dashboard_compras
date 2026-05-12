@@ -78,7 +78,7 @@
                 </select>
             </div>
             <div class="actions">
-                <button type="button" class="btn btn--primary" @onclick="BuscarAsync" disabled="@_loadingList">
+                <button type="button" class="btn btn--primary" @onclick="AplicarFiltrosAsync" disabled="@_loadingList">
                     <i class="bi bi-funnel"></i> Aplicar
                 </button>
                 <button type="button" class="btn btn--ghost" @onclick="LimpiarFiltros" disabled="@_loadingList">
@@ -330,7 +330,7 @@
             <div class="panel-card__header">
                 <div>
                     <h3 class="panel-card__title">Usuarios</h3>
-                    <p class="panel-card__subtitle">@_items.Count registro(s) · doble clic para abrir la ficha.</p>
+                    <p class="panel-card__subtitle">@_pagedTotal registro(s) · Página @_pageNumber de @_totalPages · doble clic para abrir la ficha.</p>
                 </div>
                 <div class="actions">
                     <button type="button" class="btn btn--ghost" @onclick="AbrirConfiguracionVista">
@@ -424,6 +424,31 @@
                         }
                     </table>
                 </div>
+
+                <div class="result-pagination">
+                    <span class="result-pagination__info">@_pagedTotal registro(s)</span>
+                    <div class="result-pagination__controls">
+                        <button class="result-pagination__btn" title="Página anterior"
+                                @onclick="() => CambiarPaginaAsync(_pageNumber - 1)"
+                                disabled="@(!_hasPrev || _loadingList)">
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+                        <span class="result-pagination__btn result-pagination__btn--active">@_pageNumber / @_totalPages</span>
+                        <button class="result-pagination__btn" title="Página siguiente"
+                                @onclick="() => CambiarPaginaAsync(_pageNumber + 1)"
+                                disabled="@(!_hasNext || _loadingList)">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
+                    <select class="result-pagination__size" title="Registros por página"
+                            value="@_filters.PageSize"
+                            @onchange="OnPageSizeChangedAsync"
+                            disabled="@_loadingList">
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
             }
         </section>
     }
@@ -447,6 +472,11 @@
     private bool _showViewSettings;
     private bool _viewSettingsLoaded;
     private int _photoPickerVersion;
+    private int _pagedTotal;
+    private int _pageNumber = 1;
+    private int _totalPages = 1;
+    private bool _hasPrev;
+    private bool _hasNext;
     private string _selectedNombre = string.Empty;
     private string _confirmacionContrasena = string.Empty;
     private string _activoFiltro = "1";
@@ -485,6 +515,12 @@
             await SeleccionarAsync(_selectedNombre);
     }
 
+    private async Task AplicarFiltrosAsync()
+    {
+        _filters.PageNumber = 1;
+        await BuscarAsync();
+    }
+
     private async Task BuscarAsync()
     {
         _loadingList = true;
@@ -500,12 +536,33 @@
             }
 
             _items.Clear();
-            _items.AddRange(result.Value);
+            _items.AddRange(result.Value.Items);
+            _pagedTotal  = result.Value.Total;
+            _pageNumber  = result.Value.PageNumber;
+            _totalPages  = result.Value.TotalPages;
+            _hasPrev     = result.Value.HasPrev;
+            _hasNext     = result.Value.HasNext;
         }
         finally
         {
             _loadingList = false;
         }
+    }
+
+    private async Task CambiarPaginaAsync(int page)
+    {
+        if (page < 1 || page > _totalPages || _loadingList)
+            return;
+        _filters.PageNumber = page;
+        await BuscarAsync();
+    }
+
+    private async Task OnPageSizeChangedAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var size) && size > 0)
+            _filters.PageSize = size;
+        _filters.PageNumber = 1;
+        await BuscarAsync();
     }
 
     private async Task SeleccionarAsync(string nombre)

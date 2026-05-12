@@ -135,6 +135,20 @@
                     </NavLink>
                 </nav>
             }
+            else if (_currentModule == "contactos")
+            {
+                <a class="menu__back" href="/">
+                    <i class="bi bi-grid-3x3-gap-fill"></i>
+                    <span>Aplicaciones</span>
+                </a>
+                <p class="menu__section">Contactos</p>
+                <nav class="menu__nav">
+                    <NavLink class="menu__link" href="/contactos" Match="NavLinkMatch.All">
+                        <span class="menu__icon"><i class="bi bi-person-lines-fill"></i></span>
+                        <span>Agenda de contactos</span>
+                    </NavLink>
+                </nav>
+            }
             else if (_currentModule == "ventas")
             {
                 <a class="menu__back" href="/">
@@ -530,6 +544,7 @@
             "interfaces" => "Recepción documental",
             "interfaces/configuracion" => "Configuración de Interfaces",
             "usuarios" => "Usuarios",
+            "contactos" => "Contactos",
             "compras" => "Inicio",
             "compras/proveedores" => "Proveedores",
             "compras/comprobantes" => "Comprobantes",
@@ -563,6 +578,7 @@
         "conversaciones" => "Conversaciones",
         "interfaces" => "Interfaces",
         "usuarios" => "Usuarios",
+        "contactos" => "Contactos",
         _ => "Dashboard de Compras"
     };
 }

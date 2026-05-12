@@ -669,3 +669,184 @@ Toda decisión debe priorizar:
 - mantenimiento
 - reutilización
 - crecimiento ordenado
+
+---
+
+## 26. Regla obligatoria: Configurar Vista en listados ABM
+
+### 26.1 Aplicación
+
+Todo módulo ABM que muestre un listado de registros **debe incluir la opción "Configurar vista"**.
+
+Esto aplica a:
+- módulos ya existentes: Contactos, Usuarios
+- todos los módulos nuevos que se creen
+
+### 26.2 Qué incluye "Configurar Vista"
+
+El panel de configuración de vista permite al usuario:
+
+- **Activar o desactivar columnas** de la grilla (visibilidad)
+- **Reordenar columnas** con botones arriba/abajo
+- **Elegir agrupación** de filas cuando aplique (por estado, tipo, etc.)
+
+La configuración es **por usuario** y se persiste en `TA_CONFIGURACION` con una clave única derivada del nombre de usuario y el módulo.
+
+### 26.3 Estructura de modelos esperada por módulo
+
+Cada módulo ABM debe definir en su archivo de modelos:
+
+```csharp
+// DTO de configuración de vista
+public sealed class {Modulo}ViewSettingsDto
+{
+    public string AgruparPor { get; set; } = {Modulo}ViewGroupKeys.None;
+    public List<{Modulo}ViewColumnDto> Columnas { get; set; } = [];
+}
+
+// DTO de columna
+public sealed class {Modulo}ViewColumnDto
+{
+    public string Key     { get; set; } = string.Empty;
+    public string Label   { get; set; } = string.Empty;
+    public bool   Visible { get; set; }
+    public int    Order   { get; set; }
+}
+
+// Claves de columnas disponibles
+public static class {Modulo}ViewColumnKeys { ... }
+
+// Claves de agrupaciones disponibles
+public static class {Modulo}ViewGroupKeys
+{
+    public const string None = "none";
+    // + agrupaciones específicas del módulo
+}
+```
+
+### 26.4 Persistencia
+
+La configuración se guarda en `dbo.TA_CONFIGURACION` usando:
+- `CLAVE`: prefijo fijo por módulo + hash SHA-256 del nombre de usuario (ej. `"USUVIEW-CONTACTOS-{hash24}"`)
+- `VALOR` / `VALORAUX` o `DESCRIPCION`: JSON serializado de la configuración
+- `GRUPO`: nombre del módulo en mayúsculas (ej. `"CONTACTOS"`)
+
+Patrón de clave de configuración:
+```csharp
+private const string ViewConfigPrefix = "USUVIEW-{MODULO}-";
+private static string BuildViewConfigKey(string userName)
+{
+    var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(userName.Trim().ToUpperInvariant())));
+    return $"{ViewConfigPrefix}{hash[..24]}";
+}
+```
+
+### 26.5 Métodos requeridos en el servicio
+
+```csharp
+Task<{Modulo}ViewSettingsDto> GetViewSettingsAsync(string userName, CancellationToken ct = default);
+Task SaveViewSettingsAsync(string userName, {Modulo}ViewSettingsDto settings, CancellationToken ct = default);
+```
+
+### 26.6 Comportamiento esperado en la UI
+
+- Al cargar el módulo: cargar la configuración guardada del usuario logueado.
+- Si no hay configuración guardada: usar defaults del módulo.
+- Al cambiar de sesión SQL o usuario: recargar la configuración.
+- El panel de configuración no reemplaza el editor ni el listado: aparece como sección adicional encima de la grilla.
+- Guardar la configuración no recarga la grilla; solo actualiza la vista.
+- Al menos una columna debe permanecer visible siempre.
+
+### 26.7 Lo que NO se debe hacer
+
+- No hardcodear columnas fijas en la tabla si el módulo tiene "Configurar vista".
+- No guardar la configuración en memoria local del navegador (localStorage): usar `TA_CONFIGURACION`.
+- No crear un componente universal genérico prematuro; copiar el patrón módulo a módulo hasta que haya al menos 3 implementaciones que justifiquen extraerlo.
+
+---
+
+## 27. Regla obligatoria de paginación en listados ABM
+
+### 26.1 Aplicación
+
+Todo módulo ABM (alta, baja, modificación) que muestre un listado de registros **debe implementar paginación server-side**.
+
+Esto aplica a:
+- módulos ya existentes: Contactos, Usuarios
+- todos los módulos nuevos que se creen
+
+No se aceptan listados sin paginación en pantallas de ABM.
+
+### 26.2 Técnica obligatoria
+
+Usar paginación por `OFFSET / FETCH` en SQL Server.  
+No usar `TOP N` como sustituto de paginación en listados de producción.
+
+Estructura SQL esperada:
+
+```sql
+SELECT ...
+FROM ...
+WHERE ...
+ORDER BY ...
+OFFSET @Skip ROWS FETCH NEXT @PageSize ROWS ONLY;
+
+SELECT COUNT(*) FROM ... WHERE ...;
+```
+
+El `COUNT(*)` debe ejecutarse en la misma conexión, preferentemente como segunda sentencia en el mismo batch o en una llamada separada dentro de la misma transacción lógica.
+
+### 26.3 Parámetros estándar en Filters
+
+Todo objeto de filtros de un listado ABM debe incluir:
+
+```csharp
+public int PageNumber { get; set; } = 1;   // página actual, base 1
+public int PageSize   { get; set; } = 50;  // registros por página
+```
+
+El valor `Skip` se calcula como `(PageNumber - 1) * PageSize`.
+
+### 26.4 Retorno estándar del servicio
+
+El método de búsqueda debe retornar un objeto `PagedResult<T>` con:
+
+```csharp
+public sealed class PagedResult<T>
+{
+    public IReadOnlyList<T> Items    { get; init; } = [];
+    public int              Total    { get; init; }
+    public int              PageNumber { get; init; }
+    public int              PageSize   { get; init; }
+    public int              TotalPages => PageSize > 0 ? (int)Math.Ceiling((double)Total / PageSize) : 0;
+    public bool             HasPrev    => PageNumber > 1;
+    public bool             HasNext    => PageNumber < TotalPages;
+}
+```
+
+Esta clase debe vivir en `Models/` y ser compartida por todos los módulos.
+
+### 26.5 Controles de UI esperados
+
+El componente Razor debe mostrar debajo de la grilla:
+
+- total de registros encontrados
+- página actual / total de páginas
+- botón "Anterior" (deshabilitado si `!HasPrev`)
+- botón "Siguiente" (deshabilitado si `!HasNext`)
+- opcionalmente: selector de `PageSize` (25 / 50 / 100)
+
+Al cambiar de página **no se resetean los filtros activos**.  
+Al cambiar un filtro y buscar, se vuelve a `PageNumber = 1`.
+
+### 26.6 Tamaño de página por defecto
+
+El valor por defecto es **50 registros por página**.  
+Puede configurarse por módulo si hay una razón justificada, pero nunca superar 200 sin autorización explícita.
+
+### 26.7 Lo que NO se debe hacer
+
+- No traer todos los registros y paginar en memoria con `.Skip().Take()` en C#.
+- No usar `TOP N` fijo como workaround de paginación.
+- No mostrar grillas sin límite de filas en producción.
+- No paginar en UI con JavaScript si el volumen de datos viene completo del servidor.
