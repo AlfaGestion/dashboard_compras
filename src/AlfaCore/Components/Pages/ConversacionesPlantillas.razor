@@ -3,8 +3,8 @@
 
 <PageTitle>Plantillas de WhatsApp | Alfa Gestión</PageTitle>
 
-<section class="page-grid">
-    <div class="page-intro">
+<section class="page-grid templates-page templates-page--odoo">
+    <div class="page-intro conversations-topbar">
         <div>
             <h2 class="page-intro__title">Plantillas de WhatsApp</h2>
             <p class="page-intro__text">Creá borradores, envialos a aprobación de Meta y sincronizá su estado para retomar conversaciones fuera de la ventana de 24 horas.</p>
@@ -15,6 +15,9 @@
             </a>
             <button type="button" class="btn btn--primary" @onclick="NuevaPlantilla">
                 <i class="bi bi-plus-circle-fill"></i> Nueva plantilla
+            </button>
+            <button type="button" class="btn btn--ghost" @onclick="AplicarModeloCobranzaAsync">
+                <i class="bi bi-receipt"></i> Modelo cobranza
             </button>
         </div>
     </div>
@@ -33,7 +36,7 @@
     }
     else
     {
-        <section class="panel-card">
+        <section class="panel-card templates-filters">
             <div class="conversations-filters__fields">
                 <div class="field">
                     <label for="tpl-search">Buscar</label>
@@ -52,7 +55,7 @@
                         <option value="DISABLED">Deshabilitada</option>
                     </select>
                 </div>
-                <label class="field" style="justify-content:end">
+                <label class="field templates-toggle">
                     <span>Incluir inactivas</span>
                     <input type="checkbox" @bind="_filters.IncluirInactivas" />
                 </label>
@@ -62,7 +65,7 @@
             </div>
         </section>
 
-        <div class="conversations-layout">
+        <div class="conversations-layout templates-layout">
             <aside class="panel-card conversations-list">
                 <div class="conversations-list__header">
                     <div>
@@ -106,7 +109,7 @@
                 }
             </aside>
 
-            <section class="panel-card conversations-chat">
+            <section class="panel-card conversations-chat templates-editor">
                 <header class="conversations-chat__header">
                     <div>
                         <h3 class="panel-card__title">@(_selectedId > 0 ? "Editar plantilla" : "Nueva plantilla")</h3>
@@ -117,7 +120,7 @@
                     </div>
                 </header>
 
-                <div class="conversations-composer">
+                <div class="conversations-composer templates-form">
                     <div class="field">
                         <label for="tpl-name">Nombre visible</label>
                         <input id="tpl-name" @bind="_form.NombreVisible" placeholder="Ej: Retomar conversación" />
@@ -141,6 +144,13 @@
                         <label for="tpl-body">Cuerpo</label>
                         <textarea id="tpl-body" rows="5" @bind="_form.CuerpoTexto"
                                   placeholder="Hola {{1}}, te escribimos para continuar con la conversación pendiente."></textarea>
+                        <div class="templates-body-limit @(IsBodyTooLong ? "is-danger" : string.Empty)">
+                            <span>@BodyLength / @MetaBodyMaxLength caracteres</span>
+                            @if (IsBodyTooLong)
+                            {
+                                <strong>Meta permite hasta @MetaBodyMaxLength caracteres en el cuerpo.</strong>
+                            }
+                        </div>
                     </div>
                     <div class="field">
                         <label for="tpl-footer">Pie de página</label>
@@ -151,6 +161,12 @@
                         <textarea id="tpl-examples" rows="3" @bind="_examplesText"
                                   placeholder="Un valor por línea. Ej: Evelyn"></textarea>
                     </div>
+                    <div class="templates-variable-guide">
+                        <span class="context-card__label">Variables automáticas sugeridas</span>
+                        <button type="button" class="templates-variable-chip" @onclick='() => InsertVariable("{{1}}")'>@("{{1}} Nombre")</button>
+                        <button type="button" class="templates-variable-chip" @onclick='() => InsertVariable("{{2}}")'>@("{{2}} Detalle de deuda")</button>
+                        <button type="button" class="templates-variable-chip" @onclick='() => InsertVariable("{{3}}")'>@("{{3}} Forma de pago")</button>
+                    </div>
                     <label class="field">
                         <span>Plantilla activa</span>
                         <input type="checkbox" @bind="_form.Activa" />
@@ -159,7 +175,7 @@
                         <button type="button" class="btn btn--primary" @onclick="SaveAsync" disabled="@(!CanSaveDraft)">
                             <i class="bi bi-save-fill"></i> Guardar borrador
                         </button>
-                        <button type="button" class="btn btn--ghost" @onclick="SubmitAsync" disabled="@(_busy || _selectedId <= 0)">
+                        <button type="button" class="btn btn--ghost" @onclick="SubmitAsync" disabled="@(_busy || _selectedId <= 0 || IsBodyTooLong)">
                             <i class="bi bi-cloud-arrow-up-fill"></i> Enviar a aprobación
                         </button>
                         <button type="button" class="btn btn--ghost" @onclick="SyncAsync" disabled="@(_busy || _selectedId <= 0)">
@@ -178,7 +194,7 @@
                 </div>
             </section>
 
-            <aside class="panel-card conversations-context">
+            <aside class="panel-card conversations-context templates-preview">
                 <div class="conversations-context__section">
                     <h3 class="panel-card__title">Vista previa</h3>
                     <p class="panel-card__subtitle">Así se verá el cuerpo principal con ejemplos.</p>
@@ -221,7 +237,56 @@
     private string? _feedback;
     private string? _error;
 
+    private const string MultiValueSeparator = "---";
+    private const int MetaBodyMaxLength = 550;
+
+    private static readonly string CobranzaTemplateBody = string.Join(Environment.NewLine,
+    [
+        "Estimado {{1}}",
+        "Esperamos que se encuentre bien.",
+        string.Empty,
+        "Le recordamos que registra facturas pendientes. Para continuar brindandole el servicio, solicitamos realizar el pago o transferencia a la brevedad.",
+        string.Empty,
+        "Detalle de cuenta:",
+        string.Empty,
+        "{{2}}",
+        string.Empty,
+        "Si ya realizo el pago, envie el comprobante respondiendo este mensaje o a administracion@alfagestion.com.ar.",
+        string.Empty,
+        "Alfa Net Plus",
+        "Soluciones Informaticas",
+        "Marta Ester Saez",
+        "whatsapp:+5491151480148",
+        string.Empty,
+        "Datos para transferencia:",
+        "{{3}}",
+        string.Empty,
+        "Por favor enviar comprobante de pago por este chat."
+    ]);
+
+    private static readonly string CobranzaDetalleEjemplo = string.Join(Environment.NewLine,
+    [
+        "SALDO ACTUAL............................................: 1,520,963.04",
+        "Cantidad de comprobantes pendientes de pago: 3",
+        "Dias de atraso...............................................: 73",
+        "Fecha comprobante mas antiguo....................: 01/03/2026"
+    ]);
+
+    private static readonly string CobranzaFormaPagoEjemplo = string.Join(Environment.NewLine,
+    [
+        "FORMA DE PAGO:",
+        "TRANSFERENCIAS",
+        "Alias",
+        "alfa.net.plus.mp",
+        "CVU",
+        "0000003100085700504735",
+        string.Empty,
+        "ANTUNEZ ALBERTO FAVIO"
+    ]);
+
     private string PreviewBody => RenderPreview(_form.CuerpoTexto, ParseExamples(_examplesText));
+    private int BodyLength => _form.CuerpoTexto?.Length ?? 0;
+    private bool IsBodyTooLong => BodyLength > MetaBodyMaxLength;
     private bool CanSaveDraft
         => !_busy
            && !string.IsNullOrWhiteSpace(_form.NombreVisible)
@@ -296,6 +361,38 @@
         _error = null;
     }
 
+    private async Task AplicarModeloCobranzaAsync()
+    {
+        var model = NewCobranzaForm();
+        var existing = _templates.FirstOrDefault(x =>
+            string.Equals(x.NombreMeta, model.NombreMeta, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(x.Idioma, model.Idioma, StringComparison.OrdinalIgnoreCase));
+
+        _selectedId = existing?.IdPlantilla ?? 0;
+        model.IdPlantilla = _selectedId;
+        _form = model;
+        _examplesText = JoinMultilineValues(
+        [
+            "ANTU MALAL- ROLO GUAJARDO",
+            CobranzaDetalleEjemplo,
+            CobranzaFormaPagoEjemplo
+        ]);
+        _formEstadoMeta = "DRAFT";
+        _feedback = _selectedId > 0
+            ? "Modelo de cobranza cargado sobre la plantilla existente. Revisa y guarda los cambios."
+            : "Modelo de cobranza cargado. Revisa los ejemplos y guarda el borrador.";
+        _error = null;
+
+        await Task.CompletedTask;
+    }
+
+    private void InsertVariable(string variable)
+    {
+        _form.CuerpoTexto = string.IsNullOrWhiteSpace(_form.CuerpoTexto)
+            ? variable
+            : $"{_form.CuerpoTexto}{Environment.NewLine}{variable}";
+    }
+
     private async Task SaveAsync()
     {
         _busy = true;
@@ -341,6 +438,12 @@
         _error = null;
         try
         {
+            if (IsBodyTooLong)
+            {
+                _error = $"Meta permite hasta {MetaBodyMaxLength} caracteres en el cuerpo. Acortá el texto antes de enviarlo a aprobación.";
+                return;
+            }
+
             await ConversacionesSvc.SubmitTemplateForApprovalAsync(new ConversacionPlantillaSubmitRequest
             {
                 IdPlantilla = _selectedId
@@ -395,6 +498,18 @@
             CuerpoTexto = "Hola {{1}}, te escribimos para continuar con la conversación pendiente. Respondé este mensaje y seguimos desde donde quedamos."
         };
 
+    private static ConversacionPlantillaDto NewCobranzaForm()
+        => new()
+        {
+            NombreVisible = "Recordatorio de deuda",
+            NombreMeta = "recordatorio_deuda",
+            Categoria = ConversacionPlantillaCategorias.Utility,
+            Idioma = "es_AR",
+            Activa = true,
+            EstadoMeta = "DRAFT",
+            CuerpoTexto = CobranzaTemplateBody
+        };
+
     private static string RenderPreview(string text, IReadOnlyList<string> values)
     {
         var result = string.IsNullOrWhiteSpace(text) ? "Escribí el cuerpo de la plantilla." : text;
@@ -405,11 +520,7 @@
     }
 
     private static List<string> ParseExamples(string value)
-        => (value ?? string.Empty)
-            .Split(["\r\n", "\n", "\r"], StringSplitOptions.RemoveEmptyEntries)
-            .Select(x => x.Trim())
-            .Where(x => x.Length > 0)
-            .ToList();
+        => ParseMultilineValues(value);
 
     private static string ExamplesToText(string json)
     {
@@ -419,12 +530,57 @@
         try
         {
             var values = System.Text.Json.JsonSerializer.Deserialize<List<string>>(json) ?? [];
-            return string.Join(Environment.NewLine, values);
+            return JoinMultilineValues(values);
         }
         catch
         {
             return json;
         }
+    }
+
+    private static List<string> ParseMultilineValues(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return [];
+
+        var normalized = value.Replace("\r\n", "\n").Replace('\r', '\n');
+        if (normalized.Split('\n').Any(x => string.Equals(x.Trim(), MultiValueSeparator, StringComparison.Ordinal)))
+        {
+            var result = new List<string>();
+            var current = new List<string>();
+
+            foreach (var line in normalized.Split('\n'))
+            {
+                if (string.Equals(line.Trim(), MultiValueSeparator, StringComparison.Ordinal))
+                {
+                    AddBlock(result, current);
+                    current.Clear();
+                    continue;
+                }
+
+                current.Add(line);
+            }
+
+            AddBlock(result, current);
+            return result;
+        }
+
+        return normalized
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Trim())
+            .Where(x => x.Length > 0)
+            .ToList();
+    }
+
+    private static string JoinMultilineValues(IEnumerable<string> values)
+        => string.Join($"{Environment.NewLine}{MultiValueSeparator}{Environment.NewLine}",
+            values.Select(x => (x ?? string.Empty).Trim()).Where(x => x.Length > 0));
+
+    private static void AddBlock(List<string> result, List<string> lines)
+    {
+        var block = string.Join(Environment.NewLine, lines).Trim();
+        if (block.Length > 0)
+            result.Add(block);
     }
 
     private static string GetMetaStatusLabel(string value)
