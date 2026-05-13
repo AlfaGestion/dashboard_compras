@@ -3126,6 +3126,54 @@ html[data-theme="light"] .conversations-context::-webkit-scrollbar-thumb {
     justify-self: center;
 }
 
+.modal-overlay.conversations-template-modal .conversations-template-modal__card {
+    box-sizing: border-box;
+    width: min(920px, calc(100vw - 3rem));
+    max-width: none;
+    overflow-x: hidden;
+    padding: 1.35rem;
+}
+
+.modal-overlay.conversations-template-modal .conversations-template-modal__body {
+    grid-template-columns: minmax(0, .85fr) minmax(0, 1fr);
+    min-width: 0;
+}
+
+.modal-overlay.conversations-template-modal .conversations-template-modal__header,
+.modal-overlay.conversations-template-modal .conversations-template-modal__form,
+.modal-overlay.conversations-template-modal .conversations-template-phone-preview,
+.modal-overlay.conversations-template-modal .field,
+.modal-overlay.conversations-template-modal .context-card {
+    min-width: 0;
+}
+
+.modal-overlay.conversations-template-modal select,
+.modal-overlay.conversations-template-modal textarea,
+.modal-overlay.conversations-template-modal input {
+    width: 100%;
+    max-width: 100%;
+}
+
+.modal-overlay.conversations-template-modal .message-card {
+    min-width: 0;
+    max-width: 100%;
+}
+
+@media (max-width: 760px) {
+    .modal-overlay.conversations-template-modal {
+        padding: 1rem;
+    }
+
+    .modal-overlay.conversations-template-modal .conversations-template-modal__card {
+        width: min(100%, calc(100vw - 2rem));
+        max-height: calc(100vh - 2rem);
+    }
+
+    .modal-overlay.conversations-template-modal .conversations-template-modal__body {
+        grid-template-columns: 1fr;
+    }
+}
+
 .templates-page--odoo .templates-layout {
     grid-template-columns: 320px minmax(0, 1fr) 360px;
     gap: 0;
