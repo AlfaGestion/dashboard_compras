@@ -41,14 +41,9 @@
             </div>
 
             <div class="conversations-module-actions">
-                <a class="btn btn--ghost btn--sm" href="/conversaciones/configuracion" title="Configuración">
-                    <i class="bi bi-sliders"></i>
-                </a>
-                <a class="btn btn--ghost btn--sm" href="/conversaciones/plantillas" title="Plantillas">
-                    <i class="bi bi-chat-square-text-fill"></i>
-                </a>
-                <button type="button" class="btn btn--ghost btn--sm" @onclick="ToggleContextPanel" disabled="@(_selectedConversation is null)" title="Contexto">
+                <button type="button" class="btn btn--ghost btn--sm conversations-context-button" @onclick="ToggleContextPanel" disabled="@(_selectedConversation is null)" title="Contexto">
                     <i class="bi bi-layout-sidebar-inset-reverse"></i>
+                    <span>Contexto</span>
                 </button>
                 <button type="button" class="btn btn--ghost btn--sm" @onclick="RecargarAsync" disabled="_loadingInbox || _loadingConversation" title="Recargar">
                     <i class="bi bi-arrow-clockwise"></i>
