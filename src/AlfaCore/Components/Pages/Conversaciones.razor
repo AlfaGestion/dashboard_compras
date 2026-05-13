@@ -204,7 +204,7 @@
                     {
                         <div class="conversations-window-banner">
                             <span>Esta conversación superó la ventana de 24 horas de WhatsApp.</span>
-                            <button type="button" class="btn btn--primary btn--sm" @onclick="OpenTemplatePanel" disabled="@(_loadingTemplates || _availableTemplates.Count == 0)">
+                            <button type="button" class="btn btn--primary btn--sm" @onclick="OpenTemplatePanel" disabled="@(!CanOpenTemplatePanel)">
                                 <i class="bi bi-send-fill"></i> Enviar plantilla
                             </button>
                         </div>
@@ -437,6 +437,13 @@
                             <i class="bi bi-info-circle"></i>
                             <span>Cliente y contacto se vinculan por telÃ©fono al recibir mensajes. Para corregirlos manualmente hay que asociar esta conversaciÃ³n a un cliente/contacto existente.</span>
                         </div>
+                        <div class="conversations-context__section">
+                            <h4 class="panel-card__title">Plantillas</h4>
+                            <p class="panel-card__subtitle">Mensajes aprobados por Meta</p>
+                            <button type="button" class="btn btn--primary" @onclick="OpenTemplatePanel" disabled="@(!CanOpenTemplatePanel)">
+                                <i class="bi bi-send-fill"></i> Enviar plantilla
+                            </button>
+                        </div>
                     }
 
                     <div class="conversations-context__section">
@@ -491,7 +498,7 @@
     }
 </section>
 
-@if (_showTemplatePanel && IsWhatsAppWindowExpired)
+@if (_showTemplatePanel)
 {
     <div class="modal-overlay conversations-template-modal" @onclick="CloseTemplatePanel">
         <div class="modal-card conversations-template-modal__card" @onclick:stopPropagation>
@@ -708,10 +715,15 @@
     private bool HasPendingAttachmentError => _pendingAttachments.Any(x => x.HasError);
     private bool _canAddNote => !_busyAction && _selectedConversation is not null && !string.IsNullOrWhiteSpace(_internalNoteText);
     private bool ShouldShowLatestButton => _showReturnToLatest || _newMessagesCount > 0;
+    private bool IsWhatsAppConversation
+        => _selectedConversation is not null
+           && _selectedConversation.Canal == "WHATSAPP";
     private bool IsWhatsAppWindowExpired
         => _selectedConversation is not null
            && _selectedConversation.Canal == "WHATSAPP"
            && !_selectedConversation.VentanaWhatsAppActiva;
+    private bool CanOpenTemplatePanel
+        => !_loadingTemplates && IsWhatsAppConversation;
     private ConversacionPlantillaDto? SelectedTemplate
         => _availableTemplates.FirstOrDefault(x => x.IdPlantilla == _selectedTemplateId);
     private IReadOnlyList<string> TemplateValues => ParseTemplateValues(_templateValuesText);
@@ -876,7 +888,7 @@
                 _scrollHandlerConversationId = null;
             }
 
-            if (IsWhatsAppWindowExpired)
+            if (IsWhatsAppConversation)
             {
                 if (conversationChanged)
                     _templateValuesText = string.Empty;
@@ -1102,10 +1114,8 @@
             {
                 IncluirInactivas = false
             }))
-            .Where(x => string.Equals(x.EstadoMeta, "APPROVED", StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(x.EstadoMeta, "PENDING", StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(x => string.Equals(x.EstadoMeta, "APPROVED", StringComparison.OrdinalIgnoreCase))
-            .ThenBy(x => x.NombreVisible)
+            .Where(x => string.Equals(x.EstadoMeta, "APPROVED", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(x => x.NombreVisible)
             .ToList();
 
             if (_availableTemplates.Count == 0)
@@ -1341,9 +1351,13 @@
 
     private async Task OpenTemplatePanel()
     {
-        if (!IsWhatsAppWindowExpired)
+        if (!IsWhatsAppConversation)
             return;
 
+        if (_availableTemplates.Count == 0)
+            await LoadTemplatesForConversationAsync();
+
+        _showContextPanel = false;
         await PrepareTemplateValuesAsync(forceReload: true);
         _showTemplatePanel = true;
     }
