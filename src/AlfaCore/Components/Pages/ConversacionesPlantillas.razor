@@ -162,7 +162,7 @@
                                   placeholder="Un valor por línea. Ej: Evelyn"></textarea>
                     </div>
                     <div class="templates-variable-guide">
-                        <span class="context-card__label">Variables automaticas sugeridas</span>
+                        <span class="context-card__label">Variables automáticas sugeridas</span>
                         <button type="button" class="templates-variable-chip" @onclick='() => InsertVariable("{{1}}")'>@("{{1}} Nombre")</button>
                         <button type="button" class="templates-variable-chip" @onclick='() => InsertVariable("{{2}}")'>@("{{2}} Detalle de deuda")</button>
                         <button type="button" class="templates-variable-chip" @onclick='() => InsertVariable("{{3}}")'>@("{{3}} Forma de pago")</button>
@@ -440,7 +440,7 @@
         {
             if (IsBodyTooLong)
             {
-                _error = $"Meta permite hasta {MetaBodyMaxLength} caracteres en el cuerpo. Acorta el texto antes de enviarlo a aprobacion.";
+                _error = $"Meta permite hasta {MetaBodyMaxLength} caracteres en el cuerpo. Acortá el texto antes de enviarlo a aprobación.";
                 return;
             }
 

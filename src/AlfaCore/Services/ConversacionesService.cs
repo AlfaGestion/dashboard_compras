@@ -391,7 +391,7 @@ public sealed class ConversacionesService(
                 whatsAppConfig = await conversacionesConfigService.GetWhatsAppConfigAsync(token);
                 var windowActive = await IsWhatsAppWindowActiveAsync(request.IdConversacion, token);
                 if (!windowActive)
-                    throw new InvalidOperationException("La ventana de WhatsApp esta vencida. Para retomar la conversacion tenes que enviar una plantilla aprobada.");
+                    throw new InvalidOperationException("La ventana de WhatsApp está vencida. Para retomar la conversación tenés que enviar una plantilla aprobada.");
 
                 initialState = whatsAppConfig.IsConfiguredForSend ? "PENDIENTE" : "PENDIENTE_CONFIG";
             }
@@ -647,7 +647,7 @@ public sealed class ConversacionesService(
                 "SubmitTemplateForApproval",
                 "CONV_PLANTILLAS",
                 template.IdPlantilla.ToString(CultureInfo.InvariantCulture),
-                "Plantilla enviada a aprobacion de Meta.",
+                "Plantilla enviada a aprobación de Meta.",
                 new { template.NombreMeta, submitResult.EstadoMeta },
                 token);
 
@@ -751,10 +751,10 @@ public sealed class ConversacionesService(
         => ExecuteLoggedAsync("Conversaciones", "GetTemplateAutoValues", async token =>
         {
             if (idConversacion <= 0)
-                throw new InvalidOperationException("La conversaciÃ³n es obligatoria.");
+                throw new InvalidOperationException("La conversación es obligatoria.");
 
             var conversation = await GetConversationAsync(idConversacion, token)
-                ?? throw new InvalidOperationException("La conversaciÃ³n indicada no existe.");
+                ?? throw new InvalidOperationException("La conversación indicada no existe.");
 
             var displayName = FirstNonEmpty(
                 conversation.ClienteNombre,
@@ -778,7 +778,7 @@ public sealed class ConversacionesService(
             }
             else
             {
-                observations.Add("La conversaciÃ³n no tiene cliente vinculado; no se pudo calcular deuda automÃ¡tica.");
+                observations.Add("La conversación no tiene cliente vinculado; no se pudo calcular deuda automática.");
             }
 
             payment = await ReadConversationConfigValueAsync(cn, "CONV_COBRANZA_FORMA_PAGO", token);
@@ -803,7 +803,7 @@ public sealed class ConversacionesService(
                 ClienteNombre = conversation.ClienteNombre,
                 Observaciones = string.Join(" ", observations)
             };
-        }, "No se pudieron preparar las variables automÃ¡ticas.", ct);
+        }, "No se pudieron preparar las variables automáticas.", ct);
 
     public Task<long> AddInternalNoteAsync(ConversacionNotaInternaRequest request, CancellationToken ct = default)
         => ExecuteLoggedAsync("Conversaciones", "AddInternalNote", async token =>
@@ -1100,7 +1100,7 @@ public sealed class ConversacionesService(
                 whatsAppConfig = await conversacionesConfigService.GetWhatsAppConfigAsync(token);
                 var windowActive = await IsWhatsAppWindowActiveAsync(request.IdConversacion, token);
                 if (!windowActive)
-                    throw new InvalidOperationException("La ventana de WhatsApp esta vencida. Para retomar la conversacion tenes que enviar una plantilla aprobada.");
+                    throw new InvalidOperationException("La ventana de WhatsApp está vencida. Para retomar la conversación tenés que enviar una plantilla aprobada.");
 
                 initialState = whatsAppConfig.IsConfiguredForSend ? "PENDIENTE" : "PENDIENTE_CONFIG";
             }
@@ -1658,7 +1658,7 @@ public sealed class ConversacionesService(
         return new DebtTemplateDetail
         {
             DetailText = string.Empty,
-            Observation = "No se encontrÃ³ una vista de saldos compatible para calcular deuda automÃ¡tica."
+            Observation = "No se encontró una vista de saldos compatible para calcular deuda automática."
         };
     }
 
@@ -2770,14 +2770,14 @@ public sealed class ConversacionesService(
     private static void ValidateTemplateCanSubmit(ConversacionPlantillaDto template)
     {
         if (!template.Activa)
-            throw new InvalidOperationException("No se puede enviar a aprobacion una plantilla inactiva.");
+            throw new InvalidOperationException("No se puede enviar a aprobación una plantilla inactiva.");
         if (string.Equals(template.EstadoMeta, "APPROVED", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("La plantilla ya esta aprobada por Meta.");
+            throw new InvalidOperationException("La plantilla ya está aprobada por Meta.");
 
         var variableCount = CountTemplateVariables(template.CuerpoTexto);
         var examples = ParseTemplateExamples(template.EjemplosVariablesJson);
         if (variableCount > 0 && examples.Count < variableCount)
-            throw new InvalidOperationException("Las variables de la plantilla necesitan valores de ejemplo para enviarse a aprobacion.");
+            throw new InvalidOperationException("Las variables de la plantilla necesitan valores de ejemplo para enviarse a aprobación.");
     }
 
     private static Dictionary<string, object?> BuildMetaTemplateCreatePayload(ConversacionPlantillaDto template)
@@ -3086,7 +3086,7 @@ public sealed class ConversacionesService(
 
         var objectName = ExtractMissingObjectName(rawMessage);
         var objectLabel = string.IsNullOrWhiteSpace(objectName) ? "CONV_*" : objectName;
-        message = $"El modulo Conversaciones todavia no esta inicializado en la base activa. Falta crear el objeto {objectLabel}. Ejecuta el script docs/conversaciones_modelo_inicial.sql y recarga el modulo.";
+        message = $"El módulo Conversaciones todavía no está inicializado en la base activa. Falta crear el objeto {objectLabel}. Ejecutá el script docs/conversaciones_modelo_inicial.sql y recargá el módulo.";
         return true;
     }
 

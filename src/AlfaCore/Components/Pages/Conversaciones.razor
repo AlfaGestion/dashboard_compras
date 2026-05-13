@@ -435,7 +435,7 @@
 
                         <div class="conversations-context__hint">
                             <i class="bi bi-info-circle"></i>
-                            <span>Cliente y contacto se vinculan por telÃ©fono al recibir mensajes. Para corregirlos manualmente hay que asociar esta conversaciÃ³n a un cliente/contacto existente.</span>
+                            <span>Cliente y contacto se vinculan por teléfono al recibir mensajes. Para corregirlos manualmente hay que asociar esta conversación a un cliente/contacto existente.</span>
                         </div>
                         <div class="conversations-context__section">
                             <h4 class="panel-card__title">Plantillas</h4>
@@ -1172,12 +1172,12 @@
                 var autoValues = await ConversacionesSvc.GetTemplateAutoValuesAsync(_selectedConversation.IdConversacion, required);
                 automaticValues = autoValues.Valores.ToList();
                 _templateAutoNotice = string.IsNullOrWhiteSpace(autoValues.Observaciones)
-                    ? "Variables cargadas automaticamente desde la conversacion y la cuenta del cliente."
+                    ? "Variables cargadas automáticamente desde la conversación y la cuenta del cliente."
                     : autoValues.Observaciones;
             }
             catch (Exception ex)
             {
-                _templateAutoNotice = $"No se pudieron cargar variables automaticas: {ex.Message}";
+                _templateAutoNotice = $"No se pudieron cargar variables automáticas: {ex.Message}";
             }
         }
 
@@ -1696,11 +1696,12 @@
         => values.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))?.Trim() ?? string.Empty;
 
     private static string FormatShortDate(DateTime value)
-        => value == DateTime.MinValue ? "—" : value.ToString("dd/MM HH:mm");
+        => value == DateTime.MinValue ? "--" : value.ToString("dd/MM HH:mm");
 
     private static bool IsInitializationPending(string? message)
         => !string.IsNullOrWhiteSpace(message)
-           && message.Contains("todavia no esta inicializado", StringComparison.OrdinalIgnoreCase);
+           && (message.Contains("todavia no esta inicializado", StringComparison.OrdinalIgnoreCase)
+               || message.Contains("todavía no está inicializado", StringComparison.OrdinalIgnoreCase));
 
     private static string InferTipoArchivo(string mimeType)
     {
@@ -1817,7 +1818,7 @@
         return state switch
         {
             "PENDIENTE" => "Enviando",
-            "PENDIENTE_CONFIG" => "Sin configuracion",
+            "PENDIENTE_CONFIG" => "Sin configuración",
             "ENVIADO_META" or "ENVIADO" => "Enviado",
             "ENTREGADO" => "Entregado",
             "LEIDO" => "Leido",
