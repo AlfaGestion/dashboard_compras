@@ -1,5 +1,6 @@
 using AlfaCore.Models;
 using Microsoft.Data.SqlClient;
+using System.Net;
 
 namespace AlfaCore.Services;
 
@@ -25,6 +26,7 @@ public sealed class InterfacesConfigService(
     public Task<InterfacesUploadSettingsDto> GetUploadSettingsAsync(CancellationToken ct = default)
         => ExecuteLoggedAsync("Interfaces", "GetUploadSettings", async token =>
         {
+            var activeSession = sessionService.GetActiveSession();
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync(token);
             var detailColumn = await ResolveDetailColumnAsync(cn, token);
@@ -77,7 +79,7 @@ public sealed class InterfacesConfigService(
             {
                 DestinoTipo = ReadValue(values, "INTERFACESRECEPCIONTIPO", DefaultDestinoTipo).Trim().ToUpperInvariant(),
                 DestinoNombre = ReadValue(values, "INTERFACESRECEPCIONNOMBRE", DefaultDestinoNombre).Trim(),
-                RutaBase = ReadValue(values, "INTERFACESRECEPCIONRUTA", DefaultRutaBase).Trim(),
+                RutaBase = ResolveRutaBase(ReadValue(values, "INTERFACESRECEPCIONRUTA", string.Empty), activeSession, ReadValue(values, "INTERFACESRECEPCIONTIPO", DefaultDestinoTipo)),
                 FtpHost = ReadValue(values, "INTERFACESFTPHOST", DefaultFtpHost).Trim(),
                 FtpPuerto = ftpPuerto,
                 FtpUsuario = ReadValue(values, "INTERFACESFTPUSUARIO", DefaultFtpUsuario).Trim(),
@@ -95,7 +97,9 @@ public sealed class InterfacesConfigService(
 
         await ExecuteLoggedAsync("Interfaces", "SaveUploadSettings", async token =>
         {
-            var normalized = Normalize(settings);
+            var normalized = Normalize(settings, sessionService.GetActiveSession());
+
+            await EnsureDestinationExistsAsync(normalized, token);
 
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync(token);
@@ -195,10 +199,10 @@ public sealed class InterfacesConfigService(
         yield return ("InterfacesExtensionesPermitidas", string.Join(",", settings.ExtensionesPermitidas));
     }
 
-    private static InterfacesUploadSettingsDto Normalize(InterfacesUploadSettingsDto settings)
+    private static InterfacesUploadSettingsDto Normalize(InterfacesUploadSettingsDto settings, SessionDto? activeSession)
     {
         var tipo = string.Equals(settings.DestinoTipo, "CARPETA", StringComparison.OrdinalIgnoreCase) ? "CARPETA" : "FTP";
-        var ruta = string.IsNullOrWhiteSpace(settings.RutaBase) ? DefaultRutaBase : settings.RutaBase.Trim();
+        var ruta = ResolveRutaBase(settings.RutaBase, activeSession, tipo);
         if (tipo == "FTP")
             ruta = InterfacesUploadSettingsDto.NormalizeFtpPath(ruta);
 
@@ -220,6 +224,83 @@ public sealed class InterfacesConfigService(
             TamanoMaximoMb = settings.TamanoMaximoMb <= 0 ? 25 : settings.TamanoMaximoMb,
             ExtensionesPermitidas = extensiones
         };
+    }
+
+    private static string ResolveRutaBase(string? rutaBase, SessionDto? activeSession, string? destinoTipo)
+    {
+        if (!string.IsNullOrWhiteSpace(rutaBase))
+            return rutaBase.Trim();
+
+        var baseName = BuildBaseFolderName(activeSession);
+        var ftpDefault = $"/Z_CLIENTES/{baseName}/";
+        var carpetaDefault = $@"\Z_CLIENTES\{baseName}";
+
+        return string.Equals(destinoTipo, "CARPETA", StringComparison.OrdinalIgnoreCase)
+            ? carpetaDefault
+            : ftpDefault;
+    }
+
+    private static string BuildBaseFolderName(SessionDto? activeSession)
+    {
+        var raw = !string.IsNullOrWhiteSpace(activeSession?.BaseDatos)
+            ? activeSession!.BaseDatos
+            : !string.IsNullOrWhiteSpace(activeSession?.Nombre)
+                ? activeSession!.Nombre
+                : "BASE";
+
+        var invalid = Path.GetInvalidFileNameChars().Concat(['\\', '/', ':', '*', '?', '"', '<', '>', '|']).ToHashSet();
+        var clean = new string(raw.Trim().Where(ch => !invalid.Contains(ch)).ToArray()).Trim();
+        return string.IsNullOrWhiteSpace(clean) ? "BASE" : clean;
+    }
+
+    private static async Task EnsureDestinationExistsAsync(InterfacesUploadSettingsDto settings, CancellationToken ct)
+    {
+        if (settings.UsaFtp)
+        {
+            await EnsureFtpDirectoryExistsAsync(settings, ct);
+            return;
+        }
+
+        var targetPath = settings.RutaBase.Trim();
+        if (!string.IsNullOrWhiteSpace(targetPath))
+            Directory.CreateDirectory(targetPath);
+    }
+
+    private static async Task EnsureFtpDirectoryExistsAsync(InterfacesUploadSettingsDto settings, CancellationToken ct)
+    {
+        var host = settings.FtpHost.Trim();
+        if (string.IsNullOrWhiteSpace(host))
+            return;
+
+        var path = InterfacesUploadSettingsDto.NormalizeFtpPath(settings.RutaBase);
+        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length == 0)
+            return;
+
+        var current = string.Empty;
+        foreach (var segment in segments)
+        {
+            current += "/" + segment;
+#pragma warning disable SYSLIB0014
+            var request = (FtpWebRequest)WebRequest.Create($"ftp://{host}:{Math.Max(1, settings.FtpPuerto)}{current}");
+#pragma warning restore SYSLIB0014
+            request.Method = WebRequestMethods.Ftp.MakeDirectory;
+            request.Credentials = new NetworkCredential(settings.FtpUsuario, settings.FtpClave);
+            request.UsePassive = settings.FtpModoPasivo;
+            request.UseBinary = true;
+            request.KeepAlive = false;
+
+            try
+            {
+                using var response = (FtpWebResponse)await request.GetResponseAsync();
+            }
+            catch (WebException ex) when (ex.Response is FtpWebResponse ftpResponse &&
+                                           (ftpResponse.StatusCode == FtpStatusCode.ActionNotTakenFileUnavailable ||
+                                            ftpResponse.StatusCode == FtpStatusCode.ActionNotTakenFilenameNotAllowed))
+            {
+                ftpResponse.Dispose();
+            }
+        }
     }
 
     private static string ResolveStoredValue(string value, string auxValue)

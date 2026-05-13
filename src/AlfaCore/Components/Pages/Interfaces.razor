@@ -1,6 +1,7 @@
 @page "/interfaces"
 @using AlfaCore.Models
 @using Microsoft.AspNetCore.Components.Forms
+@inject IJSRuntime JS
 @inject AlfaCore.Services.IInterfacesService InterfacesSvc
 @inject AlfaCore.Services.IInterfacesConfigService InterfacesConfigSvc
 @inject AlfaCore.Services.IAppUiOperationService UiOps
@@ -8,13 +9,16 @@
 
 <PageTitle>Interfaces | Alfa Gestión</PageTitle>
 
-<div class="page-grid">
-    <section class="page-intro">
+<div class="page-grid interfaces-page">
+    <section class="page-intro interfaces-hero">
         <div>
             <h2 class="page-intro__title">Recepción documental</h2>
-            <p class="page-intro__text">Registrá comprobantes, listas, liquidaciones y otros documentos con uno o varios adjuntos, estado y trazabilidad completa.</p>
+            <p class="page-intro__text">Centralizá carga, seguimiento y resolución documental con una experiencia tipo inbox pensada para trabajar rápido en dark y light mode.</p>
         </div>
         <div class="actions">
+            <button type="button" class="btn btn--primary" @onclick="AbrirNuevoDocumento" disabled="@_saving">
+                <i class="bi bi-plus-circle"></i> Nuevo
+            </button>
             <a class="btn btn--ghost" href="/interfaces/configuracion">
                 <i class="bi bi-sliders"></i> Configuración
             </a>
@@ -33,136 +37,22 @@
         </section>
     }
 
-    <section class="panel-card interfaces-create-panel">
-        <div class="panel-card__header">
-            <div>
-                <h3 class="panel-card__title">Nuevo comprobante</h3>
-                <p class="panel-card__subtitle">Cargá el tipo, agregá uno o varios archivos y revisalos antes de registrar.</p>
-            </div>
-        </div>
-
-        <div class="interfaces-create-steps">
-            <div class="field">
-                <label>Paso 1. Tipo documental</label>
-                @if (_documentTypes.Count == 0)
-                {
-                    <div class="interfaces-empty-upload">
-                        No hay tipos documentales disponibles. Probá recargar la pantalla.
-                    </div>
-                }
-                else
-                {
-                    <div class="interfaces-type-picker">
-                        @foreach (var item in _documentTypes)
-                        {
-                            <button type="button"
-                                    class="btn btn--ghost interfaces-type-option @(_nuevo.IdTipoDocumento == item.IdTipoDocumento ? "is-selected" : string.Empty)"
-                                    @onclick="() => SeleccionarTipo(item.IdTipoDocumento)"
-                                    disabled="@_saving">
-                                <span>@item.Descripcion</span>
-                            </button>
-                        }
-                    </div>
-                }
-            </div>
-            <div class="field">
-                <label>Paso 2. Observación opcional</label>
-                <textarea rows="4"
-                          placeholder="Comentario, referencia o contexto del comprobante..."
-                          @bind="_nuevo.Observacion"
-                          disabled="@_saving"></textarea>
-            </div>
-            <div class="field">
-                <label>Paso 3. Archivos</label>
-                <div class="interfaces-upload-box">
-                    <InputFile id="interfaces-file-picker"
-                               @key="@($"file-{_filePickerVersion}")"
-                               style="display:none"
-                               OnChange="HandleFilesSelectedAsync"
-                               multiple
-                               disabled="@_saving" />
-                    <InputFile id="interfaces-camera-picker"
-                               @key="@($"camera-{_cameraPickerVersion}")"
-                               style="display:none"
-                               OnChange="HandlePhotoSelectedAsync"
-                               accept="image/*"
-                               capture="environment"
-                               disabled="@_saving" />
-                    <div class="interfaces-upload-actions">
-                        <label class="btn btn--secondary interfaces-file-trigger interfaces-file-trigger--desktop @(_saving ? "is-disabled" : string.Empty)"
-                               for="interfaces-file-picker"
-                               aria-disabled="@_saving">
-                            <i class="bi bi-plus-circle"></i>
-                            <span>Agregar archivos</span>
-                        </label>
-                        <label class="btn btn--primary interfaces-file-trigger interfaces-file-trigger--mobile @(_saving ? "is-disabled" : string.Empty)"
-                               for="interfaces-camera-picker"
-                               aria-disabled="@_saving">
-                            <i class="bi bi-camera"></i>
-                            <span>Tomar foto</span>
-                        </label>
-                    </div>
-                    @if (_settings is not null && _settings.ExtensionesPermitidas.Count > 0)
-                    {
-                        <p class="interfaces-upload-hint">Permitidos: @string.Join(", ", _settings.ExtensionesPermitidas) · máximo @_settings.TamanoMaximoMb MB por archivo</p>
-                    }
-                </div>
-            </div>
-        </div>
-
-        @if (_selectedFiles.Count > 0)
-        {
-            <div class="interfaces-files interfaces-files--pending">
-                @foreach (var file in _selectedFiles)
-                {
-                    <div class="interfaces-file-chip interfaces-file-chip--pending">
-                        <div class="interfaces-file-chip__main">
-                            <i class="bi bi-paperclip"></i>
-                            <span>@file.NombreArchivo</span>
-                        </div>
-                        <small>@FormatSize(file.TamanoBytes)</small>
-                        <button type="button"
-                                class="btn btn--ghost btn--sm"
-                                @onclick="() => QuitarArchivoPendiente(file.Id)"
-                                disabled="@_saving">
-                            <i class="bi bi-x-circle"></i>
-                            <span>Quitar</span>
-                        </button>
-                    </div>
-                }
-            </div>
-        }
-        else
-        {
-            <div class="interfaces-empty-upload">
-                Tocá la acción disponible para sumar uno o varios comprobantes al registro.
-            </div>
-        }
-
-        <div class="actions" style="margin-top:1rem;">
-            <button type="button" class="btn btn--primary" @onclick="GuardarAsync" disabled="@(_saving || _selectedFiles.Count == 0)">
-                <i class="bi bi-upload"></i>
-                <span>@(_saving ? "Guardando..." : "Registrar comprobante")</span>
-            </button>
-            <button type="button" class="btn btn--ghost" @onclick="LimpiarFormulario" disabled="@_saving">
-                <i class="bi bi-x-circle"></i>
-                <span>Limpiar</span>
-            </button>
-        </div>
-    </section>
-
-    <section class="panel-card">
+    <section class="panel-card interfaces-filters-panel">
         <div class="panel-card__header">
             <div>
                 <h3 class="panel-card__title">Filtros</h3>
                 @if (_settings is not null)
                 {
-                    <p class="panel-card__subtitle">Destino: @_settings.GetDestinoResumen() · máximo @_settings.TamanoMaximoMb MB por archivo</p>
+                    <p class="panel-card__subtitle">Destino activo: @_settings.GetDestinoResumen() · máximo @_settings.TamanoMaximoMb MB por archivo</p>
                 }
+            </div>
+            <div class="interfaces-filters-summary">
+                <span class="interfaces-summary-chip"><i class="bi bi-collection"></i> @_items.Count documento(s)</span>
+                <span class="interfaces-summary-chip"><i class="bi bi-circle-fill"></i> @GetPendingSummary()</span>
             </div>
         </div>
 
-        <div class="filters-grid">
+        <div class="filters-grid interfaces-filters-grid">
             <div class="field">
                 <label>Desde</label>
                 <input type="date" @bind="_filtersDesde" />
@@ -195,7 +85,7 @@
                 <label>Buscar</label>
                 <input type="search" placeholder="Observación, usuario o número interno..." @bind="_filters.Texto" @bind:event="oninput" />
             </div>
-            <div class="actions">
+            <div class="actions interfaces-filters-actions">
                 <button type="button" class="btn btn--primary" @onclick="BuscarAsync" disabled="@_loading">
                     <i class="bi bi-funnel"></i> Aplicar
                 </button>
@@ -206,244 +96,12 @@
         </div>
     </section>
 
-    <div class="interfaces-layout">
-        <div class="interfaces-detail-column">
-            <section class="panel-card">
-                <div class="panel-card__header">
-                    <div>
-                        <h3 class="panel-card__title">Detalle</h3>
-                        <p class="panel-card__subtitle">@(_selectedDetail is null ? "Seleccioná un registro de la bandeja." : $"Comprobante #{_selectedDetail.IdComprobanteRecibido}")</p>
-                    </div>
-                </div>
-
-                @if (_selectedDetail is null)
-                {
-                    <div class="conversations-empty conversations-empty--center">
-                        A la derecha vas a ver los adjuntos, el historial y el cambio de estado del comprobante seleccionado.
-                    </div>
-                }
-                else
-                {
-                    <div class="interfaces-detail">
-                        <div class="interfaces-detail__grid">
-                            <div>
-                                <span class="interfaces-detail__label">Tipo</span>
-                                <strong>@_selectedDetail.TipoDocumentoDescripcion</strong>
-                            </div>
-                            <div>
-                                <span class="interfaces-detail__label">Estado</span>
-                                <strong>@_selectedDetail.EstadoDescripcion</strong>
-                            </div>
-                            <div>
-                                <span class="interfaces-detail__label">Alta</span>
-                                <strong>@_selectedDetail.FechaHoraGrabacion.ToString("dd/MM/yyyy HH:mm")</strong>
-                            </div>
-                            <div>
-                                <span class="interfaces-detail__label">Usuario</span>
-                                <strong>@_selectedDetail.UsuarioAlta</strong>
-                            </div>
-                        </div>
-
-                        @if (_selectedDetail.PermiteEdicion)
-                        {
-                            <div class="interfaces-detail__block">
-                                <div class="interfaces-detail__block-head">
-                                    <span class="interfaces-detail__label">Editar comprobante</span>
-                                </div>
-                                <div class="interfaces-edit-grid">
-                                    <div class="field">
-                                        <label>Tipo documental</label>
-                                        <select @bind="_editForm.IdTipoDocumento" disabled="@_savingEdit">
-                                            <option value="0">Seleccionar...</option>
-                                            @foreach (var item in _documentTypes)
-                                            {
-                                                <option value="@item.IdTipoDocumento">@item.Descripcion</option>
-                                            }
-                                        </select>
-                                    </div>
-                                    <div class="field">
-                                        <label>Observación</label>
-                                        <textarea rows="3" @bind="_editForm.Observacion" disabled="@_savingEdit"></textarea>
-                                    </div>
-                                </div>
-                                <div class="actions">
-                                    <button type="button" class="btn btn--secondary" @onclick="GuardarEdicionAsync" disabled="@_savingEdit">
-                                        <i class="bi bi-save"></i>
-                                        <span>@(_savingEdit ? "Guardando..." : "Guardar cambios")</span>
-                                    </button>
-                                    <button type="button" class="btn btn--ghost" @onclick="ResetEditarDetalle" disabled="@_savingEdit">
-                                        <i class="bi bi-arrow-counterclockwise"></i>
-                                        <span>Revertir</span>
-                                    </button>
-                                </div>
-                            </div>
-                        }
-                        else if (!string.IsNullOrWhiteSpace(_selectedDetail.Observacion))
-                        {
-                            <div class="interfaces-detail__block">
-                                <span class="interfaces-detail__label">Observación</span>
-                                <p>@_selectedDetail.Observacion</p>
-                            </div>
-                        }
-
-                        <div class="interfaces-detail__block">
-                            <div class="interfaces-detail__block-head">
-                                <span class="interfaces-detail__label">Adjuntos</span>
-                                <strong>@_selectedDetail.Adjuntos.Count</strong>
-                            </div>
-                            @if (_selectedDetail.Adjuntos.Count == 0)
-                            {
-                                <p>Este comprobante todavía no tiene adjuntos activos.</p>
-                            }
-                            else
-                            {
-                                <div class="interfaces-attachments">
-                                    @foreach (var attachment in _selectedDetail.Adjuntos)
-                                    {
-                                        <div class="interfaces-attachment-shell">
-                                            <a class="interfaces-attachment"
-                                               href="@GetAttachmentDownloadUrl(attachment.IdAdjunto)"
-                                               target="_blank">
-                                                <i class="bi bi-file-earmark-arrow-down"></i>
-                                                <span>@attachment.NombreOriginal</span>
-                                                <small>@FormatSize(attachment.TamanoBytes)</small>
-                                            </a>
-                                            @if (_selectedDetail.PermiteEdicion)
-                                            {
-                                                <button type="button"
-                                                        class="btn btn--ghost btn--sm"
-                                                        @onclick="() => QuitarAdjuntoAsync(attachment.IdAdjunto)"
-                                                        disabled="@_removingAttachment">
-                                                    <i class="bi bi-trash3"></i>
-                                                    <span>Quitar</span>
-                                                </button>
-                                            }
-                                        </div>
-                                    }
-                                </div>
-                            }
-                        </div>
-
-                        @if (_selectedDetail.PermiteEdicion)
-                        {
-                            <div class="interfaces-detail__block">
-                                <div class="interfaces-detail__block-head">
-                                    <span class="interfaces-detail__label">Agregar adjuntos</span>
-                                </div>
-                                <div class="filters-grid">
-                                    <div class="field field--wide">
-                                        <label>Archivos adicionales</label>
-                                        <InputFile OnChange="HandleExtraFilesSelectedAsync" multiple disabled="@_savingExtraAttachments" />
-                                    </div>
-                                </div>
-
-                                @if (_extraFiles.Count > 0)
-                                {
-                                    <div class="interfaces-files">
-                                        @foreach (var file in _extraFiles)
-                                        {
-                                            <div class="interfaces-file-chip">
-                                                <i class="bi bi-paperclip"></i>
-                                                <span>@file.Name</span>
-                                                <small>@FormatSize(file.Size)</small>
-                                            </div>
-                                        }
-                                    </div>
-                                }
-
-                                <div class="actions">
-                                    <button type="button" class="btn btn--secondary" @onclick="AgregarAdjuntosAsync" disabled="@(_savingExtraAttachments || _extraFiles.Count == 0)">
-                                        <i class="bi bi-folder-plus"></i>
-                                        <span>@(_savingExtraAttachments ? "Agregando..." : "Agregar adjuntos")</span>
-                                    </button>
-                                </div>
-                            </div>
-                        }
-
-                        <div class="interfaces-detail__block">
-                            <div class="interfaces-detail__block-head">
-                                <span class="interfaces-detail__label">Cambiar estado</span>
-                            </div>
-                            <div class="filters-grid">
-                                <div class="field">
-                                    <label>Nuevo estado</label>
-                                    <select @bind="_statusChange.IdEstadoNuevo" disabled="@_changingState">
-                                        <option value="0">Seleccionar...</option>
-                                        @foreach (var state in _states)
-                                        {
-                                            <option value="@state.IdEstado">@state.Descripcion</option>
-                                        }
-                                    </select>
-                                </div>
-                                <div class="field field--wide">
-                                    <label>Observación del cambio</label>
-                                    <textarea rows="2" @bind="_statusChange.Observacion" disabled="@_changingState"></textarea>
-                                </div>
-                            </div>
-                            <div class="actions">
-                                <button type="button" class="btn btn--secondary" @onclick="CambiarEstadoAsync" disabled="@(_changingState || _statusChange.IdEstadoNuevo == 0)">
-                                    <i class="bi bi-arrow-repeat"></i>
-                                    <span>@(_changingState ? "Actualizando..." : "Actualizar estado")</span>
-                                </button>
-                                @if (_selectedDetail.PermiteEdicion)
-                                {
-                                    <button type="button" class="btn btn--ghost" @onclick="AnularAsync" disabled="@_changingState">
-                                        <i class="bi bi-slash-circle"></i>
-                                        <span>Anular comprobante</span>
-                                    </button>
-                                }
-                            </div>
-                        </div>
-
-                        <div class="interfaces-detail__block">
-                            <div class="interfaces-detail__block-head">
-                                <span class="interfaces-detail__label">Historial</span>
-                                <strong>@_selectedDetail.Historial.Count</strong>
-                            </div>
-                            @if (_selectedDetail.Historial.Count == 0)
-                            {
-                                <p>No hay movimientos registrados.</p>
-                            }
-                            else
-                            {
-                                <div class="interfaces-history">
-                                    @foreach (var item in _selectedDetail.Historial)
-                                    {
-                                        <div class="interfaces-history__item">
-                                            <div class="interfaces-history__top">
-                                                <strong>@item.Accion</strong>
-                                                <span>@item.FechaHora.ToString("dd/MM/yyyy HH:mm")</span>
-                                            </div>
-                                            <div class="interfaces-history__meta">
-                                                <span>@item.Usuario</span>
-                                                <span>@item.Pc</span>
-                                            </div>
-                                            @if (!string.IsNullOrWhiteSpace(item.EstadoAnteriorDescripcion) || !string.IsNullOrWhiteSpace(item.EstadoNuevoDescripcion))
-                                            {
-                                                <div class="interfaces-history__meta">
-                                                    <span>@item.EstadoAnteriorDescripcion</span>
-                                                    <span>@item.EstadoNuevoDescripcion</span>
-                                                </div>
-                                            }
-                                            @if (!string.IsNullOrWhiteSpace(item.Observacion))
-                                            {
-                                                <p>@item.Observacion</p>
-                                            }
-                                        </div>
-                                    }
-                                </div>
-                            }
-                        </div>
-                    </div>
-                }
-            </section>
-        </div>
-
-        <section class="panel-card interfaces-list">
+    <div class="interfaces-workspace">
+        <aside class="panel-card interfaces-inbox-panel">
             <div class="panel-card__header">
                 <div>
-                    <h3 class="panel-card__title">Bandeja</h3>
-                    <p class="panel-card__subtitle">@_items.Count registro(s)</p>
+                    <h3 class="panel-card__title">Documentos pendientes</h3>
+                    <p class="panel-card__subtitle">Inbox operativo con foco en escaneo rápido, acciones compactas y selección inmediata.</p>
                 </div>
             </div>
 
@@ -453,31 +111,525 @@
             }
             else if (_items.Count == 0)
             {
-                <div class="conversations-empty">No hay documentos para los filtros seleccionados.</div>
+                <div class="conversations-empty interfaces-empty-state">
+                    No hay documentos para los filtros seleccionados.
+                </div>
             }
             else
             {
-                <div class="interfaces-list__items">
+                <div class="interfaces-inbox-list">
                     @foreach (var item in _items)
                     {
-                        <button type="button"
-                                class="interfaces-row @(item.IdComprobanteRecibido == _selectedId ? "is-selected" : string.Empty)"
-                                @onclick="() => SeleccionarAsync(item.IdComprobanteRecibido)">
-                            <div class="interfaces-row__top">
-                                <strong>#@item.IdComprobanteRecibido</strong>
-                                <span>@item.FechaHoraGrabacion.ToString("dd/MM/yyyy HH:mm")</span>
+                        var quickState = GetRowSelectedState(item.IdComprobanteRecibido);
+                        <article class="interfaces-inbox-item @(item.IdComprobanteRecibido == _selectedId ? "is-selected" : string.Empty)">
+                            <button type="button"
+                                    class="interfaces-inbox-item__main"
+                                    @onclick="() => SeleccionarAsync(item.IdComprobanteRecibido)">
+                                <div class="interfaces-inbox-item__active-bar"></div>
+                                <div class="interfaces-inbox-item__top">
+                                    <div class="interfaces-inbox-item__identity">
+                                        <strong>#@item.IdComprobanteRecibido</strong>
+                                        <span class="interfaces-priority-chip @GetPriorityCssClass(item)">@GetPriorityLabel(item)</span>
+                                    </div>
+                                    <span class="interfaces-status-pill @GetStateCssClass(item.EstadoCodigo, item.EstadoDescripcion)">@item.EstadoDescripcion</span>
+                                </div>
+                                <div class="interfaces-inbox-item__meta">
+                                    <span><i class="bi bi-files"></i> @item.TipoDocumentoDescripcion</span>
+                                    <span><i class="bi bi-person"></i> @item.UsuarioAlta</span>
+                                    <span><i class="bi bi-clock"></i> @item.FechaHoraGrabacion.ToString("dd/MM/yyyy HH:mm")</span>
+                                </div>
+                                <p class="interfaces-inbox-item__summary">@GetSummary(item.Observacion)</p>
+                                <div class="interfaces-inbox-item__footer">
+                                    <span><i class="bi bi-paperclip"></i> @item.CantidadAdjuntos adj.</span>
+                                    <span><i class="bi bi-record-circle"></i> @GetPendingAgeLabel(item.FechaHoraGrabacion)</span>
+                                </div>
+                            </button>
+
+                            <div class="interfaces-inbox-item__actions">
+                                <div class="interfaces-inbox-item__quick">
+                                    @if (CanQuickProcess())
+                                    {
+                                        <button type="button" class="btn btn--ghost btn--sm interfaces-icon-action" title="Procesar" aria-label="Procesar" @onclick="() => CambiarEstadoRapidoAsync(item.IdComprobanteRecibido, InterfacesQuickAction.Procesar)">
+                                            <i class="bi bi-play-circle"></i>
+                                            <span>Procesar</span>
+                                        </button>
+                                    }
+                                    @if (CanQuickFinalize())
+                                    {
+                                        <button type="button" class="btn btn--ghost btn--sm interfaces-icon-action" title="Finalizar" aria-label="Finalizar" @onclick="() => CambiarEstadoRapidoAsync(item.IdComprobanteRecibido, InterfacesQuickAction.Finalizar)">
+                                            <i class="bi bi-check2-circle"></i>
+                                            <span>Finalizar</span>
+                                        </button>
+                                    }
+                                    @if (CanQuickReject())
+                                    {
+                                        <button type="button" class="btn btn--ghost btn--sm interfaces-icon-action" title="Rechazar" aria-label="Rechazar" @onclick="() => CambiarEstadoRapidoAsync(item.IdComprobanteRecibido, InterfacesQuickAction.Rechazar)">
+                                            <i class="bi bi-x-circle"></i>
+                                            <span>Rechazar</span>
+                                        </button>
+                                    }
+                                    <button type="button" class="btn btn--ghost btn--sm interfaces-icon-action" title="Ver detalle" aria-label="Ver detalle" @onclick="() => SeleccionarAsync(item.IdComprobanteRecibido)">
+                                        <i class="bi bi-eye"></i>
+                                        <span>Detalle</span>
+                                    </button>
+                                </div>
+
+                                <div class="interfaces-inline-state">
+                                    <select value="@quickState"
+                                            @onchange="e => CambiarSeleccionEstadoLista(item.IdComprobanteRecibido, e.Value?.ToString())">
+                                        @foreach (var state in _states)
+                                        {
+                                            <option value="@state.IdEstado">@state.Descripcion</option>
+                                        }
+                                    </select>
+                                    <button type="button"
+                                            class="btn btn--secondary btn--sm"
+                                            @onclick="() => AplicarCambioEstadoListaAsync(item.IdComprobanteRecibido)"
+                                            disabled="@(_changingState || quickState == item.IdEstado)">
+                                        <i class="bi bi-arrow-repeat"></i>
+                                    </button>
+                                </div>
                             </div>
-                            <div class="interfaces-row__meta">
-                                <span>@item.TipoDocumentoDescripcion</span>
-                                <span>@item.EstadoDescripcion</span>
-                            </div>
-                            <p class="interfaces-row__text">@GetSummary(item.Observacion)</p>
-                            <div class="interfaces-row__footer">
-                                <span>@item.UsuarioAlta</span>
-                                <span>@item.CantidadAdjuntos adj.</span>
-                            </div>
+                        </article>
+                    }
+                </div>
+            }
+        </aside>
+
+        <section id="interfaces-editor-panel" class="panel-card interfaces-editor-panel">
+            <div class="panel-card__header">
+                <div>
+                    <h3 class="panel-card__title">@GetEditorTitle()</h3>
+                    <p class="panel-card__subtitle">@GetEditorSubtitle()</p>
+                </div>
+                <div class="interfaces-editor-header-actions">
+                    @if (_editorMode == InterfacesEditorMode.Edicion)
+                    {
+                        <button type="button" class="btn btn--ghost" @onclick="CancelarSeleccionActual">
+                            <i class="bi bi-x-circle"></i> Cancelar
+                        </button>
+                        <button type="button" class="btn btn--ghost" @onclick="AbrirNuevoDocumento">
+                            <i class="bi bi-plus-circle"></i> Nuevo
                         </button>
                     }
+                    @if (_editorMode == InterfacesEditorMode.Nuevo)
+                    {
+                        <button type="button" class="btn btn--ghost" @onclick="CancelarNuevoDocumento" disabled="@_saving">
+                            <i class="bi bi-arrow-left"></i> Volver a la lista
+                        </button>
+                    }
+                </div>
+            </div>
+
+            @if (_editorMode == InterfacesEditorMode.Vacio)
+            {
+                <div class="interfaces-editor-empty">
+                    <div class="interfaces-editor-empty__icon">
+                        <i class="bi bi-inboxes"></i>
+                    </div>
+                    <h4>Seleccioná un documento o empezá uno nuevo</h4>
+                    <p>La columna derecha concentra carga, edición, adjuntos e historial para que todo el flujo se resuelva desde el mismo lugar.</p>
+                    <div class="actions">
+                        <button type="button" class="btn btn--primary" @onclick="AbrirNuevoDocumento">
+                            <i class="bi bi-plus-circle"></i> Crear documento
+                        </button>
+                    </div>
+                </div>
+            }
+            else if (_editorMode == InterfacesEditorMode.Nuevo)
+            {
+                <div class="interfaces-editor-shell">
+                    <div class="interfaces-editor-ribbon">
+                        <span class="interfaces-status-pill interfaces-status-pill--info">Nuevo</span>
+                        <span class="interfaces-priority-chip interfaces-priority-chip--normal">Carga inicial</span>
+                        <span class="interfaces-summary-chip"><i class="bi bi-person"></i> @CurrentUserName</span>
+                        <span class="interfaces-summary-chip"><i class="bi bi-clock"></i> @DateTime.Now.ToString("dd/MM/yyyy HH:mm")</span>
+                    </div>
+
+                    <div class="interfaces-editor-layout">
+                        <div class="interfaces-editor-column interfaces-editor-column--main">
+                            <section class="interfaces-section interfaces-section--soft">
+                                <div class="interfaces-section__head">
+                                    <div>
+                                        <h4>Información principal</h4>
+                                        <p>Alta rápida con la misma estructura visual que luego se usa al editar.</p>
+                                    </div>
+                                </div>
+
+                                <div class="interfaces-form-grid">
+                                    <div class="field">
+                                        <label>Tipo documental</label>
+                                        @if (_documentTypes.Count == 0)
+                                        {
+                                            <div class="interfaces-empty-upload">No hay tipos documentales disponibles.</div>
+                                        }
+                                        else
+                                        {
+                                            <select @bind="_nuevo.IdTipoDocumento" disabled="@_saving">
+                                                <option value="0">Seleccionar...</option>
+                                                @foreach (var item in _documentTypes)
+                                                {
+                                                    <option value="@item.IdTipoDocumento">@item.Descripcion</option>
+                                                }
+                                            </select>
+                                        }
+                                    </div>
+                                    <div class="field">
+                                        <label>Estado inicial</label>
+                                        <input value="@GetInitialStateLabel()" readonly />
+                                    </div>
+                                    <div class="field">
+                                        <label>Usuario</label>
+                                        <input value="@CurrentUserName" readonly />
+                                    </div>
+                                    <div class="field">
+                                        <label>Fecha</label>
+                                        <input value="@DateTime.Now.ToString("dd/MM/yyyy HH:mm")" readonly />
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section class="interfaces-section interfaces-section--feature">
+                                <div class="interfaces-section__head">
+                                    <div>
+                                        <h4>Observación</h4>
+                                        <p>Usá este espacio para contexto operativo, referencias o aclaraciones del documento.</p>
+                                    </div>
+                                </div>
+                                <div class="field field--full interfaces-field-shell">
+                                    <textarea rows="7"
+                                              placeholder="Comentario, referencia o contexto del comprobante..."
+                                              @bind="_nuevo.Observacion"
+                                              disabled="@_saving"></textarea>
+                                </div>
+                            </section>
+
+                            <div class="actions interfaces-editor-actions">
+                                <button type="button" class="btn btn--primary" @onclick="GuardarAsync" disabled="@(_saving || _selectedFiles.Count == 0)">
+                                    <i class="bi bi-upload"></i> @(_saving ? "Guardando..." : "Registrar comprobante")
+                                </button>
+                                <button type="button" class="btn btn--ghost" @onclick="LimpiarFormulario" disabled="@_saving">
+                                    <i class="bi bi-eraser"></i> Limpiar
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="interfaces-editor-column interfaces-editor-column--aside">
+                            <section class="interfaces-section">
+                                <div class="interfaces-section__head">
+                                    <div>
+                                        <h4>Adjuntos</h4>
+                                        <p>Preparado para sumar archivos ahora y evolucionar luego a drag & drop sin tocar el flujo principal.</p>
+                                    </div>
+                                    <div class="interfaces-upload-actions">
+                                        <InputFile id="interfaces-file-picker"
+                                                   @key="@($"file-{_filePickerVersion}")"
+                                                   style="display:none"
+                                                   OnChange="HandleFilesSelectedAsync"
+                                                   multiple
+                                                   disabled="@_saving" />
+                                        <InputFile id="interfaces-camera-picker"
+                                                   @key="@($"camera-{_cameraPickerVersion}")"
+                                                   style="display:none"
+                                                   OnChange="HandlePhotoSelectedAsync"
+                                                   accept="image/*"
+                                                   capture="environment"
+                                                   disabled="@_saving" />
+                                        <label class="btn btn--secondary interfaces-file-trigger interfaces-file-trigger--desktop @(_saving ? "is-disabled" : string.Empty)"
+                                               for="interfaces-file-picker"
+                                               aria-disabled="@_saving">
+                                            <i class="bi bi-plus-circle"></i>
+                                            <span>Agregar archivos</span>
+                                        </label>
+                                        <label class="btn btn--ghost interfaces-file-trigger interfaces-file-trigger--mobile @(_saving ? "is-disabled" : string.Empty)"
+                                               for="interfaces-camera-picker"
+                                               aria-disabled="@_saving">
+                                            <i class="bi bi-camera"></i>
+                                            <span>Tomar foto</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                @if (_settings is not null && _settings.ExtensionesPermitidas.Count > 0)
+                                {
+                                    <p class="interfaces-upload-hint">Permitidos: @string.Join(", ", _settings.ExtensionesPermitidas) · máximo @_settings.TamanoMaximoMb MB por archivo</p>
+                                }
+
+                                @if (_selectedFiles.Count == 0)
+                                {
+                                    <div class="interfaces-empty-upload">
+                                        Sumá uno o varios archivos para dejar el comprobante listo desde el alta.
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="interfaces-attachments-modern">
+                                        @foreach (var file in _selectedFiles)
+                                        {
+                                            <div class="interfaces-attachment-row interfaces-attachment-row--pending">
+                                                <div class="interfaces-attachment-row__icon">
+                                                    <i class="bi @GetAttachmentIcon(file.NombreArchivo)"></i>
+                                                </div>
+                                                <div class="interfaces-attachment-row__content">
+                                                    <strong>@file.NombreArchivo</strong>
+                                                    <span>@FormatSize(file.TamanoBytes) · pendiente de registrar</span>
+                                                </div>
+                                                <div class="interfaces-attachment-row__actions">
+                                                    <button type="button" class="btn btn--ghost btn--sm" @onclick="() => QuitarArchivoPendiente(file.Id)" disabled="@_saving">
+                                                        <i class="bi bi-trash3"></i> Quitar
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </section>
+                        </div>
+                    </div>
+                </div>
+            }
+            else if (_selectedDetail is not null)
+            {
+                <div class="interfaces-editor-shell">
+                    <div class="interfaces-editor-ribbon">
+                        <span class="interfaces-status-pill @GetStateCssClass(_selectedDetail.EstadoCodigo, _selectedDetail.EstadoDescripcion)">@_selectedDetail.EstadoDescripcion</span>
+                        <span class="interfaces-priority-chip @GetPriorityCssClass(_selectedDetail)">@GetPriorityLabel(_selectedDetail)</span>
+                        <span class="interfaces-summary-chip"><i class="bi bi-person"></i> @_selectedDetail.UsuarioAlta</span>
+                        <span class="interfaces-summary-chip"><i class="bi bi-clock"></i> @_selectedDetail.FechaHoraGrabacion.ToString("dd/MM/yyyy HH:mm")</span>
+                    </div>
+
+                    <div class="interfaces-editor-layout">
+                        <div class="interfaces-editor-column interfaces-editor-column--main">
+                            <section class="interfaces-section interfaces-section--soft">
+                                <div class="interfaces-section__head">
+                                    <div>
+                                        <h4>Información principal</h4>
+                                        <p>Edición directa sin salir de la bandeja, con foco en velocidad y lectura clara.</p>
+                                    </div>
+                                </div>
+
+                                <div class="interfaces-form-grid">
+                                    <div class="field">
+                                        <label>Tipo documental</label>
+                                        <select @bind="_editForm.IdTipoDocumento" disabled="@(!_selectedDetail.PermiteEdicion || _savingEdit)">
+                                            <option value="0">Seleccionar...</option>
+                                            @foreach (var item in _documentTypes)
+                                            {
+                                                <option value="@item.IdTipoDocumento">@item.Descripcion</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="field">
+                                        <label>Estado</label>
+                                        <select @bind="_statusChange.IdEstadoNuevo" disabled="@_changingState">
+                                            @foreach (var state in _states)
+                                            {
+                                                <option value="@state.IdEstado">@state.Descripcion</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="field">
+                                        <label>Usuario</label>
+                                        <input value="@_selectedDetail.UsuarioAlta" readonly />
+                                    </div>
+                                    <div class="field">
+                                        <label>Fecha</label>
+                                        <input value="@_selectedDetail.FechaHoraGrabacion.ToString("dd/MM/yyyy HH:mm")" readonly />
+                                    </div>
+                                    <div class="field">
+                                        <label>Prioridad visual</label>
+                                        <input value="@GetPriorityLabel(_selectedDetail)" readonly />
+                                    </div>
+                                    <div class="field">
+                                        <label>Referencia</label>
+                                        <input value="@GetDisplayValue(_selectedDetail.ReferenciaExterna)" readonly />
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section class="interfaces-section interfaces-section--feature">
+                                <div class="interfaces-section__head">
+                                    <div>
+                                        <h4>Observación</h4>
+                                        <p>Editor principal del documento, pensado para trabajar sin una vista rígida de ERP.</p>
+                                    </div>
+                                </div>
+
+                                <div class="field field--full interfaces-field-shell">
+                                    <textarea rows="7" @bind="_editForm.Observacion" disabled="@(!_selectedDetail.PermiteEdicion || _savingEdit)"></textarea>
+                                </div>
+
+                                <div class="field field--full interfaces-field-shell interfaces-field-shell--subtle">
+                                    <label>Motivo / nota de estado</label>
+                                    <textarea rows="3" @bind="_statusChange.Observacion" disabled="@_changingState" placeholder="Opcional: explicación del cambio de estado"></textarea>
+                                </div>
+                            </section>
+
+                            <div class="actions interfaces-editor-actions">
+                                <button type="button"
+                                        class="btn btn--primary"
+                                        @onclick="GuardarEdicionAsync"
+                                        disabled="@(!_selectedDetail.PermiteEdicion || _savingEdit)">
+                                    <i class="bi bi-save"></i> @(_savingEdit ? "Guardando..." : "Guardar")
+                                </button>
+                                <button type="button"
+                                        class="btn btn--secondary"
+                                        @onclick="GuardarEstadoDetalleAsync"
+                                        disabled="@(_changingState || _statusChange.IdEstadoNuevo == _selectedDetail.IdEstado)">
+                                    <i class="bi bi-arrow-repeat"></i> @(_changingState ? "Actualizando..." : "Cambiar estado")
+                                </button>
+                                @if (_selectedDetail.PermiteEdicion)
+                                {
+                                    <button type="button" class="btn btn--ghost" @onclick="ResetEditarDetalle" disabled="@_savingEdit">
+                                        <i class="bi bi-arrow-counterclockwise"></i> Revertir
+                                    </button>
+                                    <button type="button" class="btn btn--ghost" @onclick="AnularAsync" disabled="@_changingState">
+                                        <i class="bi bi-slash-circle"></i> Anular
+                                    </button>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="interfaces-editor-column interfaces-editor-column--aside">
+                            <section class="interfaces-section">
+                                <div class="interfaces-section__head">
+                                    <div>
+                                        <h4>Adjuntos</h4>
+                                        <p>Visualización moderna con acceso rápido a descargar, abrir y quitar archivos.</p>
+                                    </div>
+                                    @if (_selectedDetail.PermiteEdicion)
+                                    {
+                                        <div class="interfaces-upload-actions">
+                                            <InputFile id="interfaces-extra-picker"
+                                                       @key="@($"extra-{_extraPickerVersion}")"
+                                                       style="display:none"
+                                                       OnChange="HandleExtraFilesSelectedAsync"
+                                                       multiple
+                                                       disabled="@_savingExtraAttachments" />
+                                            <label class="btn btn--secondary interfaces-file-trigger @(_savingExtraAttachments ? "is-disabled" : string.Empty)"
+                                                   for="interfaces-extra-picker"
+                                                   aria-disabled="@_savingExtraAttachments">
+                                                <i class="bi bi-folder-plus"></i>
+                                                <span>Agregar adjuntos</span>
+                                            </label>
+                                            <button type="button"
+                                                    class="btn btn--ghost"
+                                                    @onclick="AgregarAdjuntosAsync"
+                                                    disabled="@(_savingExtraAttachments || _extraFiles.Count == 0)">
+                                                <i class="bi bi-upload"></i> @(_savingExtraAttachments ? "Agregando..." : "Subir")
+                                            </button>
+                                        </div>
+                                    }
+                                </div>
+
+                                @if (_extraFiles.Count > 0)
+                                {
+                                    <div class="interfaces-attachments-modern interfaces-attachments-modern--draft">
+                                        @foreach (var file in _extraFiles)
+                                        {
+                                            <div class="interfaces-attachment-row interfaces-attachment-row--pending">
+                                                <div class="interfaces-attachment-row__icon">
+                                                    <i class="bi @GetAttachmentIcon(file.Name)"></i>
+                                                </div>
+                                                <div class="interfaces-attachment-row__content">
+                                                    <strong>@file.Name</strong>
+                                                    <span>@FormatSize(file.Size) · pendiente de subir</span>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+
+                                @if (_selectedDetail.Adjuntos.Count == 0)
+                                {
+                                    <div class="interfaces-empty-upload">
+                                        Este comprobante todavía no tiene adjuntos activos.
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="interfaces-attachments-modern">
+                                        @foreach (var attachment in _selectedDetail.Adjuntos)
+                                        {
+                                            <div class="interfaces-attachment-row">
+                                                <div class="interfaces-attachment-row__icon">
+                                                    <i class="bi @GetAttachmentIcon(attachment.NombreOriginal)"></i>
+                                                </div>
+                                                <div class="interfaces-attachment-row__content">
+                                                    <strong>@attachment.NombreOriginal</strong>
+                                                    <span>@FormatSize(attachment.TamanoBytes) · @attachment.FechaHoraGrabacion.ToString("dd/MM/yyyy HH:mm")</span>
+                                                </div>
+                                                <div class="interfaces-attachment-row__actions">
+                                                    <a class="btn btn--ghost btn--sm"
+                                                       href="@GetAttachmentDownloadUrl(attachment.IdAdjunto)"
+                                                       target="_blank">
+                                                        <i class="bi bi-eye"></i> Ver
+                                                    </a>
+                                                    <a class="btn btn--ghost btn--sm"
+                                                       href="@GetAttachmentDownloadUrl(attachment.IdAdjunto)"
+                                                       download="@attachment.NombreOriginal">
+                                                        <i class="bi bi-download"></i> Descargar
+                                                    </a>
+                                                    @if (_selectedDetail.PermiteEdicion)
+                                                    {
+                                                        <button type="button"
+                                                                class="btn btn--ghost btn--sm"
+                                                                @onclick="() => QuitarAdjuntoAsync(attachment.IdAdjunto)"
+                                                                disabled="@_removingAttachment">
+                                                            <i class="bi bi-trash3"></i> Eliminar
+                                                        </button>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </section>
+
+                            <section class="interfaces-section interfaces-section--timeline">
+                                <div class="interfaces-section__head">
+                                    <div>
+                                        <h4>Historial</h4>
+                                        <p>Timeline compacta con la secuencia real del documento.</p>
+                                    </div>
+                                    <span class="interfaces-summary-chip"><i class="bi bi-clock-history"></i> @_selectedDetail.Historial.Count movimiento(s)</span>
+                                </div>
+
+                                @if (_selectedDetail.Historial.Count == 0)
+                                {
+                                    <div class="interfaces-empty-upload">
+                                        No hay movimientos registrados.
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="interfaces-history-modern">
+                                        @foreach (var item in _selectedDetail.Historial)
+                                        {
+                                            <div class="interfaces-history-modern__item">
+                                                <div class="interfaces-history-modern__top">
+                                                    <strong>@item.Accion</strong>
+                                                    <span>@item.FechaHora.ToString("dd/MM/yyyy HH:mm")</span>
+                                                </div>
+                                                <div class="interfaces-history-modern__meta">
+                                                    <span>@item.Usuario</span>
+                                                    <span>@item.Pc</span>
+                                                    @if (!string.IsNullOrWhiteSpace(item.EstadoNuevoDescripcion))
+                                                    {
+                                                        <span>@item.EstadoNuevoDescripcion</span>
+                                                    }
+                                                </div>
+                                                @if (!string.IsNullOrWhiteSpace(item.Observacion))
+                                                {
+                                                    <p>@item.Observacion</p>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </section>
+                        </div>
+                    </div>
                 </div>
             }
         </section>
@@ -485,12 +637,14 @@
 </div>
 
 @code {
+    private InterfacesEditorMode _editorMode = InterfacesEditorMode.Vacio;
     private readonly InterfacesFilters _filters = new();
     private readonly InterfacesCrearComprobanteRequest _nuevo = new();
     private readonly InterfacesCambioEstadoRequest _statusChange = new();
     private readonly List<PendingUploadFile> _selectedFiles = [];
     private readonly InterfacesActualizarComprobanteRequest _editForm = new();
     private readonly List<IBrowserFile> _extraFiles = [];
+    private readonly Dictionary<long, int> _rowStateSelections = [];
     private IReadOnlyList<InterfacesEstadoOptionDto> _states = [];
     private IReadOnlyList<InterfacesTipoDocumentoOptionDto> _documentTypes = [];
     private IReadOnlyList<InterfacesInboxItemDto> _items = [];
@@ -507,6 +661,7 @@
     private bool _isError;
     private int _filePickerVersion;
     private int _cameraPickerVersion;
+    private int _extraPickerVersion;
 
     private DateTime? _filtersDesde = DateTime.Today.AddDays(-30);
     private DateTime? _filtersHasta = DateTime.Today;
@@ -569,14 +724,20 @@
                 return;
             }
 
-            _items = result.Value ?? [];
+            _items = OrdenarItems(result.Value ?? []);
+            SyncRowStateSelections();
+
             if (_selectedId.HasValue)
             {
                 var stillExists = _items.Any(x => x.IdComprobanteRecibido == _selectedId.Value);
                 if (stillExists)
                     await SeleccionarAsync(_selectedId.Value);
                 else
-                    _selectedDetail = null;
+                    ClearSelection(showEmptyState: _editorMode != InterfacesEditorMode.Nuevo);
+            }
+            else if (_editorMode == InterfacesEditorMode.Vacio && _items.Count > 0)
+            {
+                await SeleccionarAsync(_items[0].IdComprobanteRecibido);
             }
         }
         finally
@@ -588,6 +749,8 @@
     private async Task SeleccionarAsync(long id)
     {
         _selectedId = id;
+        _editorMode = InterfacesEditorMode.Edicion;
+
         var result = await UiOps.RunAsync(() => InterfacesSvc.GetByIdAsync(id), "No se pudo cargar el detalle.");
         if (!result.Success)
         {
@@ -596,11 +759,75 @@
         }
 
         _selectedDetail = result.Value;
+        if (_selectedDetail is null)
+        {
+            ClearSelection(showEmptyState: true);
+            return;
+        }
+
         _statusChange.IdComprobanteRecibido = id;
-        _statusChange.IdEstadoNuevo = 0;
+        _statusChange.IdEstadoNuevo = _selectedDetail.IdEstado;
         _statusChange.Observacion = string.Empty;
         ResetEditarDetalle();
         _extraFiles.Clear();
+        _extraPickerVersion++;
+        await ScrollEditorIntoViewAsync();
+    }
+
+    private async Task AbrirNuevoDocumento()
+    {
+        SetMessage(string.Empty, false);
+        _editorMode = InterfacesEditorMode.Nuevo;
+        _selectedId = null;
+        _selectedDetail = null;
+        _statusChange.IdComprobanteRecibido = 0;
+        _statusChange.IdEstadoNuevo = 0;
+        _statusChange.Observacion = string.Empty;
+        _extraFiles.Clear();
+        LimpiarFormulario();
+        await ScrollEditorIntoViewAsync();
+    }
+
+    private async Task CancelarNuevoDocumento()
+    {
+        if (_items.Count > 0)
+        {
+            await SeleccionarAsync(_items[0].IdComprobanteRecibido);
+            return;
+        }
+
+        ClearSelection(showEmptyState: true);
+        await ScrollEditorIntoViewAsync();
+    }
+
+    private void ClearSelection(bool showEmptyState)
+    {
+        _selectedId = null;
+        _selectedDetail = null;
+        _statusChange.IdComprobanteRecibido = 0;
+        _statusChange.IdEstadoNuevo = 0;
+        _statusChange.Observacion = string.Empty;
+        _extraFiles.Clear();
+        _editorMode = showEmptyState ? InterfacesEditorMode.Vacio : InterfacesEditorMode.Nuevo;
+    }
+
+    private void CancelarSeleccionActual()
+    {
+        ClearSelection(showEmptyState: true);
+    }
+
+    private async Task ScrollEditorIntoViewAsync()
+    {
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            await JS.InvokeVoidAsync("eval",
+                "document.getElementById('interfaces-editor-panel')?.scrollIntoView({behavior:'smooth', block:'start'})");
+        }
+        catch
+        {
+        }
     }
 
     private async Task HandleFilesSelectedAsync(InputFileChangeEventArgs e)
@@ -633,6 +860,7 @@
     {
         _extraFiles.Clear();
         _extraFiles.AddRange(e.GetMultipleFiles(20));
+        _extraPickerVersion++;
         await InvokeAsync(StateHasChanged);
     }
 
@@ -701,6 +929,20 @@
         {
             _saving = false;
         }
+    }
+
+    private async Task GuardarEstadoDetalleAsync()
+    {
+        if (_selectedDetail is null || !_selectedId.HasValue)
+            return;
+
+        if (_statusChange.IdEstadoNuevo == _selectedDetail.IdEstado)
+            return;
+
+        if (string.IsNullOrWhiteSpace(_statusChange.Observacion))
+            _statusChange.Observacion = "Estado actualizado desde el editor de Recepción documental.";
+
+        await CambiarEstadoAsync();
     }
 
     private async Task CambiarEstadoAsync()
@@ -818,6 +1060,7 @@
                 }
 
                 _extraFiles.Clear();
+                _extraPickerVersion++;
                 SetMessage("Adjuntos agregados correctamente.", false);
                 await BuscarAsync();
                 await SeleccionarAsync(_selectedId.Value);
@@ -918,11 +1161,6 @@
         _cameraPickerVersion++;
     }
 
-    private void SeleccionarTipo(int idTipoDocumento)
-    {
-        _nuevo.IdTipoDocumento = idTipoDocumento;
-    }
-
     private void QuitarArchivoPendiente(Guid id)
     {
         var index = _selectedFiles.FindIndex(x => x.Id == id);
@@ -969,16 +1207,143 @@
         _editForm.IdComprobanteRecibido = _selectedDetail.IdComprobanteRecibido;
         _editForm.IdTipoDocumento = _selectedDetail.IdTipoDocumento;
         _editForm.Observacion = _selectedDetail.Observacion;
+        _statusChange.IdEstadoNuevo = _selectedDetail.IdEstado;
+        _statusChange.Observacion = string.Empty;
     }
 
-    private void SetMessage(string message, bool isError)
+    private void SyncRowStateSelections()
     {
-        _message = message;
-        _isError = isError;
+        var validIds = _items.Select(static x => x.IdComprobanteRecibido).ToHashSet();
+
+        foreach (var item in _items)
+            _rowStateSelections[item.IdComprobanteRecibido] = item.IdEstado;
+
+        var stale = _rowStateSelections.Keys.Where(id => !validIds.Contains(id)).ToList();
+        foreach (var id in stale)
+            _rowStateSelections.Remove(id);
     }
+
+    private IReadOnlyList<InterfacesInboxItemDto> OrdenarItems(IReadOnlyList<InterfacesInboxItemDto> items)
+    {
+        if (items.Count == 0)
+            return items;
+
+        var stateOrder = _states.ToDictionary(x => x.IdEstado, x => x.Orden);
+
+        return items
+            .OrderBy(x => stateOrder.TryGetValue(x.IdEstado, out var order) ? order : int.MaxValue)
+            .ThenBy(x => x.EstadoDescripcion)
+            .ThenByDescending(x => x.FechaHoraGrabacion)
+            .ThenByDescending(x => x.IdComprobanteRecibido)
+            .ToList();
+    }
+
+    private int GetRowSelectedState(long idComprobanteRecibido)
+        => _rowStateSelections.TryGetValue(idComprobanteRecibido, out var value)
+            ? value
+            : _items.FirstOrDefault(x => x.IdComprobanteRecibido == idComprobanteRecibido)?.IdEstado ?? 0;
+
+    private void CambiarSeleccionEstadoLista(long idComprobanteRecibido, string? value)
+    {
+        if (int.TryParse(value, out var parsed))
+            _rowStateSelections[idComprobanteRecibido] = parsed;
+    }
+
+    private async Task AplicarCambioEstadoListaAsync(long idComprobanteRecibido)
+    {
+        var selectedState = GetRowSelectedState(idComprobanteRecibido);
+        if (selectedState <= 0)
+            return;
+
+        _selectedId = idComprobanteRecibido;
+        _statusChange.IdComprobanteRecibido = idComprobanteRecibido;
+        _statusChange.IdEstadoNuevo = selectedState;
+        _statusChange.Observacion = "Estado actualizado desde Documentos pendientes.";
+
+        await CambiarEstadoAsync();
+    }
+
+    private async Task CambiarEstadoRapidoAsync(long idComprobanteRecibido, InterfacesQuickAction action)
+    {
+        var targetState = ResolveQuickState(action);
+        if (targetState is null)
+        {
+            SetMessage("No se encontró un estado compatible para la acción rápida seleccionada.", true);
+            return;
+        }
+
+        _rowStateSelections[idComprobanteRecibido] = targetState.IdEstado;
+        _selectedId = idComprobanteRecibido;
+        _statusChange.IdComprobanteRecibido = idComprobanteRecibido;
+        _statusChange.IdEstadoNuevo = targetState.IdEstado;
+        _statusChange.Observacion = action switch
+        {
+            InterfacesQuickAction.Procesar => "Estado actualizado a procesar desde Documentos pendientes.",
+            InterfacesQuickAction.Finalizar => "Estado finalizado desde Documentos pendientes.",
+            InterfacesQuickAction.Rechazar => "Estado rechazado desde Documentos pendientes.",
+            _ => "Estado actualizado desde Documentos pendientes."
+        };
+
+        await CambiarEstadoAsync();
+    }
+
+    private InterfacesEstadoOptionDto? ResolveQuickState(InterfacesQuickAction action)
+        => action switch
+        {
+            InterfacesQuickAction.Procesar => FindState("PROCES"),
+            InterfacesQuickAction.Finalizar => FindState("FINAL", requireFinal: false) ?? _states.FirstOrDefault(x => x.EsFinal),
+            InterfacesQuickAction.Rechazar => FindState("RECHAZ") ?? FindState("OBSERV"),
+            _ => null
+        };
+
+    private InterfacesEstadoOptionDto? FindState(string keyword, bool requireFinal = false)
+        => _states.FirstOrDefault(x =>
+            (!requireFinal || x.EsFinal) &&
+            (x.Codigo.Contains(keyword, StringComparison.OrdinalIgnoreCase) ||
+             x.Descripcion.Contains(keyword, StringComparison.OrdinalIgnoreCase)));
+
+    private bool CanQuickProcess() => ResolveQuickState(InterfacesQuickAction.Procesar) is not null;
+    private bool CanQuickFinalize() => ResolveQuickState(InterfacesQuickAction.Finalizar) is not null;
+    private bool CanQuickReject() => ResolveQuickState(InterfacesQuickAction.Rechazar) is not null;
+
+    private string GetEditorTitle()
+        => _editorMode switch
+        {
+            InterfacesEditorMode.Nuevo => "Nuevo documento",
+            InterfacesEditorMode.Edicion when _selectedDetail is not null => $"Documento #{_selectedDetail.IdComprobanteRecibido}",
+            _ => "Editor documental"
+        };
+
+    private string GetEditorSubtitle()
+        => _editorMode switch
+        {
+            InterfacesEditorMode.Nuevo => "Workspace de carga pensado para mantener el foco y evitar formularios largos tradicionales.",
+            InterfacesEditorMode.Edicion when _selectedDetail is not null => $"{_selectedDetail.TipoDocumentoDescripcion} · edición integrada en la misma vista",
+            _ => "Seleccioná un documento para revisar datos, estado, adjuntos e historial."
+        };
+
+    private string GetPendingSummary()
+    {
+        if (_items.Count == 0)
+            return "Sin pendientes";
+
+        var active = _items.Count(x => !x.Eliminado);
+        return $"{active} activos";
+    }
+
+    private string GetInitialStateLabel()
+    {
+        var initialState = _states.FirstOrDefault(x =>
+            x.EsInicial ||
+            string.Equals(x.Codigo, _settings?.EstadoInicialCodigo, StringComparison.OrdinalIgnoreCase));
+        return initialState?.Descripcion ?? "A procesar";
+    }
+
+    private static string GetDisplayValue(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "Sin referencia" : value;
 
     private static string GetSummary(string value)
-        => string.IsNullOrWhiteSpace(value) ? "Sin observación." : value.Length <= 140 ? value : value[..140] + "...";
+        => string.IsNullOrWhiteSpace(value) ? "Sin observación." : value.Length <= 88 ? value : value[..88] + "...";
 
     private static string FormatSize(long bytes)
     {
@@ -987,6 +1352,16 @@
         if (bytes < 1024 * 1024)
             return $"{bytes / 1024.0:F1} KB";
         return $"{bytes / 1024.0 / 1024.0:F1} MB";
+    }
+
+    private static string GetPendingAgeLabel(DateTime fechaHora)
+    {
+        var age = DateTime.Now - fechaHora;
+        if (age.TotalHours < 1)
+            return "recién ingresado";
+        if (age.TotalDays >= 1)
+            return $"{Math.Floor(age.TotalDays)} día(s)";
+        return $"{Math.Floor(age.TotalHours)} h";
     }
 
     private static string BuildFeedbackText(AppUiMessage? feedback)
@@ -1004,6 +1379,70 @@
 
     private static string GetAttachmentDownloadUrl(long idAdjunto)
         => $"/api/interfaces/adjuntos/{idAdjunto}";
+
+    private static string GetAttachmentIcon(string fileName)
+    {
+        var extension = Path.GetExtension(fileName)?.TrimStart('.').ToLowerInvariant();
+        return extension switch
+        {
+            "pdf" => "bi-filetype-pdf",
+            "jpg" or "jpeg" or "png" or "gif" or "bmp" or "webp" => "bi-file-earmark-image",
+            "xls" or "xlsx" or "csv" => "bi-file-earmark-spreadsheet",
+            "txt" or "log" => "bi-file-earmark-text",
+            _ => "bi-file-earmark"
+        };
+    }
+
+    private string GetPriorityLabel(InterfacesInboxItemDto item)
+    {
+        if (item.Observacion.Contains("URGENTE", StringComparison.OrdinalIgnoreCase))
+            return "Urgente";
+        if ((DateTime.Now - item.FechaHoraGrabacion).TotalDays >= 2 && !item.EstadoDescripcion.Contains("Final", StringComparison.OrdinalIgnoreCase))
+            return "Alta";
+        return "Normal";
+    }
+
+    private string GetPriorityLabel(InterfacesDetalleDto item)
+    {
+        if (item.Observacion.Contains("URGENTE", StringComparison.OrdinalIgnoreCase))
+            return "Urgente";
+        if ((DateTime.Now - item.FechaHoraGrabacion).TotalDays >= 2 && !item.EstadoDescripcion.Contains("Final", StringComparison.OrdinalIgnoreCase))
+            return "Alta";
+        return "Normal";
+    }
+
+    private string GetPriorityCssClass(InterfacesInboxItemDto item)
+        => GetPriorityLabel(item) switch
+        {
+            "Urgente" => "interfaces-priority-chip--urgent",
+            "Alta" => "interfaces-priority-chip--high",
+            _ => "interfaces-priority-chip--normal"
+        };
+
+    private string GetPriorityCssClass(InterfacesDetalleDto item)
+        => GetPriorityLabel(item) switch
+        {
+            "Urgente" => "interfaces-priority-chip--urgent",
+            "Alta" => "interfaces-priority-chip--high",
+            _ => "interfaces-priority-chip--normal"
+        };
+
+    private static string GetStateCssClass(string codigo, string descripcion)
+    {
+        if (codigo.Contains("ANUL", StringComparison.OrdinalIgnoreCase) || descripcion.Contains("anul", StringComparison.OrdinalIgnoreCase))
+            return "interfaces-status-pill--danger";
+        if (codigo.Contains("RECHAZ", StringComparison.OrdinalIgnoreCase) || descripcion.Contains("rechaz", StringComparison.OrdinalIgnoreCase))
+            return "interfaces-status-pill--warning";
+        if (codigo.Contains("FINAL", StringComparison.OrdinalIgnoreCase) || descripcion.Contains("final", StringComparison.OrdinalIgnoreCase))
+            return "interfaces-status-pill--success";
+        return "interfaces-status-pill--info";
+    }
+
+    private void SetMessage(string message, bool isError)
+    {
+        _message = message;
+        _isError = isError;
+    }
 
     private string CurrentUserName => AppUserSession.GetCurrentUserName(Environment.UserName);
 
@@ -1046,5 +1485,19 @@
 
         public Stream OpenReadStream()
             => new MemoryStream(Contenido, writable: false);
+    }
+
+    private enum InterfacesEditorMode
+    {
+        Vacio,
+        Nuevo,
+        Edicion
+    }
+
+    private enum InterfacesQuickAction
+    {
+        Procesar,
+        Finalizar,
+        Rechazar
     }
 }
