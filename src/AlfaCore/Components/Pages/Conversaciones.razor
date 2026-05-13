@@ -6,27 +6,6 @@
 <PageTitle>Conversaciones | Alfa Gestión</PageTitle>
 
 <section class="page-grid conversations-page conversations-page--odoo">
-    <div class="page-intro conversations-topbar">
-        <div>
-            <h2 class="page-intro__title">Conversaciones</h2>
-            <p class="page-intro__text">Inbox operativo para gestionar WhatsApp, asignar técnicos y mantener trazabilidad entre contacto, cliente y estado.</p>
-        </div>
-        <div class="actions">
-            <a class="btn btn--ghost" href="/conversaciones/configuracion">
-                <i class="bi bi-sliders"></i> Configuración
-            </a>
-            <a class="btn btn--ghost" href="/conversaciones/plantillas">
-                <i class="bi bi-chat-square-text-fill"></i> Plantillas
-            </a>
-            <button type="button" class="btn btn--ghost" @onclick="ToggleContextPanel" disabled="@(_selectedConversation is null)">
-                <i class="bi bi-layout-sidebar-inset-reverse"></i> Contexto
-            </button>
-            <button type="button" class="btn btn--ghost" @onclick="RecargarAsync" disabled="_loadingInbox || _loadingConversation">
-                <i class="bi bi-arrow-clockwise"></i> Recargar
-            </button>
-        </div>
-    </div>
-
     @if (_loadError is not null)
     {
         <div class="panel-card empty-state">
@@ -59,6 +38,21 @@
                         <i class="bi bi-plus-circle-fill"></i> Nuevo hilo
                     </button>
                 }
+            </div>
+
+            <div class="conversations-module-actions">
+                <a class="btn btn--ghost btn--sm" href="/conversaciones/configuracion" title="Configuración">
+                    <i class="bi bi-sliders"></i>
+                </a>
+                <a class="btn btn--ghost btn--sm" href="/conversaciones/plantillas" title="Plantillas">
+                    <i class="bi bi-chat-square-text-fill"></i>
+                </a>
+                <button type="button" class="btn btn--ghost btn--sm" @onclick="ToggleContextPanel" disabled="@(_selectedConversation is null)" title="Contexto">
+                    <i class="bi bi-layout-sidebar-inset-reverse"></i>
+                </button>
+                <button type="button" class="btn btn--ghost btn--sm" @onclick="RecargarAsync" disabled="_loadingInbox || _loadingConversation" title="Recargar">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
             </div>
 
             <div class="conversations-filters__modes">
