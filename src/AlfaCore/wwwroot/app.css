@@ -2835,7 +2835,7 @@ html[data-theme="light"] .conversations-context::-webkit-scrollbar-thumb {
 }
 
 .conversations-page--odoo .conversations-layout {
-    grid-template-columns: 300px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     gap: 0;
     height: auto;
     min-height: 0;
@@ -2848,6 +2848,33 @@ html[data-theme="light"] .conversations-context::-webkit-scrollbar-thumb {
     border-width: 0 1px 0 0;
     background: #1c1e28;
     padding: .65rem .7rem;
+}
+
+.conversations-panel-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    border: 0;
+    background: rgba(0, 0, 0, .18);
+}
+
+.conversations-page--odoo .conversations-inbox-drawer {
+    position: fixed;
+    top: 46px;
+    left: 0;
+    bottom: 0;
+    z-index: 36;
+    width: min(330px, 92vw);
+    max-height: none;
+    transform: translateX(calc(-100% + 42px));
+    transition: transform .18s ease;
+    border-radius: 0;
+    border-width: 0 1px 0 0;
+    box-shadow: 22px 0 44px rgba(0, 0, 0, .28);
+}
+
+.conversations-page--odoo .conversations-inbox-drawer.is-open {
+    transform: translateX(0);
 }
 
 .conversations-page--odoo .conversations-list__header,
@@ -2965,7 +2992,7 @@ html[data-theme="light"] .conversations-context::-webkit-scrollbar-thumb {
     top: 46px;
     right: 0;
     bottom: 0;
-    z-index: 35;
+    z-index: 36;
     width: min(390px, 92vw);
     max-height: none;
     transform: translateX(104%);
@@ -2988,6 +3015,46 @@ html[data-theme="light"] .conversations-context::-webkit-scrollbar-thumb {
     border-radius: 7px;
     background: rgba(255, 255, 255, 0.08);
     color: var(--color-text);
+}
+
+.conversations-page--odoo textarea,
+.conversations-page--odoo select,
+.conversations-page--odoo input,
+.templates-page--odoo textarea,
+.templates-page--odoo select,
+.templates-page--odoo input {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(14, 165, 233, .55) rgba(17, 19, 26, .92);
+}
+
+.conversations-page--odoo textarea,
+.templates-page--odoo textarea {
+    resize: none;
+}
+
+.conversations-page--odoo textarea::-webkit-scrollbar,
+.templates-page--odoo textarea::-webkit-scrollbar,
+.conversations-page--odoo select::-webkit-scrollbar,
+.templates-page--odoo select::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+.conversations-page--odoo textarea::-webkit-scrollbar-track,
+.templates-page--odoo textarea::-webkit-scrollbar-track,
+.conversations-page--odoo select::-webkit-scrollbar-track,
+.templates-page--odoo select::-webkit-scrollbar-track {
+    background: #11131a;
+    border-radius: 999px;
+}
+
+.conversations-page--odoo textarea::-webkit-scrollbar-thumb,
+.templates-page--odoo textarea::-webkit-scrollbar-thumb,
+.conversations-page--odoo select::-webkit-scrollbar-thumb,
+.templates-page--odoo select::-webkit-scrollbar-thumb {
+    background: rgba(14, 165, 233, .62);
+    border: 2px solid #11131a;
+    border-radius: 999px;
 }
 
 .modal-overlay.conversations-template-modal {
