@@ -16,7 +16,7 @@
             <button type="button" class="btn btn--primary" @onclick="NuevaPlantilla">
                 <i class="bi bi-plus-circle-fill"></i> Nueva plantilla
             </button>
-            <button type="button" class="btn btn--ghost" @onclick="AplicarModeloCobranza">
+            <button type="button" class="btn btn--ghost" @onclick="AplicarModeloCobranzaAsync">
                 <i class="bi bi-receipt"></i> Modelo cobranza
             </button>
         </div>
@@ -361,10 +361,16 @@
         _error = null;
     }
 
-    private void AplicarModeloCobranza()
+    private async Task AplicarModeloCobranzaAsync()
     {
-        _selectedId = 0;
-        _form = NewCobranzaForm();
+        var model = NewCobranzaForm();
+        var existing = _templates.FirstOrDefault(x =>
+            string.Equals(x.NombreMeta, model.NombreMeta, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(x.Idioma, model.Idioma, StringComparison.OrdinalIgnoreCase));
+
+        _selectedId = existing?.IdPlantilla ?? 0;
+        model.IdPlantilla = _selectedId;
+        _form = model;
         _examplesText = JoinMultilineValues(
         [
             "ANTU MALAL- ROLO GUAJARDO",
@@ -372,8 +378,12 @@
             CobranzaFormaPagoEjemplo
         ]);
         _formEstadoMeta = "DRAFT";
-        _feedback = "Modelo de cobranza cargado. Revisa los ejemplos y guarda el borrador.";
+        _feedback = _selectedId > 0
+            ? "Modelo de cobranza cargado sobre la plantilla existente. Revisa y guarda los cambios."
+            : "Modelo de cobranza cargado. Revisa los ejemplos y guarda el borrador.";
         _error = null;
+
+        await Task.CompletedTask;
     }
 
     private void InsertVariable(string variable)

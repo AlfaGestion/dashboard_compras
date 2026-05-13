@@ -534,6 +534,7 @@ public sealed class ConversacionesService(
             var normalized = NormalizeTemplateRequest(request);
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync(token);
+            await EnsureTemplateNameIsUniqueAsync(cn, normalized, token);
 
             if (normalized.IdPlantilla <= 0)
             {
@@ -2729,6 +2730,25 @@ public sealed class ConversacionesService(
             UsuarioAccion = request.UsuarioAccion,
             SistemaAccion = request.SistemaAccion
         };
+    }
+
+    private static async Task EnsureTemplateNameIsUniqueAsync(SqlConnection cn, ConversacionPlantillaSaveRequest request, CancellationToken ct)
+    {
+        const string sql = """
+            SELECT TOP 1 IdPlantilla
+            FROM dbo.CONV_PLANTILLAS
+            WHERE NombreMeta = @NombreMeta
+              AND Idioma = @Idioma
+              AND IdPlantilla <> @IdPlantilla
+            """;
+
+        await using var cmd = new SqlCommand(sql, cn);
+        cmd.Parameters.AddWithValue("@NombreMeta", request.NombreMeta);
+        cmd.Parameters.AddWithValue("@Idioma", request.Idioma);
+        cmd.Parameters.AddWithValue("@IdPlantilla", request.IdPlantilla);
+        var existing = await cmd.ExecuteScalarAsync(ct);
+        if (existing is not null && existing != DBNull.Value)
+            throw new InvalidOperationException($"Ya existe una plantilla con nombre Meta '{request.NombreMeta}' e idioma '{request.Idioma}'. Abrila desde la lista o usa otro nombre Meta.");
     }
 
     private static void AddTemplateParameters(SqlCommand cmd, ConversacionPlantillaSaveRequest request)
