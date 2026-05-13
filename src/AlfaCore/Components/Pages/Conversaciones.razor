@@ -12,9 +12,6 @@
             <p class="page-intro__text">Inbox operativo para gestionar WhatsApp, asignar técnicos y mantener trazabilidad entre contacto, cliente y estado.</p>
         </div>
         <div class="actions">
-            <button type="button" class="btn btn--ghost" @onclick="ToggleInboxPanel">
-                <i class="bi bi-layout-sidebar-inset"></i> Inbox
-            </button>
             <a class="btn btn--ghost" href="/conversaciones/configuracion">
                 <i class="bi bi-sliders"></i> Configuración
             </a>
@@ -114,21 +111,18 @@
             </div>
         </section>
 
-        @if (_showInboxPanel || _showContextPanel)
+        @if (_showContextPanel)
         {
             <button type="button" class="conversations-panel-backdrop" aria-label="Cerrar paneles" @onclick="CloseFloatingPanels"></button>
         }
 
         <div class="conversations-layout">
-            <aside class="panel-card conversations-list conversations-inbox-drawer @(_showInboxPanel ? "is-open" : string.Empty)">
+            <aside class="panel-card conversations-list">
                 <div class="conversations-list__header">
                     <div>
                         <h3 class="panel-card__title">Inbox</h3>
                         <p class="panel-card__subtitle">@_inbox.Count conversación(es)</p>
                     </div>
-                    <button type="button" class="conversations-drawer-close" title="Cerrar inbox" @onclick="ToggleInboxPanel">
-                        <i class="bi bi-x-lg"></i>
-                    </button>
                 </div>
 
                 @if (_loadingInbox)
@@ -629,7 +623,6 @@
 
     private string _canalActivo = "WHATSAPP";
     private bool _showNuevoHilo;
-    private bool _showInboxPanel = true;
     private bool _showContextPanel;
     private bool _showTemplatePanel;
     private string _nuevoHiloNombre = string.Empty;
@@ -796,7 +789,6 @@
     private async Task SelectConversationAsync(long idConversacion)
     {
         _showTemplatePanel = false;
-        _showInboxPanel = false;
         await LoadConversationAsync(idConversacion, showLoading: true, clearActionState: true);
     }
 
@@ -1232,23 +1224,11 @@
         await LoadInboxAsync();
     }
 
-    private void ToggleInboxPanel()
-    {
-        _showInboxPanel = !_showInboxPanel;
-        if (_showInboxPanel)
-            _showContextPanel = false;
-    }
-
     private void ToggleContextPanel()
-    {
-        _showContextPanel = !_showContextPanel;
-        if (_showContextPanel)
-            _showInboxPanel = false;
-    }
+        => _showContextPanel = !_showContextPanel;
 
     private void CloseFloatingPanels()
     {
-        _showInboxPanel = false;
         _showContextPanel = false;
     }
 
@@ -1418,7 +1398,6 @@
         _replyText = string.Empty;
         _internalNoteText = string.Empty;
         _assignmentTechnicianId = string.Empty;
-        _showInboxPanel = true;
         _showContextPanel = false;
         _showTemplatePanel = false;
         ClearTemplateSelection();
