@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace AlfaCore.Services;
 
@@ -112,6 +113,7 @@ public sealed class ConversacionesService(
                     ISNULL(t.Nombre, ''),
                     ISNULL(c.ResumenUltimoMensaje, ''),
                     c.FechaHoraUltimoMensaje,
+                    ultCliente.FechaHoraUltimoMensajeCliente,
                     ISNULL(c.Archivada, 0),
                     ISNULL(c.Bloqueada, 0)
                 FROM dbo.CONV_CONVERSACIONES c
@@ -123,6 +125,13 @@ public sealed class ConversacionesService(
                     ON mc.id = c.IdContacto
                 LEFT JOIN dbo.V_TA_Tecnicos t
                     ON t.IdTecnico = c.IdTecnico
+                OUTER APPLY (
+                    SELECT TOP (1) m.FechaHora AS FechaHoraUltimoMensajeCliente
+                    FROM dbo.CONV_MENSAJES m
+                    WHERE m.IdConversacion = c.IdConversacion
+                      AND m.Direction = N'ENTRANTE'
+                    ORDER BY m.FechaHora DESC, m.IdMensaje DESC
+                ) ultCliente
                 WHERE
                     (@Canal IS NULL OR c.Canal = @Canal)
                     AND (@CodigoEstado IS NULL OR c.CodigoEstado = @CodigoEstado)
@@ -174,10 +183,14 @@ public sealed class ConversacionesService(
                     TecnicoNombre = GetString(rd, 10),
                     ResumenUltimoMensaje = GetString(rd, 11),
                     FechaHoraUltimoMensaje = rd.IsDBNull(12) ? DateTime.MinValue : rd.GetDateTime(12),
-                    Archivada = !rd.IsDBNull(13) && rd.GetBoolean(13),
-                    Bloqueada = !rd.IsDBNull(14) && rd.GetBoolean(14)
+                    FechaHoraUltimoMensajeCliente = rd.IsDBNull(13) ? null : rd.GetDateTime(13),
+                    Archivada = !rd.IsDBNull(14) && rd.GetBoolean(14),
+                    Bloqueada = !rd.IsDBNull(15) && rd.GetBoolean(15)
                 });
             }
+
+            foreach (var item in items)
+                ApplyWhatsAppWindow(item);
 
             return (IReadOnlyList<ConversacionInboxItemDto>)items;
         }, "No se pudieron cargar las conversaciones.", ct);
@@ -209,6 +222,7 @@ public sealed class ConversacionesService(
                     ISNULL(c.Bloqueada, 0),
                     c.FechaHoraPrimerMensaje,
                     c.FechaHoraUltimoMensaje,
+                    ultCliente.FechaHoraUltimoMensajeCliente,
                     c.FechaHoraCierre
                 FROM dbo.CONV_CONVERSACIONES c
                 INNER JOIN dbo.CONV_ESTADOS e
@@ -219,6 +233,13 @@ public sealed class ConversacionesService(
                     ON mc.id = c.IdContacto
                 LEFT JOIN dbo.V_TA_Tecnicos t
                     ON t.IdTecnico = c.IdTecnico
+                OUTER APPLY (
+                    SELECT TOP (1) m.FechaHora AS FechaHoraUltimoMensajeCliente
+                    FROM dbo.CONV_MENSAJES m
+                    WHERE m.IdConversacion = c.IdConversacion
+                      AND m.Direction = N'ENTRANTE'
+                    ORDER BY m.FechaHora DESC, m.IdMensaje DESC
+                ) ultCliente
                 WHERE c.IdConversacion = @IdConversacion
                 """;
 
@@ -230,7 +251,7 @@ public sealed class ConversacionesService(
             if (!await rd.ReadAsync(token))
                 return null;
 
-            return new ConversacionDetalleDto
+            var item = new ConversacionDetalleDto
             {
                 IdConversacion = rd.GetInt64(0),
                 Canal = GetString(rd, 1),
@@ -254,8 +275,12 @@ public sealed class ConversacionesService(
                 Bloqueada = !rd.IsDBNull(19) && rd.GetBoolean(19),
                 FechaHoraPrimerMensaje = rd.IsDBNull(20) ? null : rd.GetDateTime(20),
                 FechaHoraUltimoMensaje = rd.IsDBNull(21) ? DateTime.MinValue : rd.GetDateTime(21),
-                FechaHoraCierre = rd.IsDBNull(22) ? null : rd.GetDateTime(22)
+                FechaHoraUltimoMensajeCliente = rd.IsDBNull(22) ? null : rd.GetDateTime(22),
+                FechaHoraCierre = rd.IsDBNull(23) ? null : rd.GetDateTime(23)
             };
+
+            ApplyWhatsAppWindow(item);
+            return item;
         }, "No se pudo cargar la conversación.", ct);
 
     public Task<IReadOnlyList<ConversacionMensajeDto>> GetMessagesAsync(long conversationId, CancellationToken ct = default)
@@ -355,6 +380,10 @@ public sealed class ConversacionesService(
             else
             {
                 whatsAppConfig = await conversacionesConfigService.GetWhatsAppConfigAsync(token);
+                var windowActive = await IsWhatsAppWindowActiveAsync(request.IdConversacion, token);
+                if (!windowActive)
+                    throw new InvalidOperationException("La ventana de WhatsApp esta vencida. Para retomar la conversacion tenes que enviar una plantilla aprobada.");
+
                 initialState = whatsAppConfig.IsConfiguredForSend ? "PENDIENTE" : "PENDIENTE_CONFIG";
             }
 
@@ -405,6 +434,308 @@ public sealed class ConversacionesService(
                 WhatsAppMessageId = whatsAppMessageId
             };
         }, "No se pudo registrar el mensaje saliente.", ct);
+
+    public Task<IReadOnlyList<ConversacionPlantillaDto>> GetTemplatesAsync(ConversacionPlantillaFilters filters, CancellationToken ct = default)
+        => ExecuteLoggedAsync("Conversaciones", "GetTemplates", async token =>
+        {
+            filters ??= new();
+            const string sql = """
+                SELECT
+                    IdPlantilla,
+                    ISNULL(NombreVisible, ''),
+                    ISNULL(NombreMeta, ''),
+                    ISNULL(Categoria, ''),
+                    ISNULL(Idioma, ''),
+                    ISNULL(EncabezadoTexto, ''),
+                    ISNULL(CuerpoTexto, ''),
+                    ISNULL(PieTexto, ''),
+                    ISNULL(EjemplosVariablesJson, ''),
+                    ISNULL(EstadoLocal, ''),
+                    ISNULL(EstadoMeta, ''),
+                    ISNULL(MetaTemplateId, ''),
+                    ISNULL(MetaRechazoMotivo, ''),
+                    ISNULL(Activa, 1),
+                    FechaHora_Grabacion,
+                    FechaHora_Modificacion,
+                    FechaHoraSincronizacion
+                FROM dbo.CONV_PLANTILLAS
+                WHERE
+                    (@IncluirInactivas = 1 OR ISNULL(Activa, 1) = 1)
+                    AND (@EstadoMeta IS NULL OR EstadoMeta = @EstadoMeta)
+                    AND (
+                        @Search IS NULL
+                        OR NombreVisible LIKE @Search
+                        OR NombreMeta LIKE @Search
+                        OR CuerpoTexto LIKE @Search
+                    )
+                ORDER BY FechaHora_Grabacion DESC, IdPlantilla DESC
+                """;
+
+            var items = new List<ConversacionPlantillaDto>();
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.AddWithValue("@IncluirInactivas", filters.IncluirInactivas);
+            cmd.Parameters.AddWithValue("@EstadoMeta", DbNullable(filters.EstadoMeta));
+            cmd.Parameters.AddWithValue("@Search", DbNullable(Like(filters.Search)));
+            await using var rd = await cmd.ExecuteReaderAsync(token);
+            while (await rd.ReadAsync(token))
+                items.Add(ReadTemplate(rd));
+
+            return (IReadOnlyList<ConversacionPlantillaDto>)items;
+        }, "No se pudieron cargar las plantillas de WhatsApp.", ct);
+
+    public Task<ConversacionPlantillaDto?> GetTemplateAsync(long idPlantilla, CancellationToken ct = default)
+        => ExecuteLoggedAsync("Conversaciones", "GetTemplate", async token =>
+        {
+            const string sql = """
+                SELECT
+                    IdPlantilla,
+                    ISNULL(NombreVisible, ''),
+                    ISNULL(NombreMeta, ''),
+                    ISNULL(Categoria, ''),
+                    ISNULL(Idioma, ''),
+                    ISNULL(EncabezadoTexto, ''),
+                    ISNULL(CuerpoTexto, ''),
+                    ISNULL(PieTexto, ''),
+                    ISNULL(EjemplosVariablesJson, ''),
+                    ISNULL(EstadoLocal, ''),
+                    ISNULL(EstadoMeta, ''),
+                    ISNULL(MetaTemplateId, ''),
+                    ISNULL(MetaRechazoMotivo, ''),
+                    ISNULL(Activa, 1),
+                    FechaHora_Grabacion,
+                    FechaHora_Modificacion,
+                    FechaHoraSincronizacion
+                FROM dbo.CONV_PLANTILLAS
+                WHERE IdPlantilla = @IdPlantilla
+                """;
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.AddWithValue("@IdPlantilla", idPlantilla);
+            await using var rd = await cmd.ExecuteReaderAsync(token);
+            return await rd.ReadAsync(token) ? ReadTemplate(rd) : null;
+        }, "No se pudo cargar la plantilla de WhatsApp.", ct);
+
+    public Task<long> SaveTemplateDraftAsync(ConversacionPlantillaSaveRequest request, CancellationToken ct = default)
+        => ExecuteLoggedAsync("Conversaciones", "SaveTemplateDraft", async token =>
+        {
+            var normalized = NormalizeTemplateRequest(request);
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+
+            if (normalized.IdPlantilla <= 0)
+            {
+                const string insertSql = """
+                    INSERT INTO dbo.CONV_PLANTILLAS
+                    (
+                        NombreVisible,
+                        NombreMeta,
+                        Categoria,
+                        Idioma,
+                        EncabezadoTexto,
+                        CuerpoTexto,
+                        PieTexto,
+                        EjemplosVariablesJson,
+                        EstadoLocal,
+                        EstadoMeta,
+                        Activa,
+                        UsuarioAccion,
+                        SistemaAccion,
+                        FechaHora_Grabacion
+                    )
+                    VALUES
+                    (
+                        @NombreVisible,
+                        @NombreMeta,
+                        @Categoria,
+                        @Idioma,
+                        @EncabezadoTexto,
+                        @CuerpoTexto,
+                        @PieTexto,
+                        @EjemplosVariablesJson,
+                        @EstadoLocal,
+                        @EstadoMeta,
+                        @Activa,
+                        @UsuarioAccion,
+                        @SistemaAccion,
+                        GETDATE()
+                    );
+
+                    SELECT CAST(SCOPE_IDENTITY() AS bigint);
+                    """;
+
+                await using var cmd = new SqlCommand(insertSql, cn);
+                AddTemplateParameters(cmd, normalized);
+                cmd.Parameters.AddWithValue("@EstadoLocal", ConversacionPlantillaEstadosLocales.Borrador);
+                cmd.Parameters.AddWithValue("@EstadoMeta", "DRAFT");
+                var result = await cmd.ExecuteScalarAsync(token);
+                return Convert.ToInt64(result, CultureInfo.InvariantCulture);
+            }
+
+            const string updateSql = """
+                UPDATE dbo.CONV_PLANTILLAS
+                SET
+                    NombreVisible = @NombreVisible,
+                    NombreMeta = @NombreMeta,
+                    Categoria = @Categoria,
+                    Idioma = @Idioma,
+                    EncabezadoTexto = @EncabezadoTexto,
+                    CuerpoTexto = @CuerpoTexto,
+                    PieTexto = @PieTexto,
+                    EjemplosVariablesJson = @EjemplosVariablesJson,
+                    EstadoLocal = CASE WHEN EstadoMeta IN (N'APPROVED', N'PENDING') THEN EstadoLocal ELSE @EstadoLocal END,
+                    EstadoMeta = CASE WHEN EstadoMeta IN (N'APPROVED', N'PENDING') THEN EstadoMeta ELSE @EstadoMeta END,
+                    Activa = @Activa,
+                    UsuarioAccion = @UsuarioAccion,
+                    SistemaAccion = @SistemaAccion,
+                    FechaHora_Modificacion = GETDATE()
+                WHERE IdPlantilla = @IdPlantilla
+                """;
+
+            await using var updateCmd = new SqlCommand(updateSql, cn);
+            AddTemplateParameters(updateCmd, normalized);
+            updateCmd.Parameters.AddWithValue("@EstadoLocal", ConversacionPlantillaEstadosLocales.Borrador);
+            updateCmd.Parameters.AddWithValue("@EstadoMeta", "DRAFT");
+            var affected = await updateCmd.ExecuteNonQueryAsync(token);
+            if (affected == 0)
+                throw new InvalidOperationException("La plantilla indicada no existe.");
+
+            return normalized.IdPlantilla;
+        }, "No se pudo guardar la plantilla de WhatsApp.", ct);
+
+    public Task SubmitTemplateForApprovalAsync(ConversacionPlantillaSubmitRequest request, CancellationToken ct = default)
+        => ExecuteLoggedAsync("Conversaciones", "SubmitTemplateForApproval", async token =>
+        {
+            if (request.IdPlantilla <= 0)
+                throw new InvalidOperationException("La plantilla es obligatoria.");
+
+            var template = await GetTemplateAsync(request.IdPlantilla, token)
+                ?? throw new InvalidOperationException("La plantilla indicada no existe.");
+            ValidateTemplateCanSubmit(template);
+
+            var config = await conversacionesConfigService.GetWhatsAppConfigAsync(token);
+            if (string.IsNullOrWhiteSpace(config.BusinessAccountId))
+                throw new InvalidOperationException("Falta configurar el WhatsApp Business Account ID.");
+            if (string.IsNullOrWhiteSpace(config.AccessToken))
+                throw new InvalidOperationException("Falta configurar el token de acceso de WhatsApp.");
+
+            var submitResult = await CreateMetaTemplateAsync(config, template, token);
+            await UpdateTemplateMetaStateAsync(
+                template.IdPlantilla,
+                ConversacionPlantillaEstadosLocales.Enviada,
+                submitResult.EstadoMeta,
+                submitResult.MetaTemplateId,
+                submitResult.PayloadJson,
+                string.Empty,
+                token);
+
+            await _appEvents.LogAuditAsync(
+                "Conversaciones",
+                "SubmitTemplateForApproval",
+                "CONV_PLANTILLAS",
+                template.IdPlantilla.ToString(CultureInfo.InvariantCulture),
+                "Plantilla enviada a aprobacion de Meta.",
+                new { template.NombreMeta, submitResult.EstadoMeta },
+                token);
+
+            return true;
+        }, "No se pudo enviar la plantilla a aprobación de Meta.", ct);
+
+    public Task SyncTemplateStatusAsync(long idPlantilla, CancellationToken ct = default)
+        => ExecuteLoggedAsync("Conversaciones", "SyncTemplateStatus", async token =>
+        {
+            var template = await GetTemplateAsync(idPlantilla, token)
+                ?? throw new InvalidOperationException("La plantilla indicada no existe.");
+            if (string.IsNullOrWhiteSpace(template.NombreMeta))
+                throw new InvalidOperationException("La plantilla no tiene nombre Meta para sincronizar.");
+
+            var config = await conversacionesConfigService.GetWhatsAppConfigAsync(token);
+            if (string.IsNullOrWhiteSpace(config.BusinessAccountId) || string.IsNullOrWhiteSpace(config.AccessToken))
+                throw new InvalidOperationException("Falta configurar la cuenta de WhatsApp para sincronizar plantillas.");
+
+            var meta = await GetMetaTemplateStatusAsync(config, template, token);
+            await UpdateTemplateMetaStateAsync(
+                template.IdPlantilla,
+                ConversacionPlantillaEstadosLocales.Sincronizada,
+                meta.EstadoMeta,
+                string.IsNullOrWhiteSpace(meta.MetaTemplateId) ? template.MetaTemplateId : meta.MetaTemplateId,
+                meta.PayloadJson,
+                meta.RechazoMotivo,
+                token);
+
+            return true;
+        }, "No se pudo sincronizar la plantilla con Meta.", ct);
+
+    public Task<ConversacionPlantillaMessageResultDto> SendTemplateMessageAsync(ConversacionPlantillaSendRequest request, CancellationToken ct = default)
+        => ExecuteLoggedAsync("Conversaciones", "SendTemplateMessage", async token =>
+        {
+            if (request.IdConversacion <= 0)
+                throw new InvalidOperationException("La conversación es obligatoria.");
+            if (request.IdPlantilla <= 0)
+                throw new InvalidOperationException("La plantilla es obligatoria.");
+
+            var conversation = await RequireConversationAsync(request.IdConversacion, token);
+            if (!string.Equals(conversation.Canal, "WHATSAPP", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Las plantillas solo se envían por WhatsApp.");
+            if (string.IsNullOrWhiteSpace(conversation.TelefonoWhatsApp))
+                throw new InvalidOperationException("La conversación no tiene teléfono WhatsApp.");
+
+            var template = await GetTemplateAsync(request.IdPlantilla, token)
+                ?? throw new InvalidOperationException("La plantilla indicada no existe.");
+
+            var values = NormalizeTemplateValues(request.ValoresVariables);
+            var config = await conversacionesConfigService.GetWhatsAppConfigAsync(token);
+            if (!string.Equals(template.EstadoMeta, "APPROVED", StringComparison.OrdinalIgnoreCase))
+            {
+                var meta = await GetMetaTemplateStatusAsync(config, template, token);
+                await UpdateTemplateMetaStateAsync(
+                    template.IdPlantilla,
+                    ConversacionPlantillaEstadosLocales.Sincronizada,
+                    meta.EstadoMeta,
+                    string.IsNullOrWhiteSpace(meta.MetaTemplateId) ? template.MetaTemplateId : meta.MetaTemplateId,
+                    meta.PayloadJson,
+                    meta.RechazoMotivo,
+                    token);
+
+                template.EstadoMeta = meta.EstadoMeta;
+                template.MetaTemplateId = string.IsNullOrWhiteSpace(meta.MetaTemplateId) ? template.MetaTemplateId : meta.MetaTemplateId;
+            }
+
+            if (!string.Equals(template.EstadoMeta, "APPROVED", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Solo se pueden enviar plantillas aprobadas por Meta.");
+
+            var now = DateTime.Now;
+            var previewText = RenderTemplatePreview(template.CuerpoTexto, values);
+
+            var messageId = await InsertMessageAsync(new PendingMessageInsert
+            {
+                ConversationId = request.IdConversacion,
+                Phone = conversation.TelefonoWhatsApp,
+                MessageType = "TEXT",
+                Direction = "SALIENTE",
+                EstadoEnvio = "PENDIENTE",
+                Text = previewText,
+                PayloadJson = string.Empty,
+                FechaHora = now,
+                UsuarioAutor = request.UsuarioAccion,
+                SistemaAutor = request.SistemaAccion,
+                IdTecnicoAutor = request.IdTecnicoAutor
+            }, token);
+
+            var sendResult = await SendTemplateToWhatsAppAsync(config, conversation.TelefonoWhatsApp, template, values, token);
+            await UpdateMessageDeliveryAsync(messageId, sendResult.EstadoEnvio, sendResult.WhatsAppMessageId, sendResult.PayloadJson, token);
+            await RefreshConversationAsync(request.IdConversacion, now, previewText, token);
+
+            return new ConversacionPlantillaMessageResultDto
+            {
+                IdMensaje = messageId,
+                EstadoEnvio = sendResult.EstadoEnvio,
+                WhatsAppMessageId = sendResult.WhatsAppMessageId
+            };
+        }, "No se pudo enviar la plantilla por WhatsApp.", ct);
 
     public Task<long> AddInternalNoteAsync(ConversacionNotaInternaRequest request, CancellationToken ct = default)
         => ExecuteLoggedAsync("Conversaciones", "AddInternalNote", async token =>
@@ -1035,6 +1366,28 @@ public sealed class ConversacionesService(
         };
     }
 
+    private async Task<bool> IsWhatsAppWindowActiveAsync(long idConversacion, CancellationToken ct)
+    {
+        const string sql = """
+            SELECT TOP (1) FechaHora
+            FROM dbo.CONV_MENSAJES
+            WHERE IdConversacion = @IdConversacion
+              AND Direction = N'ENTRANTE'
+            ORDER BY FechaHora DESC, IdMensaje DESC
+            """;
+
+        await using var cn = new SqlConnection(ConnectionString);
+        await cn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, cn);
+        cmd.Parameters.AddWithValue("@IdConversacion", idConversacion);
+        var result = await cmd.ExecuteScalarAsync(ct);
+        if (result is null || result is DBNull)
+            return false;
+
+        var lastClientMessage = Convert.ToDateTime(result, CultureInfo.InvariantCulture);
+        return DateTime.Now <= lastClientMessage.AddHours(24);
+    }
+
     private async Task<long> InsertMessageAsync(PendingMessageInsert message, CancellationToken ct)
     {
         const string sql = """
@@ -1191,6 +1544,155 @@ public sealed class ConversacionesService(
         cmd.Parameters.AddWithValue("@WhatsAppMessageId", DbNullable(whatsAppMessageId));
         cmd.Parameters.AddWithValue("@PayloadJson", DbNullable(payloadJson));
         await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    private async Task UpdateTemplateMetaStateAsync(
+        long idPlantilla,
+        string estadoLocal,
+        string estadoMeta,
+        string metaTemplateId,
+        string payloadJson,
+        string rechazoMotivo,
+        CancellationToken ct)
+    {
+        const string sql = """
+            UPDATE dbo.CONV_PLANTILLAS
+            SET
+                EstadoLocal = @EstadoLocal,
+                EstadoMeta = @EstadoMeta,
+                MetaTemplateId = @MetaTemplateId,
+                MetaPayloadJson = @MetaPayloadJson,
+                MetaRechazoMotivo = @MetaRechazoMotivo,
+                FechaHoraSincronizacion = GETDATE(),
+                FechaHora_Modificacion = GETDATE()
+            WHERE IdPlantilla = @IdPlantilla
+            """;
+
+        await using var cn = new SqlConnection(ConnectionString);
+        await cn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, cn);
+        cmd.Parameters.AddWithValue("@IdPlantilla", idPlantilla);
+        cmd.Parameters.AddWithValue("@EstadoLocal", estadoLocal);
+        cmd.Parameters.AddWithValue("@EstadoMeta", string.IsNullOrWhiteSpace(estadoMeta) ? "PENDING" : estadoMeta.Trim().ToUpperInvariant());
+        cmd.Parameters.AddWithValue("@MetaTemplateId", DbNullable(metaTemplateId));
+        cmd.Parameters.AddWithValue("@MetaPayloadJson", DbNullable(payloadJson));
+        cmd.Parameters.AddWithValue("@MetaRechazoMotivo", DbNullable(rechazoMotivo));
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    private async Task<MetaTemplateResult> CreateMetaTemplateAsync(ConversacionWhatsAppConfigDto config, ConversacionPlantillaDto template, CancellationToken ct)
+    {
+        var url = $"https://graph.facebook.com/{config.ApiVersion}/{config.BusinessAccountId}/message_templates";
+        using var request = new HttpRequestMessage(HttpMethod.Post, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", config.AccessToken.Trim());
+
+        request.Content = new StringContent(JsonSerializer.Serialize(BuildMetaTemplateCreatePayload(template)), Encoding.UTF8, "application/json");
+        var client = httpClientFactory.CreateClient();
+        using var response = await client.SendAsync(request, ct);
+        var body = await response.Content.ReadAsStringAsync(ct);
+        if (!response.IsSuccessStatusCode)
+            throw new HttpRequestException($"Meta devolvio {(int)response.StatusCode} al crear la plantilla: {body}");
+
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+        return new MetaTemplateResult
+        {
+            MetaTemplateId = root.TryGetProperty("id", out var id) ? id.GetString() ?? string.Empty : string.Empty,
+            EstadoMeta = root.TryGetProperty("status", out var status) ? status.GetString() ?? "PENDING" : "PENDING",
+            PayloadJson = body
+        };
+    }
+
+    private async Task<MetaTemplateStatusResult> GetMetaTemplateStatusAsync(ConversacionWhatsAppConfigDto config, ConversacionPlantillaDto template, CancellationToken ct)
+    {
+        var url = $"https://graph.facebook.com/{config.ApiVersion}/{config.BusinessAccountId}/message_templates?name={Uri.EscapeDataString(template.NombreMeta)}";
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", config.AccessToken.Trim());
+
+        var client = httpClientFactory.CreateClient();
+        using var response = await client.SendAsync(request, ct);
+        var body = await response.Content.ReadAsStringAsync(ct);
+        if (!response.IsSuccessStatusCode)
+            throw new HttpRequestException($"Meta devolvio {(int)response.StatusCode} al sincronizar la plantilla: {body}");
+
+        using var doc = JsonDocument.Parse(body);
+        if (!doc.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+            throw new InvalidOperationException("Meta no devolvio informacion de plantillas.");
+
+        foreach (var item in data.EnumerateArray())
+        {
+            var language = item.TryGetProperty("language", out var languageProp) ? languageProp.GetString() ?? string.Empty : string.Empty;
+            if (!string.Equals(language, template.Idioma, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            return new MetaTemplateStatusResult
+            {
+                MetaTemplateId = item.TryGetProperty("id", out var id) ? id.GetString() ?? string.Empty : string.Empty,
+                EstadoMeta = item.TryGetProperty("status", out var status) ? status.GetString() ?? string.Empty : string.Empty,
+                RechazoMotivo = item.TryGetProperty("rejected_reason", out var rejected) ? rejected.GetString() ?? string.Empty : string.Empty,
+                PayloadJson = item.GetRawText()
+            };
+        }
+
+        throw new InvalidOperationException("No se encontro la plantilla en Meta para el idioma configurado.");
+    }
+
+    private async Task<WhatsAppSendResult> SendTemplateToWhatsAppAsync(
+        ConversacionWhatsAppConfigDto config,
+        string phone,
+        ConversacionPlantillaDto template,
+        IReadOnlyList<string> values,
+        CancellationToken ct)
+    {
+        if (!config.IsConfiguredForSend)
+            throw new InvalidOperationException("Falta configurar WhatsApp para enviar mensajes.");
+
+        var url = $"https://graph.facebook.com/{config.ApiVersion}/{config.PhoneNumberId}/messages";
+        using var request = new HttpRequestMessage(HttpMethod.Post, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", config.AccessToken.Trim());
+
+        var components = new List<Dictionary<string, object?>>();
+        if (values.Count > 0)
+        {
+            components.Add(new Dictionary<string, object?>
+            {
+                ["type"] = "body",
+                ["parameters"] = values.Select(value => new Dictionary<string, object?>
+                {
+                    ["type"] = "text",
+                    ["text"] = value
+                }).ToList()
+            });
+        }
+
+        var payload = new Dictionary<string, object?>
+        {
+            ["messaging_product"] = "whatsapp",
+            ["to"] = phone,
+            ["type"] = "template",
+            ["template"] = new Dictionary<string, object?>
+            {
+                ["name"] = template.NombreMeta,
+                ["language"] = new Dictionary<string, object?> { ["code"] = template.Idioma },
+                ["components"] = components
+            }
+        };
+
+        request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+        var client = httpClientFactory.CreateClient();
+        using var response = await client.SendAsync(request, ct);
+        var responseBody = await response.Content.ReadAsStringAsync(ct);
+
+        if (!response.IsSuccessStatusCode)
+            throw new HttpRequestException($"Meta devolvio {(int)response.StatusCode}: {responseBody}");
+
+        var messageId = ExtractSentMessageId(responseBody);
+        return new WhatsAppSendResult
+        {
+            EstadoEnvio = string.IsNullOrWhiteSpace(messageId) ? "ENVIADO" : "ENVIADO_META",
+            WhatsAppMessageId = messageId,
+            PayloadJson = responseBody
+        };
     }
 
     private async Task<WhatsAppSendResult> SendToWhatsAppAsync(ConversacionWhatsAppConfigDto config, string phone, string text, string? replyToMessageId, CancellationToken ct)
@@ -1609,6 +2111,252 @@ public sealed class ConversacionesService(
         return DateTime.Now;
     }
 
+    private static void ApplyWhatsAppWindow(ConversacionInboxItemDto item)
+    {
+        if (item.FechaHoraUltimoMensajeCliente is not DateTime lastClientMessage)
+        {
+            item.VentanaWhatsAppActiva = false;
+            item.FechaHoraVencimientoVentanaWhatsApp = null;
+            return;
+        }
+
+        item.FechaHoraVencimientoVentanaWhatsApp = lastClientMessage.AddHours(24);
+        item.VentanaWhatsAppActiva = DateTime.Now <= item.FechaHoraVencimientoVentanaWhatsApp.Value;
+    }
+
+    private static void ApplyWhatsAppWindow(ConversacionDetalleDto item)
+    {
+        if (!string.Equals(item.Canal, "WHATSAPP", StringComparison.OrdinalIgnoreCase) ||
+            item.FechaHoraUltimoMensajeCliente is not DateTime lastClientMessage)
+        {
+            item.VentanaWhatsAppActiva = false;
+            item.FechaHoraVencimientoVentanaWhatsApp = null;
+            return;
+        }
+
+        item.FechaHoraVencimientoVentanaWhatsApp = lastClientMessage.AddHours(24);
+        item.VentanaWhatsAppActiva = DateTime.Now <= item.FechaHoraVencimientoVentanaWhatsApp.Value;
+    }
+
+    private static ConversacionPlantillaDto ReadTemplate(SqlDataReader rd)
+        => new()
+        {
+            IdPlantilla = rd.GetInt64(0),
+            NombreVisible = GetString(rd, 1),
+            NombreMeta = GetString(rd, 2),
+            Categoria = GetString(rd, 3),
+            Idioma = GetString(rd, 4),
+            EncabezadoTexto = GetString(rd, 5),
+            CuerpoTexto = GetString(rd, 6),
+            PieTexto = GetString(rd, 7),
+            EjemplosVariablesJson = GetString(rd, 8),
+            EstadoLocal = GetString(rd, 9),
+            EstadoMeta = GetString(rd, 10),
+            MetaTemplateId = GetString(rd, 11),
+            MetaRechazoMotivo = GetString(rd, 12),
+            Activa = !rd.IsDBNull(13) && rd.GetBoolean(13),
+            FechaHoraGrabacion = rd.IsDBNull(14) ? DateTime.MinValue : rd.GetDateTime(14),
+            FechaHoraModificacion = rd.IsDBNull(15) ? null : rd.GetDateTime(15),
+            FechaHoraSincronizacion = rd.IsDBNull(16) ? null : rd.GetDateTime(16)
+        };
+
+    private static ConversacionPlantillaSaveRequest NormalizeTemplateRequest(ConversacionPlantillaSaveRequest request)
+    {
+        if (request is null)
+            throw new InvalidOperationException("La plantilla es obligatoria.");
+
+        var body = request.CuerpoTexto?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(request.NombreVisible))
+            throw new InvalidOperationException("El nombre de la plantilla es obligatorio.");
+        if (string.IsNullOrWhiteSpace(request.NombreMeta))
+            throw new InvalidOperationException("El nombre Meta de la plantilla es obligatorio.");
+        if (string.IsNullOrWhiteSpace(body))
+            throw new InvalidOperationException("El cuerpo de la plantilla es obligatorio.");
+
+        var metaName = NormalizeMetaTemplateName(request.NombreMeta);
+        if (string.IsNullOrWhiteSpace(metaName))
+            throw new InvalidOperationException("El nombre Meta solo puede contener letras, numeros y guiones bajos.");
+
+        return new ConversacionPlantillaSaveRequest
+        {
+            IdPlantilla = request.IdPlantilla,
+            NombreVisible = request.NombreVisible.Trim(),
+            NombreMeta = metaName,
+            Categoria = NormalizeTemplateCategory(request.Categoria),
+            Idioma = NormalizeTemplateLanguage(request.Idioma),
+            EncabezadoTexto = (request.EncabezadoTexto ?? string.Empty).Trim(),
+            CuerpoTexto = body,
+            PieTexto = (request.PieTexto ?? string.Empty).Trim(),
+            EjemplosVariablesJson = NormalizeTemplateExamples(request.EjemplosVariablesJson, CountTemplateVariables(body)),
+            Activa = request.Activa,
+            UsuarioAccion = request.UsuarioAccion,
+            SistemaAccion = request.SistemaAccion
+        };
+    }
+
+    private static void AddTemplateParameters(SqlCommand cmd, ConversacionPlantillaSaveRequest request)
+    {
+        cmd.Parameters.AddWithValue("@IdPlantilla", request.IdPlantilla);
+        cmd.Parameters.AddWithValue("@NombreVisible", request.NombreVisible);
+        cmd.Parameters.AddWithValue("@NombreMeta", request.NombreMeta);
+        cmd.Parameters.AddWithValue("@Categoria", request.Categoria);
+        cmd.Parameters.AddWithValue("@Idioma", request.Idioma);
+        cmd.Parameters.AddWithValue("@EncabezadoTexto", DbNullable(request.EncabezadoTexto));
+        cmd.Parameters.AddWithValue("@CuerpoTexto", request.CuerpoTexto);
+        cmd.Parameters.AddWithValue("@PieTexto", DbNullable(request.PieTexto));
+        cmd.Parameters.AddWithValue("@EjemplosVariablesJson", DbNullable(request.EjemplosVariablesJson));
+        cmd.Parameters.AddWithValue("@Activa", request.Activa);
+        cmd.Parameters.AddWithValue("@UsuarioAccion", DbNullable(request.UsuarioAccion));
+        cmd.Parameters.AddWithValue("@SistemaAccion", DbNullable(request.SistemaAccion));
+    }
+
+    private static void ValidateTemplateCanSubmit(ConversacionPlantillaDto template)
+    {
+        if (!template.Activa)
+            throw new InvalidOperationException("No se puede enviar a aprobacion una plantilla inactiva.");
+        if (string.Equals(template.EstadoMeta, "APPROVED", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("La plantilla ya esta aprobada por Meta.");
+
+        var variableCount = CountTemplateVariables(template.CuerpoTexto);
+        var examples = ParseTemplateExamples(template.EjemplosVariablesJson);
+        if (variableCount > 0 && examples.Count < variableCount)
+            throw new InvalidOperationException("Las variables de la plantilla necesitan valores de ejemplo para enviarse a aprobacion.");
+    }
+
+    private static Dictionary<string, object?> BuildMetaTemplateCreatePayload(ConversacionPlantillaDto template)
+    {
+        var components = new List<Dictionary<string, object?>>();
+        if (!string.IsNullOrWhiteSpace(template.EncabezadoTexto))
+        {
+            components.Add(new Dictionary<string, object?>
+            {
+                ["type"] = "HEADER",
+                ["format"] = "TEXT",
+                ["text"] = template.EncabezadoTexto
+            });
+        }
+
+        var body = new Dictionary<string, object?>
+        {
+            ["type"] = "BODY",
+            ["text"] = template.CuerpoTexto
+        };
+
+        var examples = ParseTemplateExamples(template.EjemplosVariablesJson);
+        if (examples.Count > 0)
+            body["example"] = new Dictionary<string, object?> { ["body_text"] = new[] { examples } };
+        components.Add(body);
+
+        if (!string.IsNullOrWhiteSpace(template.PieTexto))
+        {
+            components.Add(new Dictionary<string, object?>
+            {
+                ["type"] = "FOOTER",
+                ["text"] = template.PieTexto
+            });
+        }
+
+        return new Dictionary<string, object?>
+        {
+            ["name"] = template.NombreMeta,
+            ["language"] = template.Idioma,
+            ["category"] = NormalizeTemplateCategory(template.Categoria),
+            ["components"] = components
+        };
+    }
+
+    private static string NormalizeMetaTemplateName(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        var normalized = value.Trim().ToLowerInvariant();
+        normalized = Regex.Replace(normalized, @"[^a-z0-9_]+", "_");
+        normalized = Regex.Replace(normalized, @"_+", "_").Trim('_');
+        return normalized.Length <= 512 ? normalized : normalized[..512];
+    }
+
+    private static string NormalizeTemplateCategory(string? value)
+    {
+        var normalized = string.IsNullOrWhiteSpace(value) ? ConversacionPlantillaCategorias.Marketing : value.Trim().ToUpperInvariant();
+        return normalized == ConversacionPlantillaCategorias.Utility || normalized == ConversacionPlantillaCategorias.Marketing
+            ? normalized
+            : ConversacionPlantillaCategorias.Marketing;
+    }
+
+    private static string NormalizeTemplateLanguage(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "es_AR" : value.Trim();
+
+    private static int CountTemplateVariables(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return 0;
+
+        var max = 0;
+        foreach (Match match in Regex.Matches(text, @"\{\{\s*(\d+)\s*\}\}"))
+        {
+            if (int.TryParse(match.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index))
+                max = Math.Max(max, index);
+        }
+
+        return max;
+    }
+
+    private static string NormalizeTemplateExamples(string? rawExamples, int variableCount)
+    {
+        var examples = ParseTemplateExamples(rawExamples);
+        if (variableCount == 0)
+            return string.Empty;
+
+        while (examples.Count < variableCount)
+            examples.Add($"Ejemplo {examples.Count + 1}");
+
+        return JsonSerializer.Serialize(examples.Take(variableCount).ToArray());
+    }
+
+    private static List<string> ParseTemplateExamples(string? rawExamples)
+    {
+        if (string.IsNullOrWhiteSpace(rawExamples))
+            return [];
+
+        var trimmed = rawExamples.Trim();
+        if (trimmed.StartsWith("[", StringComparison.Ordinal))
+        {
+            try
+            {
+                return JsonSerializer.Deserialize<List<string>>(trimmed)?
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Select(x => x.Trim())
+                    .ToList() ?? [];
+            }
+            catch (JsonException)
+            {
+                return [];
+            }
+        }
+
+        return trimmed
+            .Split(["\r\n", "\n", "\r"], StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Trim())
+            .Where(x => x.Length > 0)
+            .ToList();
+    }
+
+    private static List<string> NormalizeTemplateValues(IEnumerable<string>? values)
+        => values?
+            .Select(x => (x ?? string.Empty).Trim())
+            .Where(x => x.Length > 0)
+            .ToList() ?? [];
+
+    private static string RenderTemplatePreview(string text, IReadOnlyList<string> values)
+    {
+        var result = text ?? string.Empty;
+        for (var i = 0; i < values.Count; i++)
+            result = Regex.Replace(result, @"\{\{\s*" + (i + 1).ToString(CultureInfo.InvariantCulture) + @"\s*\}\}", values[i]);
+
+        return result;
+    }
+
     private static void ValidateOutgoingRequest(ConversacionSendMessageRequest request)
     {
         if (request.IdConversacion <= 0)
@@ -1818,6 +2566,21 @@ public sealed class ConversacionesService(
     {
         public string EstadoEnvio { get; init; } = string.Empty;
         public string WhatsAppMessageId { get; init; } = string.Empty;
+        public string PayloadJson { get; init; } = string.Empty;
+    }
+
+    private sealed class MetaTemplateResult
+    {
+        public string MetaTemplateId { get; init; } = string.Empty;
+        public string EstadoMeta { get; init; } = string.Empty;
+        public string PayloadJson { get; init; } = string.Empty;
+    }
+
+    private sealed class MetaTemplateStatusResult
+    {
+        public string MetaTemplateId { get; init; } = string.Empty;
+        public string EstadoMeta { get; init; } = string.Empty;
+        public string RechazoMotivo { get; init; } = string.Empty;
         public string PayloadJson { get; init; } = string.Empty;
     }
 }

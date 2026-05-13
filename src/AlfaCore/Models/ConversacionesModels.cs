@@ -28,6 +28,9 @@ public sealed class ConversacionInboxItemDto
     public string TecnicoNombre { get; set; } = string.Empty;
     public string ResumenUltimoMensaje { get; set; } = string.Empty;
     public DateTime FechaHoraUltimoMensaje { get; set; }
+    public DateTime? FechaHoraUltimoMensajeCliente { get; set; }
+    public bool VentanaWhatsAppActiva { get; set; }
+    public DateTime? FechaHoraVencimientoVentanaWhatsApp { get; set; }
     public bool Archivada { get; set; }
     public bool Bloqueada { get; set; }
 }
@@ -56,6 +59,9 @@ public sealed class ConversacionDetalleDto
     public bool Bloqueada { get; set; }
     public DateTime? FechaHoraPrimerMensaje { get; set; }
     public DateTime FechaHoraUltimoMensaje { get; set; }
+    public DateTime? FechaHoraUltimoMensajeCliente { get; set; }
+    public bool VentanaWhatsAppActiva { get; set; }
+    public DateTime? FechaHoraVencimientoVentanaWhatsApp { get; set; }
     public DateTime? FechaHoraCierre { get; set; }
 }
 
@@ -191,4 +197,85 @@ public sealed class ConversacionEstadoOptionDto
     public string Descripcion { get; set; } = string.Empty;
     public bool EsCerrado { get; set; }
     public int Orden { get; set; }
+}
+
+public sealed class ConversacionPlantillaFilters
+{
+    public string Search { get; set; } = string.Empty;
+    public string? EstadoMeta { get; set; }
+    public bool IncluirInactivas { get; set; }
+}
+
+public sealed class ConversacionPlantillaDto
+{
+    public long IdPlantilla { get; set; }
+    public string NombreVisible { get; set; } = string.Empty;
+    public string NombreMeta { get; set; } = string.Empty;
+    public string Categoria { get; set; } = ConversacionPlantillaCategorias.Marketing;
+    public string Idioma { get; set; } = "es_AR";
+    public string EncabezadoTexto { get; set; } = string.Empty;
+    public string CuerpoTexto { get; set; } = string.Empty;
+    public string PieTexto { get; set; } = string.Empty;
+    public string EjemplosVariablesJson { get; set; } = string.Empty;
+    public string EstadoLocal { get; set; } = ConversacionPlantillaEstadosLocales.Borrador;
+    public string EstadoMeta { get; set; } = string.Empty;
+    public string MetaTemplateId { get; set; } = string.Empty;
+    public string MetaRechazoMotivo { get; set; } = string.Empty;
+    public bool Activa { get; set; } = true;
+    public DateTime FechaHoraGrabacion { get; set; }
+    public DateTime? FechaHoraModificacion { get; set; }
+    public DateTime? FechaHoraSincronizacion { get; set; }
+}
+
+public sealed class ConversacionPlantillaSaveRequest
+{
+    public long IdPlantilla { get; set; }
+    public string NombreVisible { get; set; } = string.Empty;
+    public string NombreMeta { get; set; } = string.Empty;
+    public string Categoria { get; set; } = ConversacionPlantillaCategorias.Marketing;
+    public string Idioma { get; set; } = "es_AR";
+    public string EncabezadoTexto { get; set; } = string.Empty;
+    public string CuerpoTexto { get; set; } = string.Empty;
+    public string PieTexto { get; set; } = string.Empty;
+    public string EjemplosVariablesJson { get; set; } = string.Empty;
+    public bool Activa { get; set; } = true;
+    public string? UsuarioAccion { get; set; }
+    public string? SistemaAccion { get; set; }
+}
+
+public sealed class ConversacionPlantillaSubmitRequest
+{
+    public long IdPlantilla { get; set; }
+    public string? UsuarioAccion { get; set; }
+    public string? SistemaAccion { get; set; }
+}
+
+public sealed class ConversacionPlantillaSendRequest
+{
+    public long IdConversacion { get; set; }
+    public long IdPlantilla { get; set; }
+    public List<string> ValoresVariables { get; set; } = [];
+    public string? IdTecnicoAutor { get; set; }
+    public string? UsuarioAccion { get; set; }
+    public string? SistemaAccion { get; set; }
+}
+
+public sealed class ConversacionPlantillaMessageResultDto
+{
+    public long IdMensaje { get; set; }
+    public string EstadoEnvio { get; set; } = string.Empty;
+    public string WhatsAppMessageId { get; set; } = string.Empty;
+}
+
+public static class ConversacionPlantillaCategorias
+{
+    public const string Marketing = "MARKETING";
+    public const string Utility = "UTILITY";
+}
+
+public static class ConversacionPlantillaEstadosLocales
+{
+    public const string Borrador = "BORRADOR";
+    public const string Enviada = "ENVIADA";
+    public const string Sincronizada = "SINCRONIZADA";
 }

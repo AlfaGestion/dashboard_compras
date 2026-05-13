@@ -15,6 +15,9 @@
             <a class="btn btn--ghost" href="/conversaciones/configuracion">
                 <i class="bi bi-sliders"></i> Configuración
             </a>
+            <a class="btn btn--ghost" href="/conversaciones/plantillas">
+                <i class="bi bi-chat-square-text-fill"></i> Plantillas
+            </a>
             <button type="button" class="btn btn--ghost" @onclick="RecargarAsync" disabled="_loadingInbox || _loadingConversation">
                 <i class="bi bi-arrow-clockwise"></i> Recargar
             </button>
@@ -145,6 +148,10 @@
                                 </div>
                                 <div class="conversation-row__badges">
                                     <span class="conversation-badge conversation-badge--state">@item.EstadoDescripcion</span>
+                                    @if (!item.VentanaWhatsAppActiva)
+                                    {
+                                        <span class="conversation-badge">Ventana vencida</span>
+                                    }
                                     @if (!string.IsNullOrWhiteSpace(item.ClienteNombre))
                                     {
                                         <span class="conversation-badge">@item.ClienteNombre</span>
@@ -180,6 +187,10 @@
                         </div>
                         <div class="conversations-chat__chips">
                             <span class="conversation-badge conversation-badge--state">@_selectedConversation.EstadoDescripcion</span>
+                            @if (_selectedConversation.Canal == "WHATSAPP")
+                            {
+                                <span class="conversation-badge">@GetWhatsAppWindowLabel(_selectedConversation)</span>
+                            }
                             @if (!string.IsNullOrWhiteSpace(_selectedConversation.TecnicoNombre))
                             {
                                 <span class="conversation-badge">@_selectedConversation.TecnicoNombre</span>
@@ -307,6 +318,56 @@
                     </div>
 
                     <div class="conversations-composer">
+                        @if (IsWhatsAppWindowExpired)
+                        {
+                            <div class="conversations-inline conversations-inline--error">
+                                La ventana de WhatsApp está vencida. Para retomar esta conversación usá una plantilla aprobada.
+                            </div>
+                            <div class="field">
+                                <label for="conv-template">Plantilla para retomar</label>
+                                <select id="conv-template" @bind="_selectedTemplateId" @bind:after="OnTemplateChangedAsync" disabled="@(_loadingTemplates || _availableTemplates.Count == 0)">
+                                    @if (_loadingTemplates)
+                                    {
+                                        <option value="0">Cargando plantillas...</option>
+                                    }
+                                    else if (_availableTemplates.Count == 0)
+                                    {
+                                        <option value="0">No hay plantillas aprobadas</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="0">Seleccioná una plantilla</option>
+                                        @foreach (var template in _availableTemplates)
+                                        {
+                                            <option value="@template.IdPlantilla">@template.NombreVisible (@GetTemplateStatusLabel(template.EstadoMeta))</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                            @if (SelectedTemplate is not null)
+                            {
+                                <div class="context-card">
+                                    <span class="context-card__label">Vista previa</span>
+                                    <strong>@SelectedTemplate.NombreVisible</strong>
+                                    <span class="context-card__muted">@RenderTemplatePreview(SelectedTemplate, TemplateValues)</span>
+                                </div>
+                                @if (CountTemplateVariables(SelectedTemplate.CuerpoTexto) > 0)
+                                {
+                                    <div class="field">
+                                        <label for="conv-template-values">Valores de variables</label>
+                                        <textarea id="conv-template-values"
+                                                  rows="2"
+                                                  placeholder="Un valor por línea"
+                                                  @bind="_templateValuesText"></textarea>
+                                    </div>
+                                }
+                            }
+                            <div class="conversations-composer__actions">
+                                <button type="button" class="btn btn--primary" @onclick="SendTemplateAsync" disabled="@(!CanSendTemplate)">
+                                    <i class="bi bi-send-fill"></i> Enviar plantilla
+                                </button>
+                            </div>
+                        }
                         <div class="field">
                             <label for="conv-message">
                                 @(_selectedConversation.Canal == "INTERNO" ? "Mensaje al equipo" : "Responder")
@@ -511,6 +572,10 @@
     private bool _uploadingFile;
     private bool _uploadingAudio;
     private Dictionary<long, List<ConversacionAdjuntoDto>> _adjuntosPorMensaje = [];
+    private List<ConversacionPlantillaDto> _availableTemplates = [];
+    private long _selectedTemplateId;
+    private bool _loadingTemplates;
+    private string _templateValuesText = string.Empty;
 
     private ConversacionesInboxFilters _filters = new() { Canal = "WHATSAPP" };
     private List<ConversacionTecnicoOptionDto> _technicians = [];
@@ -544,9 +609,21 @@
 
     private static readonly TimeSpan PollingInterval = TimeSpan.FromSeconds(5);
 
-    private bool _canSendReply => !_busyAction && _selectedConversation is not null && !string.IsNullOrWhiteSpace(_replyText);
+    private bool _canSendReply => !_busyAction && _selectedConversation is not null && !IsWhatsAppWindowExpired && !string.IsNullOrWhiteSpace(_replyText);
     private bool _canAddNote => !_busyAction && _selectedConversation is not null && !string.IsNullOrWhiteSpace(_internalNoteText);
     private bool ShouldShowLatestButton => _showReturnToLatest || _newMessagesCount > 0;
+    private bool IsWhatsAppWindowExpired
+        => _selectedConversation is not null
+           && _selectedConversation.Canal == "WHATSAPP"
+           && !_selectedConversation.VentanaWhatsAppActiva;
+    private ConversacionPlantillaDto? SelectedTemplate
+        => _availableTemplates.FirstOrDefault(x => x.IdPlantilla == _selectedTemplateId);
+    private IReadOnlyList<string> TemplateValues => ParseTemplateValues(_templateValuesText);
+    private bool CanSendTemplate
+        => !_busyAction
+           && _selectedConversation is not null
+           && SelectedTemplate is not null
+           && HasRequiredTemplateValues(SelectedTemplate, TemplateValues);
 
     protected override async Task OnInitializedAsync()
     {
@@ -684,6 +761,11 @@
                 _scrollThreadToBottomAfterRender = true;
                 _scrollHandlerConversationId = null;
             }
+
+            if (IsWhatsAppWindowExpired)
+                await LoadTemplatesForConversationAsync();
+            else
+                ClearTemplateSelection();
         }
         catch (Exception ex)
         {
@@ -761,7 +843,8 @@
            || _uploadingFile
            || _uploadingAudio
            || _recording
-           || _showNuevoHilo;
+           || _showNuevoHilo
+           || IsWhatsAppWindowExpired;
 
     private async Task<bool> IsThreadNearBottomAsync()
     {
@@ -841,6 +924,115 @@
 
             _replyText = string.Empty;
             _actionMessage = "Mensaje registrado correctamente.";
+            await SelectConversationAsync(_selectedConversation.IdConversacion);
+            await LoadInboxAsync();
+        }
+        catch (Exception ex)
+        {
+            _actionError = ex.Message;
+        }
+        finally
+        {
+            _busyAction = false;
+        }
+    }
+
+    private async Task LoadTemplatesForConversationAsync()
+    {
+        _loadingTemplates = true;
+
+        try
+        {
+            _availableTemplates = (await ConversacionesSvc.GetTemplatesAsync(new ConversacionPlantillaFilters
+            {
+                IncluirInactivas = false
+            }))
+            .Where(x => string.Equals(x.EstadoMeta, "APPROVED", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(x.EstadoMeta, "PENDING", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(x => string.Equals(x.EstadoMeta, "APPROVED", StringComparison.OrdinalIgnoreCase))
+            .ThenBy(x => x.NombreVisible)
+            .ToList();
+
+            if (_availableTemplates.Count == 0)
+            {
+                ClearTemplateSelection();
+                return;
+            }
+
+            if (_selectedTemplateId <= 0 || _availableTemplates.All(x => x.IdPlantilla != _selectedTemplateId))
+                _selectedTemplateId = _availableTemplates[0].IdPlantilla;
+
+            PrepareTemplateValues();
+        }
+        catch (Exception ex)
+        {
+            _actionError = ex.Message;
+        }
+        finally
+        {
+            _loadingTemplates = false;
+        }
+    }
+
+    private Task OnTemplateChangedAsync()
+    {
+        PrepareTemplateValues();
+        return Task.CompletedTask;
+    }
+
+    private void PrepareTemplateValues()
+    {
+        if (SelectedTemplate is null)
+        {
+            _templateValuesText = string.Empty;
+            return;
+        }
+
+        var required = CountTemplateVariables(SelectedTemplate.CuerpoTexto);
+        if (required <= 0)
+        {
+            _templateValuesText = string.Empty;
+            return;
+        }
+
+        var current = ParseTemplateValues(_templateValuesText).ToList();
+        if (current.Count >= required)
+            return;
+
+        var fallback = FirstNonEmpty(
+            _selectedConversation?.ContactoNombre,
+            _selectedConversation?.ClienteNombre,
+            _selectedConversation?.NombreVisible,
+            _selectedConversation?.TelefonoWhatsApp,
+            "cliente");
+
+        while (current.Count < required)
+            current.Add(current.Count == 0 ? fallback : $"Dato {current.Count + 1}");
+
+        _templateValuesText = string.Join(Environment.NewLine, current.Take(required));
+    }
+
+    private async Task SendTemplateAsync()
+    {
+        if (_selectedConversation is null || SelectedTemplate is null)
+            return;
+
+        _busyAction = true;
+        _actionMessage = null;
+        _actionError = null;
+
+        try
+        {
+            await ConversacionesSvc.SendTemplateMessageAsync(new ConversacionPlantillaSendRequest
+            {
+                IdConversacion = _selectedConversation.IdConversacion,
+                IdPlantilla = SelectedTemplate.IdPlantilla,
+                ValoresVariables = TemplateValues.ToList(),
+                IdTecnicoAutor = _assignmentTechnicianId
+            });
+
+            _actionMessage = "Plantilla enviada correctamente.";
+            ClearTemplateSelection();
             await SelectConversationAsync(_selectedConversation.IdConversacion);
             await LoadInboxAsync();
         }
@@ -1119,9 +1311,17 @@
         _replyText = string.Empty;
         _internalNoteText = string.Empty;
         _assignmentTechnicianId = string.Empty;
+        ClearTemplateSelection();
         _scrollHandlerConversationId = null;
         _showReturnToLatest = false;
         ClearNewMessageState();
+    }
+
+    private void ClearTemplateSelection()
+    {
+        _availableTemplates = [];
+        _selectedTemplateId = 0;
+        _templateValuesText = string.Empty;
     }
 
     private static string GetDisplayName(ConversacionInboxItemDto item)
@@ -1129,6 +1329,58 @@
 
     private static string GetConversationHeader(ConversacionDetalleDto item)
         => FirstNonEmpty(item.ContactoNombre, item.ClienteNombre, item.NombreVisible, item.TelefonoWhatsApp);
+
+    private static string GetWhatsAppWindowLabel(ConversacionDetalleDto item)
+    {
+        if (item.VentanaWhatsAppActiva && item.FechaHoraVencimientoVentanaWhatsApp is DateTime expiration)
+            return $"Ventana activa hasta {expiration:dd/MM HH:mm}";
+
+        return "Ventana vencida";
+    }
+
+    private static string GetTemplateStatusLabel(string value)
+        => string.Equals(value, "APPROVED", StringComparison.OrdinalIgnoreCase)
+            ? "Aprobada"
+            : "Pendiente";
+
+    private static int CountTemplateVariables(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return 0;
+
+        var max = 0;
+        foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(text, @"\{\{\s*(\d+)\s*\}\}"))
+        {
+            if (int.TryParse(match.Groups[1].Value, out var index))
+                max = Math.Max(max, index);
+        }
+
+        return max;
+    }
+
+    private static IReadOnlyList<string> ParseTemplateValues(string? text)
+        => (text ?? string.Empty)
+            .Split(["\r\n", "\n", "\r"], StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Trim())
+            .Where(x => x.Length > 0)
+            .ToList();
+
+    private static bool HasRequiredTemplateValues(ConversacionPlantillaDto template, IReadOnlyList<string> values)
+        => values.Count >= CountTemplateVariables(template.CuerpoTexto);
+
+    private static string RenderTemplatePreview(ConversacionPlantillaDto template, IReadOnlyList<string> values)
+    {
+        var result = template.CuerpoTexto ?? string.Empty;
+        for (var i = 0; i < values.Count; i++)
+        {
+            result = System.Text.RegularExpressions.Regex.Replace(
+                result,
+                @"\{\{\s*" + (i + 1).ToString() + @"\s*\}\}",
+                values[i]);
+        }
+
+        return result;
+    }
 
     private static string GetMessageAuthor(ConversacionMensajeDto message)
         => message.Direction switch
