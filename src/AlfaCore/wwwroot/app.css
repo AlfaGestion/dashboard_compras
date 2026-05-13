@@ -2547,6 +2547,13 @@ tr.row--critical td {
     flex: 0 0 auto;
 }
 
+.conversations-composer--support {
+    max-height: min(34vh, 300px);
+    overflow: auto;
+    padding-right: .2rem;
+    scrollbar-width: thin;
+}
+
 .conversations-composer--support > .conversations-inline,
 .conversations-composer--support > .context-card {
     grid-column: 1 / -1;
@@ -2560,20 +2567,42 @@ tr.row--critical td {
 .conversations-composer--support > .context-card .context-card__muted {
     display: block;
     white-space: pre-wrap;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
     line-height: 1.4;
+    max-height: 4.2rem;
+    overflow: auto;
 }
 
 .conversations-composer--support > .conversations-composer__actions {
     grid-column: 2;
     align-self: end;
+    grid-row: auto;
+}
+
+.conversations-composer.conversations-composer--support > .conversations-composer__actions {
+    grid-column: 2;
+    grid-row: auto;
 }
 
 .conversations-composer--support .conversations-inline--error {
     display: flex;
     align-items: center;
     gap: .6rem;
-    padding: .7rem .85rem;
+    padding: .58rem .75rem;
+    line-height: 1.25;
+}
+
+.conversations-composer--support > .field textarea {
+    min-height: 38px;
+    max-height: 48px;
+}
+
+.conversations-composer--support > .field label {
+    font-size: .76rem;
+}
+
+.conversations-composer--support .btn {
+    min-height: 38px;
 }
 
 .conversations-composer textarea {

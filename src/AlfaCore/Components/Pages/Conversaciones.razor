@@ -368,34 +368,36 @@
                                 </button>
                             </div>
                         }
-                        <div class="field">
-                            <label for="conv-message">
-                                @(_selectedConversation.Canal == "INTERNO" ? "Mensaje al equipo" : "Responder")
-                            </label>
-                            <textarea id="conv-message"
-                                      rows="2"
-                                      placeholder="@(_selectedConversation.Canal == "INTERNO" ? "Escribí un mensaje para el equipo…" : "Escribí una respuesta para WhatsApp…")"
-                                      @bind="_replyText"
-                                      disabled="@IsWhatsAppWindowExpired"></textarea>
-                        </div>
-                        <div class="conversations-composer__actions">
-                            <button type="button" class="btn btn--primary" @onclick="SendReplyAsync" disabled="@(!_canSendReply)">
-                                <i class="bi bi-send-fill"></i>
-                                @(_selectedConversation.Canal == "INTERNO" ? "Enviar" : "Enviar mensaje")
-                            </button>
-                            <label class="btn btn--ghost" title="Adjuntar archivo" style="cursor:pointer">
-                                <i class="bi @(_uploadingFile ? "bi-hourglass-split" : "bi-paperclip")"></i>
-                                <InputFile OnChange="HandleFileSelectedAsync" style="display:none"
-                                           accept="image/*,audio/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip,.rar" />
-                            </label>
-                            <button type="button"
-                                    class="btn btn--ghost @(_recording ? "is-recording" : string.Empty)"
-                                    @onclick="ToggleRecordingAsync"
-                                    title="@(_recording ? "Detener y enviar audio" : "Grabar mensaje de voz")"
-                                    disabled="@_uploadingAudio">
-                                <i class="bi @(_recording ? "bi-stop-circle-fill" : "bi-mic-fill")"></i>
-                            </button>
-                        </div>
+                        @if (!IsWhatsAppWindowExpired)
+                        {
+                            <div class="field">
+                                <label for="conv-message">
+                                    @(_selectedConversation.Canal == "INTERNO" ? "Mensaje al equipo" : "Responder")
+                                </label>
+                                <textarea id="conv-message"
+                                          rows="2"
+                                          placeholder="@(_selectedConversation.Canal == "INTERNO" ? "Escribí un mensaje para el equipo…" : "Escribí una respuesta para WhatsApp…")"
+                                          @bind="_replyText"></textarea>
+                            </div>
+                            <div class="conversations-composer__actions">
+                                <button type="button" class="btn btn--primary" @onclick="SendReplyAsync" disabled="@(!_canSendReply)">
+                                    <i class="bi bi-send-fill"></i>
+                                    @(_selectedConversation.Canal == "INTERNO" ? "Enviar" : "Enviar mensaje")
+                                </button>
+                                <label class="btn btn--ghost" title="Adjuntar archivo" style="cursor:pointer">
+                                    <i class="bi @(_uploadingFile ? "bi-hourglass-split" : "bi-paperclip")"></i>
+                                    <InputFile OnChange="HandleFileSelectedAsync" style="display:none"
+                                               accept="image/*,audio/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip,.rar" />
+                                </label>
+                                <button type="button"
+                                        class="btn btn--ghost @(_recording ? "is-recording" : string.Empty)"
+                                        @onclick="ToggleRecordingAsync"
+                                        title="@(_recording ? "Detener y enviar audio" : "Grabar mensaje de voz")"
+                                        disabled="@_uploadingAudio">
+                                    <i class="bi @(_recording ? "bi-stop-circle-fill" : "bi-mic-fill")"></i>
+                                </button>
+                            </div>
+                        }
 
                         <div class="field">
                             <label for="conv-note">Nota interna</label>
@@ -764,9 +766,16 @@
             }
 
             if (IsWhatsAppWindowExpired)
+            {
+                if (conversationChanged)
+                    _templateValuesText = string.Empty;
+
                 await LoadTemplatesForConversationAsync();
+            }
             else
+            {
                 ClearTemplateSelection();
+            }
         }
         catch (Exception ex)
         {
@@ -1000,12 +1009,7 @@
         if (current.Count >= required)
             return;
 
-        var fallback = FirstNonEmpty(
-            _selectedConversation?.ContactoNombre,
-            _selectedConversation?.ClienteNombre,
-            _selectedConversation?.NombreVisible,
-            _selectedConversation?.TelefonoWhatsApp,
-            "cliente");
+        var fallback = GetTemplateDefaultVariableValue(_selectedConversation);
 
         while (current.Count < required)
             current.Add(current.Count == 0 ? fallback : $"Dato {current.Count + 1}");
@@ -1368,6 +1372,37 @@
 
     private static bool HasRequiredTemplateValues(ConversacionPlantillaDto template, IReadOnlyList<string> values)
         => values.Count >= CountTemplateVariables(template.CuerpoTexto);
+
+    private static string GetTemplateDefaultVariableValue(ConversacionDetalleDto? conversation)
+    {
+        if (conversation is null)
+            return "cliente";
+
+        var visibleName = IsPhoneLike(conversation.NombreVisible, conversation.TelefonoWhatsApp)
+            ? string.Empty
+            : conversation.NombreVisible;
+
+        return FirstNonEmpty(
+            conversation.ContactoNombre,
+            visibleName,
+            conversation.ClienteNombre,
+            conversation.TelefonoWhatsApp,
+            "cliente");
+    }
+
+    private static bool IsPhoneLike(string? value, string? phone)
+    {
+        var normalizedValue = OnlyDigits(value);
+        if (normalizedValue.Length < 6)
+            return false;
+
+        var normalizedPhone = OnlyDigits(phone);
+        return normalizedValue == normalizedPhone
+               || normalizedValue.Length == (value ?? string.Empty).Count(char.IsDigit);
+    }
+
+    private static string OnlyDigits(string? value)
+        => new((value ?? string.Empty).Where(char.IsDigit).ToArray());
 
     private static string RenderTemplatePreview(ConversacionPlantillaDto template, IReadOnlyList<string> values)
     {
