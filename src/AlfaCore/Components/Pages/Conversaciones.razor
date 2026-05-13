@@ -332,10 +332,31 @@
                                     @(_selectedConversation.Canal == "INTERNO" ? "Mensaje al equipo" : "Responder")
                                 </label>
                                 <textarea id="conv-message"
+                                          @ref="_replyTextArea"
                                           rows="2"
                                           placeholder="@(_selectedConversation.Canal == "INTERNO" ? "Escribí un mensaje para el equipo…" : "Escribí una respuesta para WhatsApp…")"
                                           @bind="_replyText"></textarea>
                             </div>
+                            @if (_pendingAttachment is not null)
+                            {
+                                <div class="conversations-pending-attachment">
+                                    <div class="conversations-pending-attachment__icon">
+                                        <i class="bi @GetPendingAttachmentIcon(_pendingAttachment.TipoArchivo)"></i>
+                                    </div>
+                                    <div class="conversations-pending-attachment__body">
+                                        <strong>@_pendingAttachment.NombreArchivo</strong>
+                                        <span>@_pendingAttachment.TipoArchivoLabel - @FormatFileSize(_pendingAttachment.TamanoBytes)</span>
+                                    </div>
+                                    <label class="btn btn--ghost btn--sm" title="Elegir otro archivo" style="cursor:pointer">
+                                        <i class="bi bi-arrow-repeat"></i>
+                                        <InputFile OnChange="HandleFileSelectedAsync" style="display:none"
+                                                   accept="image/*,audio/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip,.rar" />
+                                    </label>
+                                    <button type="button" class="btn btn--ghost btn--sm" @onclick="ClearPendingAttachment" title="Quitar adjunto">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </div>
+                            }
                             <div class="conversations-composer__actions">
                                 <button type="button" class="btn btn--primary" @onclick="SendReplyAsync" disabled="@(!_canSendReply)" title="@(_selectedConversation.Canal == "INTERNO" ? "Enviar" : "Enviar mensaje")">
                                     <i class="bi bi-send-fill"></i>
@@ -348,7 +369,7 @@
                                 <button type="button"
                                         class="btn btn--ghost @(_recording ? "is-recording" : string.Empty)"
                                         @onclick="ToggleRecordingAsync"
-                                        title="@(_recording ? "Detener y enviar audio" : "Grabar mensaje de voz")"
+                                        title="@(_recording ? "Detener grabaciÃ³n" : "Grabar mensaje de voz")"
                                         disabled="@_uploadingAudio">
                                     <i class="bi @(_recording ? "bi-stop-circle-fill" : "bi-mic-fill")"></i>
                                 </button>
@@ -659,10 +680,14 @@
     private bool _scrollThreadToBottomAfterRender;
     private long? _openAttachmentMenuId;
     private ConversacionAdjuntoDto? _previewAttachment;
+    private ElementReference _replyTextArea;
+    private long? _replyEnterHandlerConversationId;
+    private PendingAttachment? _pendingAttachment;
 
     private static readonly TimeSpan PollingInterval = TimeSpan.FromSeconds(5);
 
-    private bool _canSendReply => !_busyAction && _selectedConversation is not null && !IsWhatsAppWindowExpired && !string.IsNullOrWhiteSpace(_replyText);
+    private bool _canSendReply => !_busyAction && _selectedConversation is not null && !IsWhatsAppWindowExpired && (HasReplyText || _pendingAttachment is not null);
+    private bool HasReplyText => !string.IsNullOrWhiteSpace(_replyText);
     private bool _canAddNote => !_busyAction && _selectedConversation is not null && !string.IsNullOrWhiteSpace(_internalNoteText);
     private bool ShouldShowLatestButton => _showReturnToLatest || _newMessagesCount > 0;
     private bool IsWhatsAppWindowExpired
@@ -701,6 +726,21 @@
             catch
             {
                 _showReturnToLatest = false;
+            }
+        }
+
+        if (_selectedConversationId.HasValue && _replyEnterHandlerConversationId != _selectedConversationId)
+        {
+            _dotNetRef ??= DotNetObjectReference.Create(this);
+            _replyEnterHandlerConversationId = _selectedConversationId;
+
+            try
+            {
+                await JS.InvokeVoidAsync("conversacionesUi.bindReplyEnter", _replyTextArea, _dotNetRef);
+            }
+            catch
+            {
+                _replyEnterHandlerConversationId = null;
             }
         }
 
@@ -972,21 +1012,47 @@
         if (_selectedConversation is null)
             return;
 
+        var textToSend = _replyText.Trim();
+        var attachmentToSend = _pendingAttachment;
+        if (string.IsNullOrWhiteSpace(textToSend) && attachmentToSend is null)
+            return;
+
         _busyAction = true;
         _actionMessage = null;
         _actionError = null;
 
         try
         {
-            await ConversacionesSvc.SendMessageAsync(new ConversacionSendMessageRequest
+            if (!string.IsNullOrWhiteSpace(textToSend))
             {
-                IdConversacion = _selectedConversation.IdConversacion,
-                Texto = _replyText.Trim(),
-                MessageType = "TEXT",
-                IdTecnicoAutor = _assignmentTechnicianId
-            });
+                await ConversacionesSvc.SendMessageAsync(new ConversacionSendMessageRequest
+                {
+                    IdConversacion = _selectedConversation.IdConversacion,
+                    Texto = textToSend,
+                    MessageType = "TEXT",
+                    IdTecnicoAutor = _assignmentTechnicianId
+                });
 
-            _replyText = string.Empty;
+                _replyText = string.Empty;
+            }
+
+            if (attachmentToSend is not null)
+            {
+                await using var stream = new MemoryStream(attachmentToSend.Contenido);
+                await ConversacionesSvc.UploadAttachmentAsync(new ConversacionUploadAdjuntoRequest
+                {
+                    IdConversacion = _selectedConversation.IdConversacion,
+                    NombreArchivo = attachmentToSend.NombreArchivo,
+                    MimeType = attachmentToSend.MimeType,
+                    TipoArchivo = attachmentToSend.TipoArchivo,
+                    Contenido = stream,
+                    TamanoBytes = attachmentToSend.TamanoBytes,
+                    IdTecnicoAutor = string.IsNullOrWhiteSpace(_assignmentTechnicianId) ? null : _assignmentTechnicianId
+                });
+
+                ClearPendingAttachment();
+            }
+
             _actionMessage = "Mensaje registrado correctamente.";
             await SelectConversationAsync(_selectedConversation.IdConversacion);
             await LoadInboxAsync();
@@ -1000,6 +1066,10 @@
             _busyAction = false;
         }
     }
+
+    [JSInvokable]
+    public Task SendComposerFromEnter()
+        => InvokeAsync(SendReplyAsync);
 
     private async Task LoadTemplatesForConversationAsync()
     {
@@ -1287,25 +1357,23 @@
         {
             const long maxSize = 25 * 1024 * 1024;
             await using var stream = file.OpenReadStream(maxSize);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
 
-            await ConversacionesSvc.UploadAttachmentAsync(new ConversacionUploadAdjuntoRequest
+            _pendingAttachment = new PendingAttachment
             {
-                IdConversacion = _selectedConversation.IdConversacion,
                 NombreArchivo = file.Name,
                 MimeType = file.ContentType,
                 TipoArchivo = InferTipoArchivo(file.ContentType),
-                Contenido = stream,
+                Contenido = buffer.ToArray(),
                 TamanoBytes = file.Size,
-                IdTecnicoAutor = string.IsNullOrWhiteSpace(_assignmentTechnicianId) ? null : _assignmentTechnicianId
-            });
+            };
 
-            _actionMessage = "Adjunto enviado.";
-            await SelectConversationAsync(_selectedConversation.IdConversacion);
-            await LoadInboxAsync();
+            _actionMessage = "Adjunto listo para enviar.";
         }
         catch (Exception ex)
         {
-            _actionError = ex.Message;
+            _actionError = $"No se pudo preparar el adjunto: {ex.Message}";
         }
         finally
         {
@@ -1342,37 +1410,36 @@
 
         try
         {
-            var base64 = await JS.InvokeAsync<string>("conversacionesAudio.stopRecording");
-            if (string.IsNullOrWhiteSpace(base64)) return;
+            var recording = await JS.InvokeAsync<RecordedAudioPayload>("conversacionesAudio.stopRecordingPayload");
+            if (string.IsNullOrWhiteSpace(recording.Base64)) return;
 
-            var bytes = Convert.FromBase64String(base64);
-            await using var stream = new MemoryStream(bytes);
-            var fileName = $"audio_{DateTime.Now:yyyyMMdd_HHmmss}.webm";
+            var bytes = Convert.FromBase64String(recording.Base64);
+            var mimeType = string.IsNullOrWhiteSpace(recording.MimeType) ? "audio/webm" : recording.MimeType;
+            var fileName = $"audio_{DateTime.Now:yyyyMMdd_HHmmss}{InferAudioExtension(mimeType)}";
 
-            await ConversacionesSvc.UploadAttachmentAsync(new ConversacionUploadAdjuntoRequest
+            _pendingAttachment = new PendingAttachment
             {
-                IdConversacion = _selectedConversation!.IdConversacion,
                 NombreArchivo = fileName,
-                MimeType = "audio/webm",
+                MimeType = mimeType,
                 TipoArchivo = "AUDIO",
-                Contenido = stream,
-                TamanoBytes = bytes.Length,
-                IdTecnicoAutor = string.IsNullOrWhiteSpace(_assignmentTechnicianId) ? null : _assignmentTechnicianId
-            });
+                Contenido = bytes,
+                TamanoBytes = bytes.Length
+            };
 
-            _actionMessage = "Audio enviado.";
-            await SelectConversationAsync(_selectedConversation!.IdConversacion);
-            await LoadInboxAsync();
+            _actionMessage = "Audio listo para enviar.";
         }
         catch (Exception ex)
         {
-            _actionError = $"No se pudo guardar el audio: {ex.Message}";
+            _actionError = $"No se pudo preparar el audio: {ex.Message}";
         }
         finally
         {
             _uploadingAudio = false;
         }
     }
+
+    private void ClearPendingAttachment()
+        => _pendingAttachment = null;
 
     private void CerrarNuevoHilo()
     {
@@ -1390,11 +1457,13 @@
         _adjuntosPorMensaje = [];
         _replyText = string.Empty;
         _internalNoteText = string.Empty;
+        _pendingAttachment = null;
         _assignmentTechnicianId = string.Empty;
         _showContextPanel = false;
         _showTemplatePanel = false;
         ClearTemplateSelection();
         _scrollHandlerConversationId = null;
+        _replyEnterHandlerConversationId = null;
         _showReturnToLatest = false;
         ClearNewMessageState();
     }
@@ -1604,6 +1673,24 @@
     private static string GetAttachmentLabel(ConversacionAdjuntoDto adjunto)
         => string.IsNullOrWhiteSpace(adjunto.NombreArchivo) ? "Adjunto" : adjunto.NombreArchivo;
 
+    private static string GetPendingAttachmentIcon(string tipoArchivo)
+        => tipoArchivo switch
+        {
+            "IMAGE" => "bi-image",
+            "AUDIO" => "bi-mic-fill",
+            "VIDEO" => "bi-camera-video-fill",
+            _ => "bi-file-earmark"
+        };
+
+    private static string InferAudioExtension(string mimeType)
+    {
+        var normalized = (mimeType ?? string.Empty).ToLowerInvariant();
+        if (normalized.Contains("ogg", StringComparison.OrdinalIgnoreCase)) return ".ogg";
+        if (normalized.Contains("mp4", StringComparison.OrdinalIgnoreCase)) return ".m4a";
+        if (normalized.Contains("mpeg", StringComparison.OrdinalIgnoreCase)) return ".mp3";
+        return ".webm";
+    }
+
     private static string FormatFileSize(long bytes)
     {
         if (bytes < 1024)
@@ -1635,5 +1722,27 @@
 
         _pollingCts.Dispose();
         _dotNetRef?.Dispose();
+    }
+
+    private sealed class PendingAttachment
+    {
+        public string NombreArchivo { get; init; } = string.Empty;
+        public string MimeType { get; init; } = string.Empty;
+        public string TipoArchivo { get; init; } = string.Empty;
+        public byte[] Contenido { get; init; } = [];
+        public long TamanoBytes { get; init; }
+        public string TipoArchivoLabel => TipoArchivo switch
+        {
+            "IMAGE" => "Imagen",
+            "AUDIO" => "Audio",
+            "VIDEO" => "Video",
+            _ => "Archivo"
+        };
+    }
+
+    private sealed class RecordedAudioPayload
+    {
+        public string Base64 { get; set; } = string.Empty;
+        public string MimeType { get; set; } = string.Empty;
     }
 }

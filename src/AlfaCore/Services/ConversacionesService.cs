@@ -1015,19 +1015,10 @@ public sealed class ConversacionesService(
             if (request.TamanoBytes <= 0)
                 throw new InvalidOperationException("El archivo está vacío.");
 
-            var folder = Path.Combine(UploadsBasePath, request.IdConversacion.ToString(CultureInfo.InvariantCulture));
-            Directory.CreateDirectory(folder);
-
-            var ext = Path.GetExtension(request.NombreArchivo).ToLowerInvariant();
-            var safeFileName = $"{Guid.NewGuid():N}{ext}";
-            var rutaLocal = Path.Combine(folder, safeFileName);
-
-            await using (var fs = File.Create(rutaLocal))
-                await request.Contenido.CopyToAsync(fs, token);
-
             var conversation = await RequireConversationAsync(request.IdConversacion, token);
             var isInternal = string.Equals(conversation.Canal, "INTERNO", StringComparison.OrdinalIgnoreCase);
             var messageType = NormalizeMessageType(request.TipoArchivo);
+            var mimeType = NormalizeOutgoingMime(request.MimeType, request.NombreArchivo, messageType);
             var now = DateTime.Now;
             string initialState;
             ConversacionWhatsAppConfigDto? whatsAppConfig = null;
@@ -1046,56 +1037,15 @@ public sealed class ConversacionesService(
                 initialState = whatsAppConfig.IsConfiguredForSend ? "PENDIENTE" : "PENDIENTE_CONFIG";
             }
 
-            var messageId = await InsertMessageAsync(new PendingMessageInsert
-            {
-                ConversationId = request.IdConversacion,
-                Phone = conversation.TelefonoWhatsApp,
-                MessageType = messageType,
-                Direction = "SALIENTE",
-                EstadoEnvio = initialState,
-                Text = request.NombreArchivo,
-                PayloadJson = string.Empty,
-                FechaHora = now,
-                IdTecnicoAutor = request.IdTecnicoAutor,
-                UsuarioAutor = request.UsuarioAccion,
-                SistemaAutor = request.SistemaAccion
-            }, token);
+            var folder = Path.Combine(UploadsBasePath, request.IdConversacion.ToString(CultureInfo.InvariantCulture));
+            Directory.CreateDirectory(folder);
 
-            const string adjuntoSql = """
-                INSERT INTO dbo.CONV_ADJUNTOS
-                (
-                    IdMensaje,
-                    TipoArchivo,
-                    NombreArchivo,
-                    MimeType,
-                    RutaLocal,
-                    TamanoBytes,
-                    FechaHora_Grabacion
-                )
-                VALUES
-                (
-                    @IdMensaje,
-                    @TipoArchivo,
-                    @NombreArchivo,
-                    @MimeType,
-                    @RutaLocal,
-                    @TamanoBytes,
-                    GETDATE()
-                );
+            var ext = Path.GetExtension(request.NombreArchivo).ToLowerInvariant();
+            var safeFileName = $"{Guid.NewGuid():N}{ext}";
+            var rutaLocal = Path.Combine(folder, safeFileName);
 
-                SELECT CAST(SCOPE_IDENTITY() AS bigint);
-                """;
-
-            await using var cn = new SqlConnection(ConnectionString);
-            await cn.OpenAsync(token);
-            await using var cmd = new SqlCommand(adjuntoSql, cn);
-            cmd.Parameters.AddWithValue("@IdMensaje", messageId);
-            cmd.Parameters.AddWithValue("@TipoArchivo", messageType);
-            cmd.Parameters.AddWithValue("@NombreArchivo", request.NombreArchivo);
-            cmd.Parameters.AddWithValue("@MimeType", DbNullable(request.MimeType));
-            cmd.Parameters.AddWithValue("@RutaLocal", rutaLocal);
-            cmd.Parameters.AddWithValue("@TamanoBytes", request.TamanoBytes);
-            var adjuntoId = Convert.ToInt64(await cmd.ExecuteScalarAsync(token), CultureInfo.InvariantCulture);
+            await using (var fs = File.Create(rutaLocal))
+                await request.Contenido.CopyToAsync(fs, token);
 
             string whatsAppMessageId = string.Empty;
             string finalState = initialState;
@@ -1108,16 +1058,40 @@ public sealed class ConversacionesService(
                     conversation.TelefonoWhatsApp,
                     rutaLocal,
                     request.NombreArchivo,
-                    request.MimeType,
+                    mimeType,
                     messageType,
                     token);
 
                 whatsAppMessageId = sendResult.WhatsAppMessageId;
                 finalState = sendResult.EstadoEnvio;
                 payload = sendResult.PayloadJson;
-                await UpdateMessageDeliveryAsync(messageId, finalState, whatsAppMessageId, payload, token);
-                await UpdateAttachmentPayloadAsync(adjuntoId, payload, token);
             }
+
+            var messageId = await InsertMessageAsync(new PendingMessageInsert
+            {
+                ConversationId = request.IdConversacion,
+                Phone = conversation.TelefonoWhatsApp,
+                WhatsAppMessageId = whatsAppMessageId,
+                MessageType = messageType,
+                Direction = "SALIENTE",
+                EstadoEnvio = finalState,
+                Text = request.NombreArchivo,
+                PayloadJson = payload,
+                FechaHora = now,
+                IdTecnicoAutor = request.IdTecnicoAutor,
+                UsuarioAutor = request.UsuarioAccion,
+                SistemaAutor = request.SistemaAccion
+            }, token);
+
+            var adjuntoId = await InsertAttachmentRecordAsync(
+                messageId,
+                messageType,
+                request.NombreArchivo,
+                mimeType,
+                rutaLocal,
+                request.TamanoBytes,
+                payload,
+                token);
 
             await RefreshConversationAsync(request.IdConversacion, now, $"[{messageType}] {request.NombreArchivo}", token);
 
@@ -1127,7 +1101,7 @@ public sealed class ConversacionesService(
                 IdMensaje = messageId,
                 TipoArchivo = messageType,
                 NombreArchivo = request.NombreArchivo,
-                MimeType = request.MimeType,
+                MimeType = mimeType,
                 RutaLocal = rutaLocal,
                 TamanoBytes = request.TamanoBytes
             };
@@ -2750,6 +2724,9 @@ public sealed class ConversacionesService(
         if (normalized == "IMAGE" && string.Equals(mimeType, "image/webp", StringComparison.OrdinalIgnoreCase))
             return "sticker";
 
+        if (normalized == "AUDIO" && string.Equals(mimeType, "audio/webm", StringComparison.OrdinalIgnoreCase))
+            return "document";
+
         return normalized switch
         {
             "IMAGE" => "image",
@@ -2757,6 +2734,35 @@ public sealed class ConversacionesService(
             "VIDEO" => "video",
             "STICKER" => "sticker",
             _ => "document"
+        };
+    }
+
+    private static string NormalizeOutgoingMime(string? mimeType, string? fileName, string tipoArchivo)
+    {
+        if (!string.IsNullOrWhiteSpace(mimeType))
+            return mimeType.Trim();
+
+        var ext = Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant();
+        return ext switch
+        {
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            ".gif" => "image/gif",
+            ".webp" => NormalizeMessageType(tipoArchivo) == "STICKER" ? "image/webp" : "image/webp",
+            ".ogg" or ".oga" => "audio/ogg",
+            ".mp3" => "audio/mpeg",
+            ".m4a" => "audio/mp4",
+            ".mp4" => NormalizeMessageType(tipoArchivo) == "VIDEO" ? "video/mp4" : "audio/mp4",
+            ".webm" => NormalizeMessageType(tipoArchivo) == "VIDEO" ? "video/webm" : "audio/webm",
+            ".pdf" => "application/pdf",
+            ".txt" => "text/plain",
+            ".zip" => "application/zip",
+            ".rar" => "application/vnd.rar",
+            ".doc" => "application/msword",
+            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".xls" => "application/vnd.ms-excel",
+            ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            _ => InferMimeFromType(tipoArchivo)
         };
     }
 

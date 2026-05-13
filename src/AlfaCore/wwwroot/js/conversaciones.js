@@ -6,7 +6,14 @@ window.conversacionesAudio = (function () {
         startRecording: async function () {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             _chunks = [];
-            _recorder = new MediaRecorder(stream);
+            const preferredTypes = [
+                'audio/ogg;codecs=opus',
+                'audio/mp4',
+                'audio/webm;codecs=opus',
+                'audio/webm'
+            ];
+            const mimeType = preferredTypes.find(type => window.MediaRecorder && MediaRecorder.isTypeSupported(type));
+            _recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
             _recorder.ondataavailable = e => { if (e.data.size > 0) _chunks.push(e.data); };
             _recorder.start();
             return true;
@@ -18,6 +25,25 @@ window.conversacionesAudio = (function () {
                     const blob = new Blob(_chunks, { type: _recorder.mimeType || 'audio/webm' });
                     const reader = new FileReader();
                     reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                    reader.readAsDataURL(blob);
+                    _recorder.stream.getTracks().forEach(t => t.stop());
+                    _recorder = null;
+                    _chunks = [];
+                };
+                _recorder.stop();
+            });
+        },
+
+        stopRecordingPayload: function () {
+            return new Promise(resolve => {
+                _recorder.onstop = () => {
+                    const mimeType = _recorder.mimeType || 'audio/webm';
+                    const blob = new Blob(_chunks, { type: mimeType });
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve({
+                        base64: reader.result.split(',')[1],
+                        mimeType: mimeType
+                    });
                     reader.readAsDataURL(blob);
                     _recorder.stream.getTracks().forEach(t => t.stop());
                     _recorder = null;
@@ -74,5 +100,26 @@ window.conversacionesUi = {
         element.addEventListener('scroll', handler, { passive: true });
         this._threadWatchers.set(element, { handler: handler });
         return lastAway;
+    },
+
+    bindReplyEnter: function (element, dotNetRef) {
+        if (!element || !dotNetRef) return false;
+
+        if (element._conversacionesReplyEnterHandler) {
+            element.removeEventListener('keydown', element._conversacionesReplyEnterHandler);
+        }
+
+        const handler = (event) => {
+            if (event.key !== 'Enter' || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) {
+                return;
+            }
+
+            event.preventDefault();
+            dotNetRef.invokeMethodAsync('SendComposerFromEnter').catch(() => {});
+        };
+
+        element.addEventListener('keydown', handler);
+        element._conversacionesReplyEnterHandler = handler;
+        return true;
     }
 };

@@ -2555,7 +2555,8 @@ tr.row--critical td {
 }
 
 .conversations-composer--support > .conversations-inline,
-.conversations-composer--support > .context-card {
+.conversations-composer--support > .context-card,
+.conversations-composer--support > .conversations-pending-attachment {
     grid-column: 1 / -1;
 }
 
@@ -2577,6 +2578,50 @@ tr.row--critical td {
     grid-column: 2;
     align-self: end;
     grid-row: auto;
+}
+
+.conversations-pending-attachment {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: .65rem;
+    padding: .55rem .65rem;
+    border: 1px solid rgba(14, 165, 233, .26);
+    border-radius: 8px;
+    background: rgba(14, 165, 233, .08);
+}
+
+.conversations-pending-attachment__icon {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    background: rgba(14, 165, 233, .16);
+    color: var(--color-primary);
+}
+
+.conversations-pending-attachment__body {
+    min-width: 0;
+    display: grid;
+    gap: .1rem;
+}
+
+.conversations-pending-attachment__body strong,
+.conversations-pending-attachment__body span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.conversations-pending-attachment__body strong {
+    color: var(--color-text);
+    font-size: .86rem;
+}
+
+.conversations-pending-attachment__body span {
+    color: var(--color-text-muted);
+    font-size: .74rem;
 }
 
 .conversations-composer.conversations-composer--support > .conversations-composer__actions {
