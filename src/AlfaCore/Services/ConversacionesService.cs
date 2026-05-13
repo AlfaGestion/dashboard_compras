@@ -1142,11 +1142,20 @@ public sealed class ConversacionesService(
         {
             const string sql = """
                 SELECT
-                    ISNULL(RutaLocal, ''),
-                    ISNULL(MimeType, ''),
-                    ISNULL(NombreArchivo, '')
-                FROM dbo.CONV_ADJUNTOS
-                WHERE IdAdjunto = @IdAdjunto
+                    a.IdAdjunto,
+                    a.IdMensaje,
+                    m.IdConversacion,
+                    ISNULL(a.TipoArchivo, ''),
+                    ISNULL(a.NombreArchivo, ''),
+                    ISNULL(a.MimeType, ''),
+                    ISNULL(a.UrlArchivo, ''),
+                    ISNULL(a.RutaLocal, ''),
+                    ISNULL(a.PayloadJson, ''),
+                    ISNULL(m.PayloadJson, '')
+                FROM dbo.CONV_ADJUNTOS a
+                INNER JOIN dbo.CONV_MENSAJES m
+                    ON m.IdMensaje = a.IdMensaje
+                WHERE a.IdAdjunto = @IdAdjunto
                 """;
 
             await using var cn = new SqlConnection(ConnectionString);
@@ -1157,11 +1166,35 @@ public sealed class ConversacionesService(
             if (!await rd.ReadAsync(token))
                 return null;
 
+            var record = new AttachmentServeRecord
+            {
+                IdAdjunto = rd.GetInt64(0),
+                IdMensaje = rd.GetInt64(1),
+                IdConversacion = rd.GetInt64(2),
+                TipoArchivo = GetString(rd, 3),
+                NombreArchivo = GetString(rd, 4),
+                MimeType = GetString(rd, 5),
+                UrlArchivo = GetString(rd, 6),
+                RutaLocal = GetString(rd, 7),
+                AdjuntoPayloadJson = GetString(rd, 8),
+                MensajePayloadJson = GetString(rd, 9)
+            };
+
+            var rutaLocal = ResolveExistingAttachmentPath(record);
+            if (!string.IsNullOrWhiteSpace(rutaLocal) && !string.Equals(rutaLocal, record.RutaLocal, StringComparison.OrdinalIgnoreCase))
+            {
+                await UpdateAttachmentLocalPathAsync(record.IdAdjunto, rutaLocal, token);
+                record.RutaLocal = rutaLocal;
+            }
+
+            if (string.IsNullOrWhiteSpace(rutaLocal))
+                rutaLocal = await TryRecoverAttachmentFileAsync(record, token);
+
             return new ConversacionAdjuntoServeDto
             {
-                RutaLocal = GetString(rd, 0),
-                MimeType = GetString(rd, 1),
-                NombreArchivo = GetString(rd, 2)
+                RutaLocal = rutaLocal,
+                MimeType = record.MimeType,
+                NombreArchivo = record.NombreArchivo
             };
         }, "No se pudo obtener el adjunto.", ct);
 
@@ -1257,6 +1290,8 @@ public sealed class ConversacionesService(
             }
             catch (Exception ex)
             {
+                MediaHydrationAttempts.TryRemove(item.Message.IdMensaje, out _);
+
                 await _appEvents.LogErrorAsync(
                     "Conversaciones",
                     "HydrateMissingIncomingMedia",
@@ -1267,6 +1302,175 @@ public sealed class ConversacionesService(
                     ct);
             }
         }
+    }
+
+    private string ResolveExistingAttachmentPath(AttachmentServeRecord record)
+    {
+        if (!string.IsNullOrWhiteSpace(record.RutaLocal) && File.Exists(record.RutaLocal))
+            return record.RutaLocal;
+
+        foreach (var candidate in BuildAttachmentPathCandidates(record))
+        {
+            if (File.Exists(candidate))
+                return candidate;
+        }
+
+        return string.Empty;
+    }
+
+    private IEnumerable<string> BuildAttachmentPathCandidates(AttachmentServeRecord record)
+    {
+        var fileName = Path.GetFileName(record.RutaLocal);
+        if (!string.IsNullOrWhiteSpace(fileName))
+            yield return Path.Combine(UploadsBasePath, record.IdConversacion.ToString(CultureInfo.InvariantCulture), fileName);
+
+        if (!string.IsNullOrWhiteSpace(record.RutaLocal))
+        {
+            const string marker = "App_Data";
+            var index = record.RutaLocal.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (index >= 0)
+            {
+                var relativeToContent = record.RutaLocal[index..]
+                    .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                yield return Path.Combine(environment.ContentRootPath, relativeToContent);
+            }
+
+            if (!Path.IsPathRooted(record.RutaLocal))
+                yield return Path.Combine(environment.ContentRootPath, record.RutaLocal);
+        }
+
+        if (!string.IsNullOrWhiteSpace(record.UrlArchivo) && !Uri.TryCreate(record.UrlArchivo, UriKind.Absolute, out _))
+        {
+            var relativeUrl = record.UrlArchivo.TrimStart('/', '\\')
+                .Replace('/', Path.DirectorySeparatorChar)
+                .Replace('\\', Path.DirectorySeparatorChar);
+            yield return Path.Combine(environment.ContentRootPath, relativeUrl);
+        }
+    }
+
+    private async Task<string> TryRecoverAttachmentFileAsync(AttachmentServeRecord record, CancellationToken ct)
+    {
+        var mediaId = TryExtractMediaId(record.AdjuntoPayloadJson, record.TipoArchivo)
+            ?? TryExtractMediaId(record.MensajePayloadJson, record.TipoArchivo);
+        if (string.IsNullOrWhiteSpace(mediaId))
+            return string.Empty;
+
+        try
+        {
+            var config = await conversacionesConfigService.GetWhatsAppConfigAsync(ct);
+            if (string.IsNullOrWhiteSpace(config.AccessToken))
+                return string.Empty;
+
+            var media = await GetWhatsAppMediaAsync(config, mediaId, ct);
+            var bytes = await DownloadWhatsAppMediaAsync(config, media.Url, ct);
+            if (bytes.Length == 0)
+                return string.Empty;
+
+            var mimeType = FirstNonEmpty(media.MimeType, record.MimeType, InferMimeFromType(record.TipoArchivo));
+            var fileName = string.IsNullOrWhiteSpace(record.NombreArchivo)
+                ? BuildIncomingFileName(new IncomingWhatsAppAttachment
+                {
+                    MediaId = mediaId,
+                    TipoArchivo = record.TipoArchivo,
+                    MimeType = mimeType
+                }, mimeType)
+                : record.NombreArchivo;
+            var rutaLocal = await SaveIncomingAttachmentAsync(record.IdConversacion, fileName, bytes, ct);
+
+            await UpdateRecoveredAttachmentAsync(record.IdAdjunto, rutaLocal, mimeType, bytes.LongLength, ct);
+
+            record.RutaLocal = rutaLocal;
+            record.MimeType = mimeType;
+            return rutaLocal;
+        }
+        catch (Exception ex)
+        {
+            await _appEvents.LogErrorAsync(
+                "Conversaciones",
+                "RecoverAttachmentFile",
+                ex,
+                "No se pudo recuperar un archivo adjunto faltante.",
+                new { record.IdAdjunto, record.IdMensaje, record.IdConversacion, MediaId = mediaId, record.TipoArchivo },
+                AppEventSeverity.Warning,
+                ct);
+            return string.Empty;
+        }
+    }
+
+    private async Task UpdateAttachmentLocalPathAsync(long idAdjunto, string rutaLocal, CancellationToken ct)
+    {
+        const string sql = """
+            UPDATE dbo.CONV_ADJUNTOS
+            SET RutaLocal = @RutaLocal
+            WHERE IdAdjunto = @IdAdjunto
+            """;
+
+        await using var cn = new SqlConnection(ConnectionString);
+        await cn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, cn);
+        cmd.Parameters.AddWithValue("@IdAdjunto", idAdjunto);
+        cmd.Parameters.AddWithValue("@RutaLocal", rutaLocal);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    private async Task UpdateRecoveredAttachmentAsync(long idAdjunto, string rutaLocal, string mimeType, long tamanoBytes, CancellationToken ct)
+    {
+        const string sql = """
+            UPDATE dbo.CONV_ADJUNTOS
+            SET
+                RutaLocal = @RutaLocal,
+                MimeType = CASE WHEN @MimeType IS NULL OR LTRIM(RTRIM(@MimeType)) = '' THEN MimeType ELSE @MimeType END,
+                TamanoBytes = @TamanoBytes
+            WHERE IdAdjunto = @IdAdjunto
+            """;
+
+        await using var cn = new SqlConnection(ConnectionString);
+        await cn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, cn);
+        cmd.Parameters.AddWithValue("@IdAdjunto", idAdjunto);
+        cmd.Parameters.AddWithValue("@RutaLocal", rutaLocal);
+        cmd.Parameters.AddWithValue("@MimeType", DbNullable(mimeType));
+        cmd.Parameters.AddWithValue("@TamanoBytes", tamanoBytes);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    private static string? TryExtractMediaId(string payloadJson, string tipoArchivo)
+    {
+        if (string.IsNullOrWhiteSpace(payloadJson))
+            return null;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(payloadJson);
+            var root = doc.RootElement;
+            if (TryReadStringProperty(root, "MediaId", out var mediaId) ||
+                TryReadStringProperty(root, "mediaId", out mediaId) ||
+                TryReadStringProperty(root, "id", out mediaId))
+            {
+                return mediaId;
+            }
+
+            var attachments = ExtractIncomingAttachments(root, tipoArchivo);
+            return attachments.Count > 0 ? attachments[0].MediaId : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static bool TryReadStringProperty(JsonElement element, string propertyName, out string value)
+    {
+        value = string.Empty;
+        if (element.ValueKind != JsonValueKind.Object ||
+            !element.TryGetProperty(propertyName, out var property) ||
+            property.ValueKind != JsonValueKind.String)
+        {
+            return false;
+        }
+
+        value = property.GetString() ?? string.Empty;
+        return !string.IsNullOrWhiteSpace(value);
     }
 
     private async Task<long> EnsureConversationAsync(IncomingWhatsAppMessage incoming, CancellationToken ct)
@@ -2544,6 +2748,20 @@ public sealed class ConversacionesService(
     {
         public ConversacionMensajeDto Message { get; init; } = new();
         public string PayloadJson { get; init; } = string.Empty;
+    }
+
+    private sealed class AttachmentServeRecord
+    {
+        public long IdAdjunto { get; init; }
+        public long IdMensaje { get; init; }
+        public long IdConversacion { get; init; }
+        public string TipoArchivo { get; init; } = string.Empty;
+        public string NombreArchivo { get; init; } = string.Empty;
+        public string MimeType { get; set; } = string.Empty;
+        public string UrlArchivo { get; init; } = string.Empty;
+        public string RutaLocal { get; set; } = string.Empty;
+        public string AdjuntoPayloadJson { get; init; } = string.Empty;
+        public string MensajePayloadJson { get; init; } = string.Empty;
     }
 
     private sealed class IncomingWhatsAppAttachment
