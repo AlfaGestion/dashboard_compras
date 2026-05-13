@@ -2405,7 +2405,8 @@ tr.row--critical td {
 .message-card__text {
     margin: 0;
     line-height: 1.42;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
+    word-break: normal;
     white-space: pre-wrap;
 }
 
@@ -2447,9 +2448,9 @@ tr.row--critical td {
     padding: .55rem .72rem;
     border-radius: 14px;
     border: 1px solid var(--color-border);
-    min-width: 0;
+    min-width: min(18rem, 100%);
     max-width: min(92%, 720px);
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
     box-shadow: 0 4px 14px rgba(2, 6, 23, 0.10);
 }
 
@@ -2546,6 +2547,35 @@ tr.row--critical td {
     flex: 0 0 auto;
 }
 
+.conversations-composer--support > .conversations-inline,
+.conversations-composer--support > .context-card {
+    grid-column: 1 / -1;
+}
+
+.conversations-composer--support > .context-card {
+    border-radius: 12px;
+    padding: .72rem .85rem;
+}
+
+.conversations-composer--support > .context-card .context-card__muted {
+    display: block;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.4;
+}
+
+.conversations-composer--support > .conversations-composer__actions {
+    grid-column: 2;
+    align-self: end;
+}
+
+.conversations-composer--support .conversations-inline--error {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .7rem .85rem;
+}
+
 .conversations-composer textarea {
     min-height: 42px;
     max-height: 64px;
@@ -2571,6 +2601,59 @@ tr.row--critical td {
 .conversations-composer > .conversations-composer__actions:nth-of-type(4) {
     grid-column: 2;
     grid-row: 2;
+}
+
+.templates-page .page-intro__text {
+    max-width: 760px;
+}
+
+.templates-layout {
+    grid-template-columns: minmax(280px, 340px) minmax(0, 1.1fr) minmax(280px, 360px);
+}
+
+.templates-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: .7rem;
+    border-top: 0;
+    margin-top: 0;
+    padding-top: 0;
+}
+
+.templates-form .field {
+    grid-column: auto;
+}
+
+.templates-form .field:has(textarea),
+.templates-form label.field,
+.templates-form .conversations-composer__actions,
+.templates-form .conversations-inline {
+    grid-column: 1 / -1;
+}
+
+.templates-form textarea {
+    max-height: none;
+}
+
+.templates-form .conversations-composer__actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    padding-top: .15rem;
+}
+
+.templates-preview {
+    gap: .85rem;
+}
+
+.templates-preview .message-card {
+    align-self: stretch;
+    max-width: 100%;
+}
+
+.templates-preview .message-card__text,
+.templates-preview .context-card__muted {
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
 }
 
 .conversations-context {

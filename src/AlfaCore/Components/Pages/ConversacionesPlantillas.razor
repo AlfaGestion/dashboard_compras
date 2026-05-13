@@ -3,7 +3,7 @@
 
 <PageTitle>Plantillas de WhatsApp | Alfa Gestión</PageTitle>
 
-<section class="page-grid">
+<section class="page-grid templates-page">
     <div class="page-intro">
         <div>
             <h2 class="page-intro__title">Plantillas de WhatsApp</h2>
@@ -62,7 +62,7 @@
             </div>
         </section>
 
-        <div class="conversations-layout">
+        <div class="conversations-layout templates-layout">
             <aside class="panel-card conversations-list">
                 <div class="conversations-list__header">
                     <div>
@@ -106,7 +106,7 @@
                 }
             </aside>
 
-            <section class="panel-card conversations-chat">
+            <section class="panel-card conversations-chat templates-editor">
                 <header class="conversations-chat__header">
                     <div>
                         <h3 class="panel-card__title">@(_selectedId > 0 ? "Editar plantilla" : "Nueva plantilla")</h3>
@@ -117,7 +117,7 @@
                     </div>
                 </header>
 
-                <div class="conversations-composer">
+                <div class="conversations-composer templates-form">
                     <div class="field">
                         <label for="tpl-name">Nombre visible</label>
                         <input id="tpl-name" @bind="_form.NombreVisible" placeholder="Ej: Retomar conversación" />
@@ -178,7 +178,7 @@
                 </div>
             </section>
 
-            <aside class="panel-card conversations-context">
+            <aside class="panel-card conversations-context templates-preview">
                 <div class="conversations-context__section">
                     <h3 class="panel-card__title">Vista previa</h3>
                     <p class="panel-card__subtitle">Así se verá el cuerpo principal con ejemplos.</p>

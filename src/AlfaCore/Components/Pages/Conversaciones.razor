@@ -317,7 +317,7 @@
                     }
                     </div>
 
-                    <div class="conversations-composer">
+                    <div class="conversations-composer conversations-composer--support">
                         @if (IsWhatsAppWindowExpired)
                         {
                             <div class="conversations-inline conversations-inline--error">
@@ -375,7 +375,8 @@
                             <textarea id="conv-message"
                                       rows="2"
                                       placeholder="@(_selectedConversation.Canal == "INTERNO" ? "Escribí un mensaje para el equipo…" : "Escribí una respuesta para WhatsApp…")"
-                                      @bind="_replyText"></textarea>
+                                      @bind="_replyText"
+                                      disabled="@IsWhatsAppWindowExpired"></textarea>
                         </div>
                         <div class="conversations-composer__actions">
                             <button type="button" class="btn btn--primary" @onclick="SendReplyAsync" disabled="@(!_canSendReply)">
