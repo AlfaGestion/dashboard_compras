@@ -2973,6 +2973,18 @@ html[data-theme="light"] .conversations-context::-webkit-scrollbar-thumb {
     background: rgba(15, 23, 42, 0.32);
 }
 
+.conversations-page--odoo .conversations-composer__actions {
+    gap: .4rem;
+}
+
+.conversations-page--odoo .conversations-composer__actions .btn {
+    width: 42px;
+    min-width: 42px;
+    height: 40px;
+    padding: 0;
+    justify-content: center;
+}
+
 .conversations-page--odoo .conversations-composer textarea,
 .conversations-page--odoo .conversations-composer input,
 .conversations-page--odoo .conversations-composer select {

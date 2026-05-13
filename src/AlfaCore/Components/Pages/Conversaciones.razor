@@ -342,9 +342,8 @@
                                           @bind="_replyText"></textarea>
                             </div>
                             <div class="conversations-composer__actions">
-                                <button type="button" class="btn btn--primary" @onclick="SendReplyAsync" disabled="@(!_canSendReply)">
+                                <button type="button" class="btn btn--primary" @onclick="SendReplyAsync" disabled="@(!_canSendReply)" title="@(_selectedConversation.Canal == "INTERNO" ? "Enviar" : "Enviar mensaje")">
                                     <i class="bi bi-send-fill"></i>
-                                    @(_selectedConversation.Canal == "INTERNO" ? "Enviar" : "Enviar mensaje")
                                 </button>
                                 <label class="btn btn--ghost" title="Adjuntar archivo" style="cursor:pointer">
                                     <i class="bi @(_uploadingFile ? "bi-hourglass-split" : "bi-paperclip")"></i>
@@ -369,8 +368,8 @@
                                       @bind="_internalNoteText"></textarea>
                         </div>
                         <div class="conversations-composer__actions">
-                            <button type="button" class="btn btn--ghost" @onclick="AddInternalNoteAsync" disabled="@(!_canAddNote)">
-                                <i class="bi bi-journal-text"></i> Guardar nota
+                            <button type="button" class="btn btn--ghost" @onclick="AddInternalNoteAsync" disabled="@(!_canAddNote)" title="Guardar nota interna">
+                                <i class="bi bi-journal-text"></i>
                             </button>
                         </div>
                     </div>
