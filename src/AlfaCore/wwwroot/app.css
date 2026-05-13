@@ -2711,6 +2711,24 @@ tr.row--critical td {
     font-weight: 800;
 }
 
+.conversations-context__hint {
+    display: flex;
+    align-items: flex-start;
+    gap: .55rem;
+    padding: .72rem .85rem;
+    border: 1px solid rgba(14, 165, 233, .22);
+    border-radius: 8px;
+    background: rgba(14, 165, 233, .08);
+    color: var(--color-text-muted);
+    font-size: .78rem;
+    line-height: 1.35;
+}
+
+.conversations-context__hint .bi {
+    color: var(--color-primary);
+    margin-top: .1rem;
+}
+
 .conversations-inline {
     border-radius: 16px;
     padding: .9rem 1rem;

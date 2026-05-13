@@ -45,7 +45,7 @@
                     <i class="bi bi-layout-sidebar-inset-reverse"></i>
                     <span>Contexto</span>
                 </button>
-                <button type="button" class="btn btn--ghost btn--sm" @onclick="RecargarAsync" disabled="_loadingInbox || _loadingConversation" title="Recargar">
+                <button type="button" class="btn btn--ghost btn--sm" @onclick="RecargarAsync" disabled="@(_loadingInbox || _loadingConversation)" title="Recargar">
                     <i class="bi bi-arrow-clockwise"></i>
                 </button>
             </div>
@@ -403,6 +403,11 @@
                             <span class="context-card__muted">@DisplayOrFallback(_selectedConversation.ContactoCelular, _selectedConversation.ContactoTelefono)</span>
                             <span class="context-card__muted">@DisplayOrFallback(_selectedConversation.ContactoEmail)</span>
                         </div>
+
+                        <div class="conversations-context__hint">
+                            <i class="bi bi-info-circle"></i>
+                            <span>Cliente y contacto se vinculan por telÃ©fono al recibir mensajes. Para corregirlos manualmente hay que asociar esta conversaciÃ³n a un cliente/contacto existente.</span>
+                        </div>
                     }
 
                     <div class="conversations-context__section">
@@ -417,7 +422,7 @@
                                 }
                             </select>
                         </div>
-                        <button type="button" class="btn btn--ghost" @onclick="AssignAsync" disabled="_busyAction">
+                        <button type="button" class="btn btn--ghost" @onclick="AssignAsync" disabled="@_busyAction">
                             <i class="bi bi-person-check-fill"></i> Guardar asignación
                         </button>
                     </div>
@@ -434,10 +439,10 @@
                             </select>
                         </div>
                         <div class="conversations-context__actions">
-                            <button type="button" class="btn btn--ghost" @onclick="SaveStatusAsync" disabled="_busyAction">
+                            <button type="button" class="btn btn--ghost" @onclick="SaveStatusAsync" disabled="@_busyAction">
                                 <i class="bi bi-check2-circle"></i> Guardar estado
                             </button>
-                            <button type="button" class="btn btn--ghost" @onclick="CloseConversationAsync" disabled="_busyAction">
+                            <button type="button" class="btn btn--ghost" @onclick="CloseConversationAsync" disabled="@_busyAction">
                                 <i class="bi bi-lock-fill"></i> Cerrar conversación
                             </button>
                         </div>
