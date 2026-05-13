@@ -3266,6 +3266,20 @@ html[data-theme="light"] .conversations-context::-webkit-scrollbar-thumb {
     background: rgba(8, 145, 178, .28);
 }
 
+.templates-body-limit {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: .35rem .75rem;
+    color: var(--color-muted);
+    font-size: .76rem;
+    margin-top: .4rem;
+}
+
+.templates-body-limit.is-danger {
+    color: #fca5a5;
+}
+
 .conversations-page--odoo textarea::-webkit-scrollbar,
 .templates-page--odoo textarea::-webkit-scrollbar,
 .conversations-page--odoo select::-webkit-scrollbar,

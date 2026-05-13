@@ -144,6 +144,13 @@
                         <label for="tpl-body">Cuerpo</label>
                         <textarea id="tpl-body" rows="5" @bind="_form.CuerpoTexto"
                                   placeholder="Hola {{1}}, te escribimos para continuar con la conversación pendiente."></textarea>
+                        <div class="templates-body-limit @(IsBodyTooLong ? "is-danger" : string.Empty)">
+                            <span>@BodyLength / @MetaBodyMaxLength caracteres</span>
+                            @if (IsBodyTooLong)
+                            {
+                                <strong>Meta permite hasta @MetaBodyMaxLength caracteres en el cuerpo.</strong>
+                            }
+                        </div>
                     </div>
                     <div class="field">
                         <label for="tpl-footer">Pie de página</label>
@@ -168,7 +175,7 @@
                         <button type="button" class="btn btn--primary" @onclick="SaveAsync" disabled="@(!CanSaveDraft)">
                             <i class="bi bi-save-fill"></i> Guardar borrador
                         </button>
-                        <button type="button" class="btn btn--ghost" @onclick="SubmitAsync" disabled="@(_busy || _selectedId <= 0)">
+                        <button type="button" class="btn btn--ghost" @onclick="SubmitAsync" disabled="@(_busy || _selectedId <= 0 || IsBodyTooLong)">
                             <i class="bi bi-cloud-arrow-up-fill"></i> Enviar a aprobación
                         </button>
                         <button type="button" class="btn btn--ghost" @onclick="SyncAsync" disabled="@(_busy || _selectedId <= 0)">
@@ -231,30 +238,30 @@
     private string? _error;
 
     private const string MultiValueSeparator = "---";
+    private const int MetaBodyMaxLength = 550;
 
     private static readonly string CobranzaTemplateBody = string.Join(Environment.NewLine,
     [
         "Estimado {{1}}",
         "Esperamos que se encuentre bien.",
         string.Empty,
-        "Le escribimos para recordarle las facturas detalladas a continuacion. Para seguir brindandole nuestros servicios con la calidad y compromiso de siempre, le solicitamos que realice el pago o transferencia a la brevedad posible.",
+        "Le recordamos que registra facturas pendientes. Para continuar brindandole el servicio, solicitamos realizar el pago o transferencia a la brevedad.",
         string.Empty,
-        "A continuacion, le proporcionamos los detalles de su cuenta:",
+        "Detalle de cuenta:",
         string.Empty,
         "{{2}}",
         string.Empty,
-        "Agradecemos su tiempo y colaboracion. Si ya ha realizado el pago, le pedimos que nos envie el comprobante respondiendo a este mensaje o a administracion@alfagestion.com.ar.",
+        "Si ya realizo el pago, envie el comprobante respondiendo este mensaje o a administracion@alfagestion.com.ar.",
         string.Empty,
         "Alfa Net Plus",
         "Soluciones Informaticas",
         "Marta Ester Saez",
         "whatsapp:+5491151480148",
         string.Empty,
-        "DATOS PARA LA TRANSFERENCIA BANCARIA",
+        "Datos para transferencia:",
         "{{3}}",
         string.Empty,
-        "POR FAVOR ENVIAR COMPROBANTE DE PAGO RESPONDIENDO EL PRESENTE MENSAJE",
-        "O administracion@alfagestion.com.ar"
+        "Por favor enviar comprobante de pago por este chat."
     ]);
 
     private static readonly string CobranzaDetalleEjemplo = string.Join(Environment.NewLine,
@@ -278,6 +285,8 @@
     ]);
 
     private string PreviewBody => RenderPreview(_form.CuerpoTexto, ParseExamples(_examplesText));
+    private int BodyLength => _form.CuerpoTexto?.Length ?? 0;
+    private bool IsBodyTooLong => BodyLength > MetaBodyMaxLength;
     private bool CanSaveDraft
         => !_busy
            && !string.IsNullOrWhiteSpace(_form.NombreVisible)
@@ -419,6 +428,12 @@
         _error = null;
         try
         {
+            if (IsBodyTooLong)
+            {
+                _error = $"Meta permite hasta {MetaBodyMaxLength} caracteres en el cuerpo. Acorta el texto antes de enviarlo a aprobacion.";
+                return;
+            }
+
             await ConversacionesSvc.SubmitTemplateForApprovalAsync(new ConversacionPlantillaSubmitRequest
             {
                 IdPlantilla = _selectedId
