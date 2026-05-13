@@ -3377,46 +3377,61 @@ html[data-theme="light"] .conversations-context::-webkit-scrollbar-thumb {
     gap: 0;
     height: 100%;
     min-height: 0;
-    overflow: hidden;
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(14, 165, 233, .55) rgba(15, 23, 42, .35);
 }
 
 .templates-page--odoo .templates-editor,
 .templates-page--odoo .templates-preview {
     border-radius: 0;
     min-width: 0;
-    min-height: 0;
+    min-height: max-content;
 }
 
 .templates-page--odoo .templates-form {
-    height: 100%;
-    overflow: auto;
+    height: auto;
+    min-height: max-content;
+    overflow: visible;
     padding: 1rem 1.1rem;
     background: var(--color-panel);
-    scrollbar-width: thin;
-    scrollbar-color: rgba(14, 165, 233, .55) rgba(15, 23, 42, .35);
+    padding-bottom: 1.35rem;
+}
+
+.templates-page--odoo .templates-form .conversations-composer__actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    margin: .35rem -1.1rem -1.35rem;
+    padding: .75rem 1.1rem;
+    background: linear-gradient(180deg, rgba(15, 23, 42, .86), var(--color-panel));
+    border-top: 1px solid var(--color-border);
 }
 
 .templates-page--odoo .templates-preview {
     border-width: 0 0 0 1px;
     background: rgba(15, 23, 42, 0.28);
     padding: 1rem 1.1rem;
-    overflow: auto;
+    overflow: visible;
     scrollbar-width: thin;
     scrollbar-color: rgba(14, 165, 233, .55) rgba(15, 23, 42, .35);
 }
 
+.templates-page--odoo .templates-layout::-webkit-scrollbar,
 .templates-page--odoo .templates-form::-webkit-scrollbar,
 .templates-page--odoo .templates-preview::-webkit-scrollbar {
     width: 10px;
     height: 10px;
 }
 
+.templates-page--odoo .templates-layout::-webkit-scrollbar-track,
 .templates-page--odoo .templates-form::-webkit-scrollbar-track,
 .templates-page--odoo .templates-preview::-webkit-scrollbar-track {
     background: rgba(15, 23, 42, .35);
     border-radius: 999px;
 }
 
+.templates-page--odoo .templates-layout::-webkit-scrollbar-thumb,
 .templates-page--odoo .templates-form::-webkit-scrollbar-thumb,
 .templates-page--odoo .templates-preview::-webkit-scrollbar-thumb {
     background: rgba(14, 165, 233, .62);
