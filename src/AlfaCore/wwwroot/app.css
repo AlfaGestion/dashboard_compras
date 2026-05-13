@@ -2385,6 +2385,26 @@ tr.row--critical td {
     color: var(--color-text);
 }
 
+.conversation-row__side {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    flex: 0 0 auto;
+}
+
+.conversation-row__new-count {
+    display: inline-grid;
+    place-items: center;
+    min-width: 1.15rem;
+    height: 1.15rem;
+    border-radius: 999px;
+    background: var(--color-danger);
+    color: #fff;
+    font-size: .68rem;
+    font-weight: 900;
+    line-height: 1;
+}
+
 .conversation-row__date,
 .conversation-row__meta,
 .conversation-row__summary,
@@ -2408,6 +2428,15 @@ tr.row--critical td {
     overflow-wrap: break-word;
     word-break: normal;
     white-space: pre-wrap;
+}
+
+.conversation-row__summary {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow-wrap: normal;
 }
 
 .conversation-badge {

@@ -134,7 +134,13 @@
                                     @onclick="() => SelectConversationAsync(item.IdConversacion)">
                                 <div class="conversation-row__top">
                                     <span class="conversation-row__name">@GetDisplayName(item)</span>
-                                    <span class="conversation-row__date">@FormatShortDate(item.FechaHoraUltimoMensaje)</span>
+                                    <span class="conversation-row__side">
+                                        <span class="conversation-row__date">@FormatShortDate(item.FechaHoraUltimoMensaje)</span>
+                                        @if (GetConversationNewCount(item.IdConversacion) > 0)
+                                        {
+                                            <span class="conversation-row__new-count">@GetConversationNewCount(item.IdConversacion)</span>
+                                        }
+                                    </span>
                                 </div>
                                 <div class="conversation-row__meta">
                                     <span>@item.TelefonoWhatsApp</span>
@@ -344,6 +350,7 @@
                                           @ref="_replyTextArea"
                                           rows="2"
                                           placeholder="@(_selectedConversation.Canal == "INTERNO" ? "Escribí un mensaje para el equipo…" : "Escribí una respuesta para WhatsApp…")"
+                                          @onfocus="MarkSelectedConversationAsRead"
                                           @bind="_replyText"></textarea>
                             </div>
                             @if (_pendingAttachments.Count > 0)
@@ -700,6 +707,7 @@
     private long? _scrollHandlerConversationId;
     private long? _firstNewMessageId;
     private int _newMessagesCount;
+    private readonly Dictionary<long, int> _newMessagesByConversation = [];
     private bool _showReturnToLatest;
     private bool _scrollThreadToBottomAfterRender;
     private long? _openAttachmentMenuId;
@@ -828,7 +836,10 @@
 
         try
         {
-            _inbox = (await ConversacionesSvc.GetInboxAsync(_filters)).ToList();
+            var previousInbox = _inbox.ToDictionary(x => x.IdConversacion);
+            var refreshedInbox = (await ConversacionesSvc.GetInboxAsync(_filters)).ToList();
+            TrackInboxNewMessages(previousInbox, refreshedInbox, showLoading);
+            _inbox = refreshedInbox;
 
             if (_selectedConversationId.HasValue && _inbox.Any(x => x.IdConversacion == _selectedConversationId.Value))
                 return;
@@ -846,6 +857,32 @@
         {
             if (showLoading)
                 _loadingInbox = false;
+        }
+    }
+
+    private void TrackInboxNewMessages(
+        IReadOnlyDictionary<long, ConversacionInboxItemDto> previousInbox,
+        IReadOnlyList<ConversacionInboxItemDto> refreshedInbox,
+        bool showLoading)
+    {
+        if (showLoading || previousInbox.Count == 0)
+            return;
+
+        foreach (var item in refreshedInbox)
+        {
+            if (item.IdConversacion == _selectedConversationId)
+                continue;
+
+            if (!previousInbox.TryGetValue(item.IdConversacion, out var previous))
+                continue;
+
+            if (item.FechaHoraUltimoMensajeCliente is not DateTime currentClientMessage
+                || previous.FechaHoraUltimoMensajeCliente is not DateTime previousClientMessage
+                || currentClientMessage <= previousClientMessage)
+                continue;
+
+            _newMessagesByConversation[item.IdConversacion] =
+                _newMessagesByConversation.TryGetValue(item.IdConversacion, out var count) ? count + 1 : 1;
         }
     }
 
@@ -886,6 +923,7 @@
                 _showReturnToLatest = false;
                 _scrollThreadToBottomAfterRender = true;
                 _scrollHandlerConversationId = null;
+                RestoreSelectedNewMessageMarker(idConversacion);
             }
 
             if (IsWhatsAppConversation)
@@ -955,12 +993,17 @@
                              && currentLastMessageId.HasValue
                              && currentLastMessageId > previousLastMessageId;
 
-        if (hasNewMessages && !shouldKeepAtBottom && previousLastMessageId is { } lastSeenMessageId)
+        if (hasNewMessages && previousLastMessageId is { } lastSeenMessageId)
         {
-            var newMessages = _messages.Where(x => x.IdMensaje > lastSeenMessageId).ToList();
-            _firstNewMessageId = newMessages.FirstOrDefault()?.IdMensaje;
-            _newMessagesCount += newMessages.Count;
-            _showReturnToLatest = true;
+            var newMessages = _messages
+                .Where(x => x.IdMensaje > lastSeenMessageId && IsIncomingMessage(x))
+                .ToList();
+            if (newMessages.Count > 0)
+            {
+                _firstNewMessageId ??= newMessages.FirstOrDefault()?.IdMensaje;
+                _newMessagesCount += newMessages.Count;
+                _showReturnToLatest = true;
+            }
         }
 
         StateHasChanged();
@@ -1001,7 +1044,6 @@
         {
             await Task.Yield();
             await JS.InvokeVoidAsync("conversacionesUi.scrollToBottom", _threadElement);
-            ClearNewMessageState();
             _showReturnToLatest = false;
         }
         catch
@@ -1022,8 +1064,6 @@
             return Task.CompletedTask;
 
         _showReturnToLatest = isAwayFromBottom;
-        if (!isAwayFromBottom)
-            ClearNewMessageState();
 
         return InvokeAsync(StateHasChanged);
     }
@@ -1035,6 +1075,43 @@
     {
         _firstNewMessageId = null;
         _newMessagesCount = 0;
+    }
+
+    private void MarkSelectedConversationAsRead()
+    {
+        if (_selectedConversationId is { } id)
+            _newMessagesByConversation.Remove(id);
+
+        ClearNewMessageState();
+        _showReturnToLatest = false;
+    }
+
+    private int GetConversationNewCount(long idConversacion)
+    {
+        var count = _newMessagesByConversation.TryGetValue(idConversacion, out var storedCount) ? storedCount : 0;
+        if (_selectedConversationId == idConversacion)
+            count = Math.Max(count, _newMessagesCount);
+
+        return count;
+    }
+
+    private void RestoreSelectedNewMessageMarker(long idConversacion)
+    {
+        if (!_newMessagesByConversation.TryGetValue(idConversacion, out var count) || count <= 0)
+            return;
+
+        var unreadMessages = _messages
+            .Where(IsIncomingMessage)
+            .OrderByDescending(x => x.IdMensaje)
+            .Take(count)
+            .ToList();
+
+        if (unreadMessages.Count == 0)
+            return;
+
+        _firstNewMessageId = unreadMessages.Min(x => x.IdMensaje);
+        _newMessagesCount = unreadMessages.Count;
+        _showReturnToLatest = true;
     }
 
     private async Task SendReplyAsync()
@@ -1688,6 +1765,9 @@
             "NOTA_INTERNA" => "message-card--internal",
             _ => "message-card--outgoing"
         };
+
+    private static bool IsIncomingMessage(ConversacionMensajeDto message)
+        => string.Equals(message.Direction, "ENTRANTE", StringComparison.OrdinalIgnoreCase);
 
     private static string DisplayOrFallback(params string?[] values)
         => FirstNonEmpty(values) is { Length: > 0 } found ? found : "Sin dato";
