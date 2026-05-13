@@ -19,6 +19,15 @@ public sealed class ConversacionesService(
 {
     private readonly IAppEventService _appEvents = appEvents;
     private static readonly ConcurrentDictionary<long, byte> MediaHydrationAttempts = new();
+    private static readonly string[] DebtSourceCandidates =
+    [
+        "VE_CPTES_SALDOS_VENTAS",
+        "VE_CPTES_IMPAGOS",
+        "VE_CPTES_SALDOS",
+        "VE_CPTES_SALDOS_TODOS_SALDO",
+        "VE_CPTES_SALDOS_TODOS"
+    ];
+
     private string UploadsBasePath => Path.Combine(environment.ContentRootPath, "App_Data", "uploads", "conversaciones");
     private string ConnectionString => sessionService.GetConnectionString().Length > 0
         ? sessionService.GetConnectionString()
@@ -736,6 +745,64 @@ public sealed class ConversacionesService(
                 WhatsAppMessageId = sendResult.WhatsAppMessageId
             };
         }, "No se pudo enviar la plantilla por WhatsApp.", ct);
+
+    public Task<ConversacionPlantillaAutoValuesDto> GetTemplateAutoValuesAsync(long idConversacion, int variableCount, CancellationToken ct = default)
+        => ExecuteLoggedAsync("Conversaciones", "GetTemplateAutoValues", async token =>
+        {
+            if (idConversacion <= 0)
+                throw new InvalidOperationException("La conversaciÃ³n es obligatoria.");
+
+            var conversation = await GetConversationAsync(idConversacion, token)
+                ?? throw new InvalidOperationException("La conversaciÃ³n indicada no existe.");
+
+            var displayName = FirstNonEmpty(
+                conversation.ClienteNombre,
+                conversation.ContactoNombre,
+                conversation.NombreVisible,
+                conversation.TelefonoWhatsApp);
+
+            var detail = string.Empty;
+            var payment = string.Empty;
+            var observations = new List<string>();
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+
+            if (!string.IsNullOrWhiteSpace(conversation.ClienteCodigo))
+            {
+                var debt = await TryBuildDebtDetailAsync(cn, conversation.ClienteCodigo, token);
+                detail = debt.DetailText;
+                if (!string.IsNullOrWhiteSpace(debt.Observation))
+                    observations.Add(debt.Observation);
+            }
+            else
+            {
+                observations.Add("La conversaciÃ³n no tiene cliente vinculado; no se pudo calcular deuda automÃ¡tica.");
+            }
+
+            payment = await ReadConversationConfigValueAsync(cn, "CONV_COBRANZA_FORMA_PAGO", token);
+            if (string.IsNullOrWhiteSpace(payment))
+                observations.Add("Falta configurar CONV_COBRANZA_FORMA_PAGO en TA_CONFIGURACION.");
+
+            var values = new List<string>();
+            if (variableCount >= 1)
+                values.Add(displayName);
+            if (variableCount >= 2)
+                values.Add(string.IsNullOrWhiteSpace(detail) ? "Detalle de deuda pendiente de completar." : detail);
+            if (variableCount >= 3)
+                values.Add(string.IsNullOrWhiteSpace(payment) ? "Datos de transferencia pendientes de configurar." : payment);
+
+            while (values.Count < variableCount)
+                values.Add($"Dato {values.Count + 1}");
+
+            return new ConversacionPlantillaAutoValuesDto
+            {
+                Valores = values,
+                ClienteCodigo = conversation.ClienteCodigo,
+                ClienteNombre = conversation.ClienteNombre,
+                Observaciones = string.Join(" ", observations)
+            };
+        }, "No se pudieron preparar las variables automÃ¡ticas.", ct);
 
     public Task<long> AddInternalNoteAsync(ConversacionNotaInternaRequest request, CancellationToken ct = default)
         => ExecuteLoggedAsync("Conversaciones", "AddInternalNote", async token =>
@@ -1504,6 +1571,154 @@ public sealed class ConversacionesService(
         value = property.GetString() ?? string.Empty;
         return !string.IsNullOrWhiteSpace(value);
     }
+
+    private async Task<DebtTemplateDetail> TryBuildDebtDetailAsync(SqlConnection cn, string clienteCodigo, CancellationToken ct)
+    {
+        foreach (var source in DebtSourceCandidates)
+        {
+            var columns = await GetSqlObjectColumnsAsync(cn, source, ct);
+            if (columns.Count == 0 ||
+                !columns.Contains("CUENTA") ||
+                !columns.Contains("SALDO"))
+            {
+                continue;
+            }
+
+            var dateColumn = FirstMatchingColumn(columns, "VENCIMIENTO", "FECHAVTO", "FECHA_VTO", "FECHA");
+            var comprobanteDateColumn = FirstMatchingColumn(columns, "FECHA", "FECHACOMPROBANTE", "FECHA_COMPROBANTE", "EMISION");
+            var objectName = $"dbo.{QuoteSqlName(source)}";
+
+            var daysExpression = string.IsNullOrWhiteSpace(dateColumn)
+                ? "0"
+                : $"MAX(CASE WHEN TRY_CONVERT(date, {QuoteSqlName(dateColumn)}) IS NULL THEN 0 ELSE DATEDIFF(day, TRY_CONVERT(date, {QuoteSqlName(dateColumn)}), GETDATE()) END)";
+            var oldestExpression = string.IsNullOrWhiteSpace(comprobanteDateColumn)
+                ? "NULL"
+                : $"MIN(TRY_CONVERT(date, {QuoteSqlName(comprobanteDateColumn)}))";
+
+            var sql = $"""
+                SELECT
+                    ISNULL(SUM(CONVERT(decimal(18, 2), ISNULL({QuoteSqlName("SALDO")}, 0))), 0) AS SaldoActual,
+                    COUNT(1) AS Cantidad,
+                    {daysExpression} AS DiasAtraso,
+                    {oldestExpression} AS FechaAntigua
+                FROM {objectName}
+                WHERE LTRIM(RTRIM(CONVERT(nvarchar(50), {QuoteSqlName("CUENTA")}))) = @Cuenta
+                  AND ISNULL(CONVERT(decimal(18, 2), {QuoteSqlName("SALDO")}), 0) > 0
+                """;
+
+            try
+            {
+                await using var cmd = new SqlCommand(sql, cn);
+                cmd.Parameters.AddWithValue("@Cuenta", clienteCodigo.Trim());
+                await using var rd = await cmd.ExecuteReaderAsync(ct);
+                if (!await rd.ReadAsync(ct))
+                    continue;
+
+                var saldo = rd.IsDBNull(0) ? 0 : Convert.ToDecimal(rd.GetValue(0), CultureInfo.InvariantCulture);
+                var cantidad = rd.IsDBNull(1) ? 0 : Convert.ToInt32(rd.GetValue(1), CultureInfo.InvariantCulture);
+                var dias = rd.IsDBNull(2) ? 0 : Math.Max(0, Convert.ToInt32(rd.GetValue(2), CultureInfo.InvariantCulture));
+                var fecha = rd.IsDBNull(3) ? (DateTime?)null : Convert.ToDateTime(rd.GetValue(3), CultureInfo.InvariantCulture);
+
+                if (cantidad <= 0)
+                {
+                    return new DebtTemplateDetail
+                    {
+                        DetailText = "No se registran comprobantes pendientes de pago.",
+                        Observation = $"Fuente consultada: {source}."
+                    };
+                }
+
+                var detail = $"""
+                    SALDO ACTUAL............................................: {saldo:N2}
+                    Cantidad de comprobantes pendientes de pago: {cantidad}
+                    Dias de atraso...............................................: {dias}
+                    Fecha comprobante mas antiguo....................: {(fecha.HasValue ? fecha.Value.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) : "Sin dato")}
+                    """;
+
+                return new DebtTemplateDetail
+                {
+                    DetailText = detail,
+                    Observation = $"Fuente consultada: {source}."
+                };
+            }
+            catch (Exception ex)
+            {
+                await _appEvents.LogErrorAsync(
+                    "Conversaciones",
+                    "BuildDebtTemplateDetail",
+                    ex,
+                    "No se pudo consultar una fuente de deuda para plantillas.",
+                    new { Fuente = source, Cliente = clienteCodigo },
+                    AppEventSeverity.Warning,
+                    ct);
+            }
+        }
+
+        return new DebtTemplateDetail
+        {
+            DetailText = string.Empty,
+            Observation = "No se encontrÃ³ una vista de saldos compatible para calcular deuda automÃ¡tica."
+        };
+    }
+
+    private static async Task<HashSet<string>> GetSqlObjectColumnsAsync(SqlConnection cn, string objectName, CancellationToken ct)
+    {
+        const string sql = """
+            SELECT UPPER(name)
+            FROM sys.columns
+            WHERE object_id = OBJECT_ID(@ObjectName)
+            """;
+
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        await using var cmd = new SqlCommand(sql, cn);
+        cmd.Parameters.AddWithValue("@ObjectName", $"dbo.{objectName}");
+        await using var rd = await cmd.ExecuteReaderAsync(ct);
+        while (await rd.ReadAsync(ct))
+            result.Add(GetString(rd, 0));
+
+        return result;
+    }
+
+    private async Task<string> ReadConversationConfigValueAsync(SqlConnection cn, string key, CancellationToken ct)
+    {
+        var detailColumn = await ResolveConfigDetailColumnAsync(cn, ct);
+        var sql = $"""
+            SELECT TOP (1)
+                ISNULL(VALOR, ''),
+                ISNULL({QuoteSqlName(detailColumn)}, '')
+            FROM dbo.TA_CONFIGURACION
+            WHERE UPPER(LTRIM(RTRIM(CLAVE))) = @Clave
+            """;
+
+        await using var cmd = new SqlCommand(sql, cn);
+        cmd.Parameters.AddWithValue("@Clave", key.Trim().ToUpperInvariant());
+        await using var rd = await cmd.ExecuteReaderAsync(ct);
+        if (!await rd.ReadAsync(ct))
+            return string.Empty;
+
+        return FirstNonEmpty(GetString(rd, 0), GetString(rd, 1));
+    }
+
+    private static async Task<string> ResolveConfigDetailColumnAsync(SqlConnection cn, CancellationToken ct)
+    {
+        const string sql = """
+            SELECT TOP (1) name
+            FROM sys.columns
+            WHERE object_id = OBJECT_ID(N'dbo.TA_CONFIGURACION')
+              AND LOWER(name) IN (N'valoraux', N'valor_aux', N'descripcion')
+            ORDER BY CASE WHEN LOWER(name) IN (N'valoraux', N'valor_aux') THEN 0 ELSE 1 END
+            """;
+
+        await using var cmd = new SqlCommand(sql, cn);
+        var result = Convert.ToString(await cmd.ExecuteScalarAsync(ct), CultureInfo.InvariantCulture);
+        return string.IsNullOrWhiteSpace(result) ? "DESCRIPCION" : result;
+    }
+
+    private static string FirstMatchingColumn(HashSet<string> columns, params string[] names)
+        => names.FirstOrDefault(columns.Contains) ?? string.Empty;
+
+    private static string QuoteSqlName(string value)
+        => "[" + value.Replace("]", "]]", StringComparison.Ordinal) + "]";
 
     private async Task<long> EnsureConversationAsync(IncomingWhatsAppMessage incoming, CancellationToken ct)
     {
@@ -2657,11 +2872,45 @@ public sealed class ConversacionesService(
             }
         }
 
-        return trimmed
-            .Split(["\r\n", "\n", "\r"], StringSplitOptions.RemoveEmptyEntries)
+        return ParseTemplateTextBlocks(trimmed);
+    }
+
+    private static List<string> ParseTemplateTextBlocks(string text)
+    {
+        var normalized = text.Replace("\r\n", "\n").Replace('\r', '\n');
+        if (normalized.Split('\n').Any(x => string.Equals(x.Trim(), "---", StringComparison.Ordinal)))
+        {
+            var result = new List<string>();
+            var current = new List<string>();
+
+            foreach (var line in normalized.Split('\n'))
+            {
+                if (string.Equals(line.Trim(), "---", StringComparison.Ordinal))
+                {
+                    AddTemplateTextBlock(result, current);
+                    current.Clear();
+                    continue;
+                }
+
+                current.Add(line);
+            }
+
+            AddTemplateTextBlock(result, current);
+            return result;
+        }
+
+        return normalized
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(x => x.Trim())
             .Where(x => x.Length > 0)
             .ToList();
+    }
+
+    private static void AddTemplateTextBlock(List<string> result, List<string> lines)
+    {
+        var block = string.Join(Environment.NewLine, lines).Trim();
+        if (block.Length > 0)
+            result.Add(block);
     }
 
     private static List<string> NormalizeTemplateValues(IEnumerable<string>? values)
@@ -2914,6 +3163,12 @@ public sealed class ConversacionesService(
     {
         public ConversacionMensajeDto Message { get; init; } = new();
         public string PayloadJson { get; init; } = string.Empty;
+    }
+
+    private sealed class DebtTemplateDetail
+    {
+        public string DetailText { get; init; } = string.Empty;
+        public string Observation { get; init; } = string.Empty;
     }
 
     private sealed class AttachmentServeRecord

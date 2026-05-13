@@ -3235,6 +3235,37 @@ html[data-theme="light"] .conversations-context::-webkit-scrollbar-thumb {
     resize: none;
 }
 
+.templates-variable-guide {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    padding: .8rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: rgba(15, 23, 42, .36);
+}
+
+.templates-variable-guide .context-card__label {
+    flex-basis: 100%;
+}
+
+.templates-variable-chip {
+    border: 1px solid rgba(56, 189, 248, .35);
+    border-radius: 999px;
+    background: rgba(8, 145, 178, .16);
+    color: var(--color-text);
+    font-size: .78rem;
+    font-weight: 700;
+    line-height: 1;
+    padding: .48rem .7rem;
+}
+
+.templates-variable-chip:hover {
+    border-color: rgba(56, 189, 248, .7);
+    background: rgba(8, 145, 178, .28);
+}
+
 .conversations-page--odoo textarea::-webkit-scrollbar,
 .templates-page--odoo textarea::-webkit-scrollbar,
 .conversations-page--odoo select::-webkit-scrollbar,

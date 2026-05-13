@@ -267,6 +267,14 @@ public sealed class ConversacionPlantillaMessageResultDto
     public string WhatsAppMessageId { get; set; } = string.Empty;
 }
 
+public sealed class ConversacionPlantillaAutoValuesDto
+{
+    public List<string> Valores { get; set; } = [];
+    public string ClienteCodigo { get; set; } = string.Empty;
+    public string ClienteNombre { get; set; } = string.Empty;
+    public string Observaciones { get; set; } = string.Empty;
+}
+
 public static class ConversacionPlantillaCategorias
 {
     public const string Marketing = "MARKETING";

@@ -540,6 +540,14 @@
                         </div>
                     }
 
+                    @if (!string.IsNullOrWhiteSpace(_templateAutoNotice))
+                    {
+                        <div class="conversations-context__hint">
+                            <i class="bi bi-info-circle"></i>
+                            <span>@_templateAutoNotice</span>
+                        </div>
+                    }
+
                     <div class="context-card">
                         <span class="context-card__label">Destino</span>
                         <strong>@DisplayOrFallback(_selectedConversation?.NombreVisible, _selectedConversation?.ContactoNombre)</strong>
@@ -658,6 +666,7 @@
     private long _selectedTemplateId;
     private bool _loadingTemplates;
     private string _templateValuesText = string.Empty;
+    private string? _templateAutoNotice;
 
     private ConversacionesInboxFilters _filters = new() { Canal = "WHATSAPP" };
     private List<ConversacionTecnicoOptionDto> _technicians = [];
@@ -1108,7 +1117,7 @@
             if (_selectedTemplateId <= 0 || _availableTemplates.All(x => x.IdPlantilla != _selectedTemplateId))
                 _selectedTemplateId = _availableTemplates[0].IdPlantilla;
 
-            PrepareTemplateValues();
+            await PrepareTemplateValuesAsync();
         }
         catch (Exception ex)
         {
@@ -1120,14 +1129,14 @@
         }
     }
 
-    private Task OnTemplateChangedAsync()
+    private async Task OnTemplateChangedAsync()
     {
-        PrepareTemplateValues();
-        return Task.CompletedTask;
+        await PrepareTemplateValuesAsync(forceReload: true);
     }
 
-    private void PrepareTemplateValues()
+    private async Task PrepareTemplateValuesAsync(bool forceReload = false)
     {
+        _templateAutoNotice = null;
         if (SelectedTemplate is null)
         {
             _templateValuesText = string.Empty;
@@ -1142,15 +1151,38 @@
         }
 
         var current = ParseTemplateValues(_templateValuesText).ToList();
-        if (current.Count >= required)
+        if (!forceReload && current.Count >= required)
             return;
 
+        List<string> automaticValues = [];
+        if (_selectedConversation is not null)
+        {
+            try
+            {
+                var autoValues = await ConversacionesSvc.GetTemplateAutoValuesAsync(_selectedConversation.IdConversacion, required);
+                automaticValues = autoValues.Valores.ToList();
+                _templateAutoNotice = string.IsNullOrWhiteSpace(autoValues.Observaciones)
+                    ? "Variables cargadas automaticamente desde la conversacion y la cuenta del cliente."
+                    : autoValues.Observaciones;
+            }
+            catch (Exception ex)
+            {
+                _templateAutoNotice = $"No se pudieron cargar variables automaticas: {ex.Message}";
+            }
+        }
+
         var fallback = GetTemplateDefaultVariableValue(_selectedConversation);
+        current = forceReload ? [] : current;
 
         while (current.Count < required)
-            current.Add(current.Count == 0 ? fallback : $"Dato {current.Count + 1}");
+        {
+            if (automaticValues.Count > current.Count && !string.IsNullOrWhiteSpace(automaticValues[current.Count]))
+                current.Add(automaticValues[current.Count]);
+            else
+                current.Add(current.Count == 0 ? fallback : $"Dato {current.Count + 1}");
+        }
 
-        _templateValuesText = string.Join(Environment.NewLine, current.Take(required));
+        _templateValuesText = JoinTemplateValuesForEditing(current.Take(required));
     }
 
     private async Task SendTemplateAsync()
@@ -1307,12 +1339,12 @@
         _showContextPanel = false;
     }
 
-    private void OpenTemplatePanel()
+    private async Task OpenTemplatePanel()
     {
         if (!IsWhatsAppWindowExpired)
             return;
 
-        PrepareTemplateValues();
+        await PrepareTemplateValuesAsync(forceReload: true);
         _showTemplatePanel = true;
     }
 
@@ -1490,6 +1522,7 @@
         _availableTemplates = [];
         _selectedTemplateId = 0;
         _templateValuesText = string.Empty;
+        _templateAutoNotice = null;
     }
 
     private static string GetDisplayName(ConversacionInboxItemDto item)
@@ -1527,11 +1560,49 @@
     }
 
     private static IReadOnlyList<string> ParseTemplateValues(string? text)
-        => (text ?? string.Empty)
-            .Split(["\r\n", "\n", "\r"], StringSplitOptions.RemoveEmptyEntries)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return [];
+
+        var normalized = text.Replace("\r\n", "\n").Replace('\r', '\n');
+        if (normalized.Split('\n').Any(x => string.Equals(x.Trim(), "---", StringComparison.Ordinal)))
+        {
+            var result = new List<string>();
+            var current = new List<string>();
+
+            foreach (var line in normalized.Split('\n'))
+            {
+                if (string.Equals(line.Trim(), "---", StringComparison.Ordinal))
+                {
+                    AddTemplateValueBlock(result, current);
+                    current.Clear();
+                    continue;
+                }
+
+                current.Add(line);
+            }
+
+            AddTemplateValueBlock(result, current);
+            return result;
+        }
+
+        return normalized
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(x => x.Trim())
             .Where(x => x.Length > 0)
             .ToList();
+    }
+
+    private static string JoinTemplateValuesForEditing(IEnumerable<string> values)
+        => string.Join($"{Environment.NewLine}---{Environment.NewLine}",
+            values.Select(x => (x ?? string.Empty).Trim()).Where(x => x.Length > 0));
+
+    private static void AddTemplateValueBlock(List<string> result, List<string> lines)
+    {
+        var block = string.Join(Environment.NewLine, lines).Trim();
+        if (block.Length > 0)
+            result.Add(block);
+    }
 
     private static bool HasRequiredTemplateValues(ConversacionPlantillaDto template, IReadOnlyList<string> values)
         => values.Count >= CountTemplateVariables(template.CuerpoTexto);

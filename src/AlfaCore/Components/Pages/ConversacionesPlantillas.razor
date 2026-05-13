@@ -16,6 +16,9 @@
             <button type="button" class="btn btn--primary" @onclick="NuevaPlantilla">
                 <i class="bi bi-plus-circle-fill"></i> Nueva plantilla
             </button>
+            <button type="button" class="btn btn--ghost" @onclick="AplicarModeloCobranza">
+                <i class="bi bi-receipt"></i> Modelo cobranza
+            </button>
         </div>
     </div>
 
@@ -151,6 +154,12 @@
                         <textarea id="tpl-examples" rows="3" @bind="_examplesText"
                                   placeholder="Un valor por línea. Ej: Evelyn"></textarea>
                     </div>
+                    <div class="templates-variable-guide">
+                        <span class="context-card__label">Variables automaticas sugeridas</span>
+                        <button type="button" class="templates-variable-chip" @onclick='() => InsertVariable("{{1}}")'>@("{{1}} Nombre")</button>
+                        <button type="button" class="templates-variable-chip" @onclick='() => InsertVariable("{{2}}")'>@("{{2}} Detalle de deuda")</button>
+                        <button type="button" class="templates-variable-chip" @onclick='() => InsertVariable("{{3}}")'>@("{{3}} Forma de pago")</button>
+                    </div>
                     <label class="field">
                         <span>Plantilla activa</span>
                         <input type="checkbox" @bind="_form.Activa" />
@@ -220,6 +229,53 @@
     private string? _loadError;
     private string? _feedback;
     private string? _error;
+
+    private const string MultiValueSeparator = "---";
+
+    private static readonly string CobranzaTemplateBody = string.Join(Environment.NewLine,
+    [
+        "Estimado {{1}}",
+        "Esperamos que se encuentre bien.",
+        string.Empty,
+        "Le escribimos para recordarle las facturas detalladas a continuacion. Para seguir brindandole nuestros servicios con la calidad y compromiso de siempre, le solicitamos que realice el pago o transferencia a la brevedad posible.",
+        string.Empty,
+        "A continuacion, le proporcionamos los detalles de su cuenta:",
+        string.Empty,
+        "{{2}}",
+        string.Empty,
+        "Agradecemos su tiempo y colaboracion. Si ya ha realizado el pago, le pedimos que nos envie el comprobante respondiendo a este mensaje o a administracion@alfagestion.com.ar.",
+        string.Empty,
+        "Alfa Net Plus",
+        "Soluciones Informaticas",
+        "Marta Ester Saez",
+        "whatsapp:+5491151480148",
+        string.Empty,
+        "DATOS PARA LA TRANSFERENCIA BANCARIA",
+        "{{3}}",
+        string.Empty,
+        "POR FAVOR ENVIAR COMPROBANTE DE PAGO RESPONDIENDO EL PRESENTE MENSAJE",
+        "O administracion@alfagestion.com.ar"
+    ]);
+
+    private static readonly string CobranzaDetalleEjemplo = string.Join(Environment.NewLine,
+    [
+        "SALDO ACTUAL............................................: 1,520,963.04",
+        "Cantidad de comprobantes pendientes de pago: 3",
+        "Dias de atraso...............................................: 73",
+        "Fecha comprobante mas antiguo....................: 01/03/2026"
+    ]);
+
+    private static readonly string CobranzaFormaPagoEjemplo = string.Join(Environment.NewLine,
+    [
+        "FORMA DE PAGO:",
+        "TRANSFERENCIAS",
+        "Alias",
+        "alfa.net.plus.mp",
+        "CVU",
+        "0000003100085700504735",
+        string.Empty,
+        "ANTUNEZ ALBERTO FAVIO"
+    ]);
 
     private string PreviewBody => RenderPreview(_form.CuerpoTexto, ParseExamples(_examplesText));
     private bool CanSaveDraft
@@ -294,6 +350,28 @@
         _formEstadoMeta = "DRAFT";
         _feedback = null;
         _error = null;
+    }
+
+    private void AplicarModeloCobranza()
+    {
+        _selectedId = 0;
+        _form = NewCobranzaForm();
+        _examplesText = JoinMultilineValues(
+        [
+            "ANTU MALAL- ROLO GUAJARDO",
+            CobranzaDetalleEjemplo,
+            CobranzaFormaPagoEjemplo
+        ]);
+        _formEstadoMeta = "DRAFT";
+        _feedback = "Modelo de cobranza cargado. Revisa los ejemplos y guarda el borrador.";
+        _error = null;
+    }
+
+    private void InsertVariable(string variable)
+    {
+        _form.CuerpoTexto = string.IsNullOrWhiteSpace(_form.CuerpoTexto)
+            ? variable
+            : $"{_form.CuerpoTexto}{Environment.NewLine}{variable}";
     }
 
     private async Task SaveAsync()
@@ -395,6 +473,18 @@
             CuerpoTexto = "Hola {{1}}, te escribimos para continuar con la conversación pendiente. Respondé este mensaje y seguimos desde donde quedamos."
         };
 
+    private static ConversacionPlantillaDto NewCobranzaForm()
+        => new()
+        {
+            NombreVisible = "Recordatorio de deuda",
+            NombreMeta = "recordatorio_deuda",
+            Categoria = ConversacionPlantillaCategorias.Utility,
+            Idioma = "es_AR",
+            Activa = true,
+            EstadoMeta = "DRAFT",
+            CuerpoTexto = CobranzaTemplateBody
+        };
+
     private static string RenderPreview(string text, IReadOnlyList<string> values)
     {
         var result = string.IsNullOrWhiteSpace(text) ? "Escribí el cuerpo de la plantilla." : text;
@@ -405,11 +495,7 @@
     }
 
     private static List<string> ParseExamples(string value)
-        => (value ?? string.Empty)
-            .Split(["\r\n", "\n", "\r"], StringSplitOptions.RemoveEmptyEntries)
-            .Select(x => x.Trim())
-            .Where(x => x.Length > 0)
-            .ToList();
+        => ParseMultilineValues(value);
 
     private static string ExamplesToText(string json)
     {
@@ -419,12 +505,57 @@
         try
         {
             var values = System.Text.Json.JsonSerializer.Deserialize<List<string>>(json) ?? [];
-            return string.Join(Environment.NewLine, values);
+            return JoinMultilineValues(values);
         }
         catch
         {
             return json;
         }
+    }
+
+    private static List<string> ParseMultilineValues(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return [];
+
+        var normalized = value.Replace("\r\n", "\n").Replace('\r', '\n');
+        if (normalized.Split('\n').Any(x => string.Equals(x.Trim(), MultiValueSeparator, StringComparison.Ordinal)))
+        {
+            var result = new List<string>();
+            var current = new List<string>();
+
+            foreach (var line in normalized.Split('\n'))
+            {
+                if (string.Equals(line.Trim(), MultiValueSeparator, StringComparison.Ordinal))
+                {
+                    AddBlock(result, current);
+                    current.Clear();
+                    continue;
+                }
+
+                current.Add(line);
+            }
+
+            AddBlock(result, current);
+            return result;
+        }
+
+        return normalized
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Trim())
+            .Where(x => x.Length > 0)
+            .ToList();
+    }
+
+    private static string JoinMultilineValues(IEnumerable<string> values)
+        => string.Join($"{Environment.NewLine}{MultiValueSeparator}{Environment.NewLine}",
+            values.Select(x => (x ?? string.Empty).Trim()).Where(x => x.Length > 0));
+
+    private static void AddBlock(List<string> result, List<string> lines)
+    {
+        var block = string.Join(Environment.NewLine, lines).Trim();
+        if (block.Length > 0)
+            result.Add(block);
     }
 
     private static string GetMetaStatusLabel(string value)
