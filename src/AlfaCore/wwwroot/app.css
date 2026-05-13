@@ -3375,6 +3375,8 @@ html[data-theme="light"] .conversations-context::-webkit-scrollbar-thumb {
     max-width: none;
     overflow-x: hidden;
     padding: 1.35rem;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(14, 165, 233, .62) rgba(15, 23, 42, .35);
 }
 
 .modal-overlay.conversations-template-modal .conversations-template-modal__body {
@@ -3400,6 +3402,38 @@ html[data-theme="light"] .conversations-context::-webkit-scrollbar-thumb {
 .modal-overlay.conversations-template-modal .message-card {
     min-width: 0;
     max-width: 100%;
+}
+
+.modal-overlay.conversations-template-modal .conversations-template-modal__card::-webkit-scrollbar,
+.modal-overlay.conversations-template-modal .conversations-template-phone-preview::-webkit-scrollbar,
+.modal-overlay.conversations-template-modal textarea::-webkit-scrollbar,
+.modal-overlay.conversations-template-modal select::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+.modal-overlay.conversations-template-modal .conversations-template-modal__card::-webkit-scrollbar-track,
+.modal-overlay.conversations-template-modal .conversations-template-phone-preview::-webkit-scrollbar-track,
+.modal-overlay.conversations-template-modal textarea::-webkit-scrollbar-track,
+.modal-overlay.conversations-template-modal select::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, .35);
+    border-radius: 999px;
+}
+
+.modal-overlay.conversations-template-modal .conversations-template-modal__card::-webkit-scrollbar-thumb,
+.modal-overlay.conversations-template-modal .conversations-template-phone-preview::-webkit-scrollbar-thumb,
+.modal-overlay.conversations-template-modal textarea::-webkit-scrollbar-thumb,
+.modal-overlay.conversations-template-modal select::-webkit-scrollbar-thumb {
+    background: rgba(14, 165, 233, .62);
+    border: 2px solid rgba(15, 23, 42, .35);
+    border-radius: 999px;
+}
+
+.modal-overlay.conversations-template-modal .conversations-template-modal__card::-webkit-scrollbar-thumb:hover,
+.modal-overlay.conversations-template-modal .conversations-template-phone-preview::-webkit-scrollbar-thumb:hover,
+.modal-overlay.conversations-template-modal textarea::-webkit-scrollbar-thumb:hover,
+.modal-overlay.conversations-template-modal select::-webkit-scrollbar-thumb:hover {
+    background: rgba(14, 165, 233, .86);
 }
 
 @media (max-width: 760px) {
