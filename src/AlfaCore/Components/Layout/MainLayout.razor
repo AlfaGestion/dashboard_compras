@@ -181,6 +181,10 @@
                         <span class="menu__icon"><i class="bi bi-receipt"></i></span>
                         <span>Comprobantes</span>
                     </NavLink>
+                    <NavLink class="menu__link" href="/ventas/comparativo">
+                        <span class="menu__icon"><i class="bi bi-bar-chart-line-fill"></i></span>
+                        <span>Comparativo</span>
+                    </NavLink>
                 </nav>
             }
             else if (_currentModule == "stock")
@@ -384,7 +388,16 @@
     private void OnSessionChanged()
     {
         _activeSession = SessionSvc.GetActiveSession();
+        var wasAuthenticated = AppUserSession.IsAuthenticated;
         AppUserSession.HandleSqlSessionChanged();
+        if (wasAuthenticated && !AppUserSession.IsAuthenticated)
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try { await JS.InvokeVoidAsync("localStorage.removeItem", "alfacore_user_token"); }
+                catch { }
+            });
+        }
         _loginPassword = string.Empty;
         _loginShowPassword = false;
         _loginError = string.Empty;
@@ -439,6 +452,17 @@
             _isDark = true;
         }
 
+        if (!AppUserSession.IsAuthenticated)
+        {
+            try
+            {
+                var token = await JS.InvokeAsync<string?>("localStorage.getItem", "alfacore_user_token");
+                if (!string.IsNullOrEmpty(token))
+                    AppUserSession.TryRestoreFromToken(token);
+            }
+            catch { }
+        }
+
         _sidebarInitialized = true;
         StateHasChanged();
     }
@@ -486,6 +510,11 @@
             _loginUserName = session.UserName;
             _loginPassword = string.Empty;
             _loginShowPassword = false;
+            if (AppUserSession.CurrentToken is not null)
+            {
+                try { await JS.InvokeVoidAsync("localStorage.setItem", "alfacore_user_token", AppUserSession.CurrentToken); }
+                catch { }
+            }
         }
         catch (InvalidOperationException ex)
         {
@@ -498,10 +527,12 @@
         }
     }
 
-    private void LogoutAppUser()
+    private async Task LogoutAppUser()
     {
         AppUserSession.Logout();
         _loginError = string.Empty;
+        try { await JS.InvokeVoidAsync("localStorage.removeItem", "alfacore_user_token"); }
+        catch { }
     }
 
     private Task OpenSqlSessionDrawerAsync()
@@ -529,6 +560,7 @@
             "ventas/familias" => "Familias",
             "ventas/articulos" => "Artículos",
             "ventas/comprobantes" => "Comprobantes",
+            "ventas/comparativo" => "Comparativo",
             "stock" => "Stock",
             "caja-bancos" => "Caja y Bancos",
             "contabilidad" => "Contabilidad",

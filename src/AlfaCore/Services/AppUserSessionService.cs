@@ -7,10 +7,12 @@ public sealed class AppUserSessionService(
     IConfiguration configuration,
     ISessionService sessionService,
     IAppEventService appEvents,
-    UsuariosPasswordCodec passwordCodec) : IAppUserSessionService
+    UsuariosPasswordCodec passwordCodec,
+    AppUserSessionStore sessionStore) : IAppUserSessionService
 {
     private const string SistemaFijo = "CN000PR";
     private AppUserSessionInfo? _currentUser;
+    private string? _sessionToken;
 
     private string ConnectionString => sessionService.GetConnectionString().Length > 0
         ? sessionService.GetConnectionString()
@@ -21,6 +23,7 @@ public sealed class AppUserSessionService(
 
     public bool IsAuthenticated => _currentUser is not null;
     public AppUserSessionInfo? CurrentUser => _currentUser;
+    public string? CurrentToken => _sessionToken;
 
     public async Task<AppUserSessionInfo> LoginAsync(string userName, string password, CancellationToken ct = default)
     {
@@ -90,6 +93,7 @@ public sealed class AppUserSessionService(
                 SqlSessionName = activeSqlSession.Nombre
             };
 
+            _sessionToken = sessionStore.Store(_currentUser);
             StateChanged?.Invoke();
             return _currentUser;
         }
@@ -117,10 +121,34 @@ public sealed class AppUserSessionService(
         }
     }
 
+    public bool TryRestoreFromToken(string token)
+    {
+        if (!sessionStore.TryGet(token, out var info) || info is null)
+            return false;
+
+        var activeSqlSession = sessionService.GetActiveSession();
+        if (activeSqlSession is null || activeSqlSession.Id != info.SqlSessionId)
+        {
+            sessionStore.Remove(token);
+            return false;
+        }
+
+        _sessionToken = token;
+        _currentUser = info;
+        StateChanged?.Invoke();
+        return true;
+    }
+
     public void Logout()
     {
         if (_currentUser is null)
             return;
+
+        if (_sessionToken is not null)
+        {
+            sessionStore.Remove(_sessionToken);
+            _sessionToken = null;
+        }
 
         _currentUser = null;
         StateChanged?.Invoke();
@@ -134,6 +162,12 @@ public sealed class AppUserSessionService(
         var activeSqlSession = sessionService.GetActiveSession();
         if (activeSqlSession is null || activeSqlSession.Id != _currentUser.SqlSessionId)
         {
+            if (_sessionToken is not null)
+            {
+                sessionStore.Remove(_sessionToken);
+                _sessionToken = null;
+            }
+
             _currentUser = null;
             StateChanged?.Invoke();
         }

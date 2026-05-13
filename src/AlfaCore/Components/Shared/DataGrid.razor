@@ -1,0 +1,118 @@
+<section class="panel-card">
+    <div class="panel-card__header">
+        <div>
+            <h3 class="panel-card__title">@Title</h3>
+            @if (!string.IsNullOrWhiteSpace(Subtitle))
+            {
+                <p class="panel-card__subtitle">@Subtitle</p>
+            }
+        </div>
+        @if (HeaderActions is not null)
+        {
+            <div class="actions">@HeaderActions</div>
+        }
+    </div>
+
+    @if (BeforeTable is not null)
+    {
+        @BeforeTable
+    }
+
+    @if (Loading)
+    {
+        <div class="usuarios-empty"><i class="bi bi-hourglass-split"></i> Cargando...</div>
+    }
+    else if (Rows.Count == 0)
+    {
+        <div class="usuarios-empty">@EmptyMessage</div>
+    }
+    else
+    {
+        <div class="usuarios-table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        @foreach (var (col, i) in Columns.Select((c, i) => (c, i)))
+                        {
+                            var iCopy = i;
+                            <th class="sortable @(SortCol == i ? (SortDesc ? "sort-desc" : "sort-asc") : "")"
+                                @onclick="() => OnSort.InvokeAsync(iCopy)"
+                                title="Ordenar por @col">
+                                @col
+                                <i class="bi @(SortCol == i ? (SortDesc ? "bi-sort-down" : "bi-sort-up") : "bi-arrow-down-up") sort-icon"></i>
+                            </th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Rows)
+                    {
+                        <tr class="data-grid__row">
+                            @foreach (var val in row)
+                            {
+                                <td title="@val">@val</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (TotalRows > PageSize)
+        {
+            var totalPaginas = (int)Math.Ceiling(TotalRows / (double)PageSize);
+            var desde = Page * PageSize + 1;
+            var hasta = Math.Min((Page + 1) * PageSize, TotalRows);
+            var pDesde = Math.Max(0, Page - 2);
+            var pHasta = Math.Min(totalPaginas - 1, Page + 2);
+
+            <div class="result-pagination">
+                <div class="result-pagination__info">
+                    Mostrando @desde–@hasta de @TotalRows filas
+                </div>
+                <div class="result-pagination__controls">
+                    <button class="result-pagination__btn" @onclick="() => OnPageChange.InvokeAsync(0)" disabled="@(Page == 0)" title="Primera">«</button>
+                    <button class="result-pagination__btn" @onclick="() => OnPageChange.InvokeAsync(Page - 1)" disabled="@(Page == 0)" title="Anterior">‹</button>
+                    @for (int p = pDesde; p <= pHasta; p++)
+                    {
+                        var pCopy = p;
+                        <button class="result-pagination__btn @(pCopy == Page ? "result-pagination__btn--active" : "")"
+                                @onclick="() => OnPageChange.InvokeAsync(pCopy)">@(pCopy + 1)</button>
+                    }
+                    <button class="result-pagination__btn" @onclick="() => OnPageChange.InvokeAsync(Page + 1)" disabled="@(Page >= totalPaginas - 1)" title="Siguiente">›</button>
+                    <button class="result-pagination__btn" @onclick="() => OnPageChange.InvokeAsync(totalPaginas - 1)" disabled="@(Page >= totalPaginas - 1)" title="Última">»</button>
+                </div>
+                <select class="result-pagination__size"
+                        @onchange="e => OnPageSizeChange.InvokeAsync(int.Parse(e.Value!.ToString()!))">
+                    <option value="25" selected="@(PageSize == 25)">25 / pág.</option>
+                    <option value="50" selected="@(PageSize == 50)">50 / pág.</option>
+                    <option value="100" selected="@(PageSize == 100)">100 / pág.</option>
+                    <option value="200" selected="@(PageSize == 200)">200 / pág.</option>
+                </select>
+            </div>
+        }
+    }
+</section>
+
+@code {
+    [Parameter] public string Title        { get; set; } = string.Empty;
+    [Parameter] public string? Subtitle    { get; set; }
+    [Parameter] public bool Loading        { get; set; }
+    [Parameter] public string EmptyMessage { get; set; } = "Sin datos para mostrar.";
+
+    [Parameter, EditorRequired] public IReadOnlyList<string>   Columns { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyList<string[]> Rows    { get; set; } = [];
+
+    [Parameter] public int  TotalRows { get; set; }
+    [Parameter] public int  Page      { get; set; }
+    [Parameter] public int  PageSize  { get; set; } = 50;
+    [Parameter] public int  SortCol   { get; set; } = -1;
+    [Parameter] public bool SortDesc  { get; set; }
+
+    [Parameter] public RenderFragment? HeaderActions { get; set; }
+    [Parameter] public RenderFragment? BeforeTable   { get; set; }
+
+    [Parameter] public EventCallback<int> OnSort           { get; set; }
+    [Parameter] public EventCallback<int> OnPageChange     { get; set; }
+    [Parameter] public EventCallback<int> OnPageSizeChange { get; set; }
+}

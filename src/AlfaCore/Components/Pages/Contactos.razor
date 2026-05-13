@@ -197,7 +197,7 @@
                         </div>
                         <div class="field">
                             <label>Provincia</label>
-                            <select class="@GetFieldInputClass("provincia")" @bind="_form.ProvinciaCodigo" disabled="@_saving || _loadingProvincias">
+                            <select class="@GetFieldInputClass("provincia")" @bind="_form.ProvinciaCodigo" disabled="@(_saving || _loadingProvincias)">
                                 <option value="">Seleccionar...</option>
                                 @foreach (var item in _provincias)
                                 {

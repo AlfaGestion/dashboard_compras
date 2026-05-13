@@ -67,17 +67,34 @@ else
                             <label class="consulta-params__label">@param.Campo</label>
                             @if (param.Tipo == TipoParametro.Fecha)
                             {
-                                <input class="consulta-params__input"
-                                       type="date"
-                                       value="@_valores[param.Orden]"
-                                       @onchange="e => _valores[param.Orden] = e.Value?.ToString() ?? string.Empty" />
+                                var orden = param.Orden;
+                                <div class="consulta-params__date-wrap">
+                                    <div class="quick-range quick-range--sm">
+                                        <button class="btn btn--ghost btn--xs" type="button"
+                                                @onclick="() => SetFecha(orden, DateTime.Today)">Hoy</button>
+                                        <button class="btn btn--ghost btn--xs" type="button"
+                                                @onclick="() => SetFecha(orden, InicioSemana())">Esta semana</button>
+                                        <button class="btn btn--ghost btn--xs" type="button"
+                                                @onclick="() => SetFecha(orden, InicioMes())">Este mes</button>
+                                        <button class="btn btn--ghost btn--xs" type="button"
+                                                @onclick="() => SetFecha(orden, InicioMesAnterior())">Mes ant.</button>
+                                        <button class="btn btn--ghost btn--xs" type="button"
+                                                @onclick="() => SetFecha(orden, DateTime.Today.AddMonths(-3))">-3 meses</button>
+                                        <button class="btn btn--ghost btn--xs" type="button"
+                                                @onclick="() => SetFecha(orden, InicioAnio())">Año actual</button>
+                                    </div>
+                                    <input class="consulta-params__input"
+                                           type="date"
+                                           value="@_valores[param.Orden]"
+                                           @onchange="e => { _valores[param.Orden] = e.Value?.ToString() ?? string.Empty; if (_resultado is not null) _resultadoDesactualizado = true; }" />
+                                </div>
                             }
                             else if (param.Tipo == TipoParametro.Numero)
                             {
                                 <input class="consulta-params__input"
                                        type="number"
                                        value="@_valores[param.Orden]"
-                                       @onchange="e => _valores[param.Orden] = e.Value?.ToString() ?? string.Empty" />
+                                       @onchange="e => { _valores[param.Orden] = e.Value?.ToString() ?? string.Empty; if (_resultado is not null) _resultadoDesactualizado = true; }" />
                             }
                             else
                             {
@@ -85,7 +102,7 @@ else
                                        type="text"
                                        placeholder="@param.Campo"
                                        value="@_valores[param.Orden]"
-                                       @onchange="e => _valores[param.Orden] = e.Value?.ToString() ?? string.Empty" />
+                                       @onchange="e => { _valores[param.Orden] = e.Value?.ToString() ?? string.Empty; if (_resultado is not null) _resultadoDesactualizado = true; }" />
                             }
                         </div>
                     }
@@ -93,8 +110,16 @@ else
             </div>
         }
 
+        @if (_resultadoDesactualizado)
+        {
+            <div class="consulta-stale-warn">
+                <i class="bi bi-arrow-repeat"></i>
+                Los filtros cambiaron. Hacé clic en <strong>Ejecutar</strong> para actualizar el resultado.
+            </div>
+        }
+
         <div class="consulta-actions">
-            <button class="btn btn--primary" @onclick="EjecutarAsync" disabled="@_ejecutando">
+            <button class="btn btn--primary @(_resultadoDesactualizado ? "btn--pulse" : "")" @onclick="EjecutarAsync" disabled="@_ejecutando">
                 @if (_ejecutando)
                 {
                     <i class="bi bi-hourglass-split"></i>
@@ -366,29 +391,35 @@ else
 
         @if (_resultado is not null && !DebeOcultarResultadoPlano())
         {
-            <div class="consulta-result">
-                @if (!_resultado.Exitoso)
-                {
-                    <div class="consulta-result__error">
-                        <i class="bi bi-exclamation-circle"></i>
-                        @_resultado.MensajeError
-                    </div>
-                }
-                else if (_resultado.Filas.Count == 0)
-                {
-                    <div class="consulta-result__empty">
-                        <i class="bi bi-inbox"></i>
-                        La consulta se ejecutó correctamente pero no devolvió datos con los parámetros actuales.
-                    </div>
-                }
-                else
-                {
-                    <div class="consulta-result__header">
-                        <div class="consulta-result__stats">
-                            <span><strong>@_resultado.TotalFilas.ToString("N0")</strong> filas</span>
-                            <span>@_resultado.TiempoEjecucion.TotalSeconds.ToString("F2") seg</span>
-                            <span class="consulta-result__ts">@_resultado.EjecutadoEn.ToString("HH:mm:ss")</span>
-                        </div>
+            @if (!_resultado.Exitoso)
+            {
+                <div class="consulta-result__error">
+                    <i class="bi bi-exclamation-circle"></i>
+                    @_resultado.MensajeError
+                </div>
+            }
+            else if (_resultado.Filas.Count == 0)
+            {
+                <div class="consulta-result__empty">
+                    <i class="bi bi-inbox"></i>
+                    La consulta se ejecutó correctamente pero no devolvió datos con los parámetros actuales.
+                </div>
+            }
+            else
+            {
+                <DataGrid Title="Resultado"
+                          Subtitle="@BuildResultSubtitle()"
+                          Columns="_resultado.Columnas"
+                          Rows="FilasPagina().ToList()"
+                          TotalRows="_filasFiltradas.Count"
+                          Page="_pagina"
+                          PageSize="_filasPorPagina"
+                          SortCol="_sortCol"
+                          SortDesc="_sortDesc"
+                          OnSort="SortBy"
+                          OnPageChange="p => { _pagina = p; }"
+                          OnPageSizeChange="s => { _filasPorPagina = s; _pagina = 0; }">
+                    <BeforeTable>
                         @if (_resultado.TieneMasFilas)
                         {
                             <div class="consulta-result__warn">
@@ -396,89 +427,24 @@ else
                                 Se muestran las primeras 500 filas. Usá Excel para ver el resultado completo.
                             </div>
                         }
-                    </div>
-
-                    <div class="result-search">
-                        <i class="bi bi-search result-search__icon"></i>
-                        <input class="result-search__input"
-                               @bind="_filtroResultado"
-                               @bind:event="oninput"
-                               @onkeydown="OnFiltroBuscarKeyDown"
-                               placeholder="Buscar en el resultado… (Enter para filtrar, Esc para limpiar)" />
-                        @if (!string.IsNullOrWhiteSpace(_filtroAplicado))
-                        {
-                            <span class="result-search__count">@_filasFiltradas.Count filas</span>
-                            <button class="result-search__clear" @onclick="LimpiarFiltro" title="Limpiar filtro">
-                                <i class="bi bi-x-lg"></i>
-                            </button>
-                        }
-                    </div>
-
-                    <div class="consulta-result__table-wrap">
-                        <table class="consulta-table">
-                            <thead>
-                                <tr>
-                                    @foreach (var (col, i) in _resultado.Columnas.Select((c, i) => (c, i)))
-                                    {
-                                        <th class="sortable @(_sortCol == i ? (_sortDesc ? "sort-desc" : "sort-asc") : "")"
-                                            @onclick="() => SortBy(i)" title="Ordenar por @col">
-                                            @col
-                                            <i class="bi @(_sortCol == i ? (_sortDesc ? "bi-sort-down" : "bi-sort-up") : "bi-arrow-down-up") sort-icon"></i>
-                                        </th>
-                                    }
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var fila in FilasPagina())
-                                {
-                                    <tr>
-                                        @foreach (var val in fila)
-                                        {
-                                            <td title="@val">@val</td>
-                                        }
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-
-                    @if (TotalPaginas > 1)
-                    {
-                        <div class="result-pagination">
-                            <div class="result-pagination__info">
-                                Mostrando @(_pagina * _filasPorPagina + 1)–@(Math.Min((_pagina + 1) * _filasPorPagina, _filasFiltradas.Count))
-                                de @_filasFiltradas.Count filas
-                                @if (!string.IsNullOrWhiteSpace(_filtroAplicado))
-                                {
-                                    <span style="color:var(--color-primary)"> (filtrado)</span>
-                                }
-                            </div>
-                            <div class="result-pagination__controls">
-                                <button class="result-pagination__btn" @onclick="() => _pagina = 0" disabled="@(_pagina == 0)" title="Primera">«</button>
-                                <button class="result-pagination__btn" @onclick="() => _pagina--" disabled="@(_pagina == 0)" title="Anterior">‹</button>
-                                @{
-                                    int desde = Math.Max(0, _pagina - 2);
-                                    int hasta = Math.Min(TotalPaginas - 1, _pagina + 2);
-                                }
-                                @for (int p = desde; p <= hasta; p++)
-                                {
-                                    var pCopy = p;
-                                    <button class="result-pagination__btn @(pCopy == _pagina ? "result-pagination__btn--active" : "")"
-                                            @onclick="() => _pagina = pCopy">@(pCopy + 1)</button>
-                                }
-                                <button class="result-pagination__btn" @onclick="() => _pagina++" disabled="@(_pagina >= TotalPaginas - 1)" title="Siguiente">›</button>
-                                <button class="result-pagination__btn" @onclick="() => _pagina = TotalPaginas - 1" disabled="@(_pagina >= TotalPaginas - 1)" title="Última">»</button>
-                            </div>
-                            <select class="result-pagination__size" @onchange="e => { _filasPorPagina = int.Parse(e.Value!.ToString()!); _pagina = 0; }">
-                                <option value="25" selected="@(_filasPorPagina == 25)">25 / pág.</option>
-                                <option value="50" selected="@(_filasPorPagina == 50)">50 / pág.</option>
-                                <option value="100" selected="@(_filasPorPagina == 100)">100 / pág.</option>
-                                <option value="200" selected="@(_filasPorPagina == 200)">200 / pág.</option>
-                            </select>
+                        <div class="result-search">
+                            <i class="bi bi-search result-search__icon"></i>
+                            <input class="result-search__input"
+                                   @bind="_filtroResultado"
+                                   @bind:event="oninput"
+                                   @onkeydown="OnFiltroBuscarKeyDown"
+                                   placeholder="Buscar en el resultado… (Enter para filtrar, Esc para limpiar)" />
+                            @if (!string.IsNullOrWhiteSpace(_filtroAplicado))
+                            {
+                                <span class="result-search__count">@_filasFiltradas.Count filas</span>
+                                <button class="result-search__clear" @onclick="LimpiarFiltro" title="Limpiar filtro">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            }
                         </div>
-                    }
-                }
-            </div>
+                    </BeforeTable>
+                </DataGrid>
+            }
         }
 
     </div>
@@ -493,6 +459,7 @@ else
     private List<NodoArbolDto> _ruta = [];
     private bool _cargando = true;
     private bool _ejecutando;
+    private bool _resultadoDesactualizado;
 
     private int _pagina = 0;
     private int _filasPorPagina = 50;
@@ -968,6 +935,7 @@ else
     {
         if (_ejecutando) return;
         _ejecutando = true;
+        _resultadoDesactualizado = false;
         _pagina = 0;
         _sortCol = -1;
         _sortDesc = false;
@@ -1036,6 +1004,20 @@ else
         return qs.Length > 0 ? $"/consultas/{Id}/descargar-excel?{qs}" : $"/consultas/{Id}/descargar-excel";
     }
 
+    private string BuildResultSubtitle()
+    {
+        if (_resultado is null) return string.Empty;
+        var parts = new List<string>
+        {
+            $"{_resultado.TotalFilas:N0} filas",
+            $"{_resultado.TiempoEjecucion.TotalSeconds:F2} seg",
+            _resultado.EjecutadoEn.ToString("HH:mm:ss")
+        };
+        if (!string.IsNullOrWhiteSpace(_filtroAplicado))
+            parts.Add($"{_filasFiltradas.Count:N0} filtradas");
+        return string.Join(" · ", parts);
+    }
+
     private async Task ImprimirAsync() =>
         await JS.InvokeVoidAsync("dashboardExport.printCurrentPage", _consulta?.Descripcion ?? "Consulta");
 
@@ -1047,4 +1029,24 @@ else
     }
 
     private sealed record TotalGrupoResultado(string Label, string Valor);
+
+    // ── Quick-range helpers ──
+    private void SetFecha(int orden, DateTime fecha)
+    {
+        _valores[orden] = fecha.ToString("yyyy-MM-dd");
+        if (_resultado is not null) _resultadoDesactualizado = true;
+    }
+
+    private static DateTime InicioSemana()
+    {
+        var t = DateTime.Today;
+        return t.AddDays(-(((int)t.DayOfWeek + 6) % 7));
+    }
+    private static DateTime InicioMes()      => new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private static DateTime InicioAnio()     => new(DateTime.Today.Year, 1, 1);
+    private static DateTime InicioMesAnterior()
+    {
+        var f = InicioMes();
+        return f.AddMonths(-1);
+    }
 }

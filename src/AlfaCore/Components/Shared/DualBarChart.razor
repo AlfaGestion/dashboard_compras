@@ -1,0 +1,163 @@
+@if (Data.Count == 0)
+{
+    <p class="chart-empty">Sin datos para graficar.</p>
+}
+else
+{
+    <div class="line-chart" @key="_renderKey">
+        <svg viewBox="0 0 800 320" class="line-chart__svg dual-bar__svg" role="img">
+
+            @* Grid horizontal *@
+            @foreach (var g in _gridLines)
+            {
+                <line x1="80" y1="@F(g.Y)" x2="780" y2="@F(g.Y)"
+                      class="line-chart__grid" style="transition:none;animation:none;" />
+            }
+            <line x1="80" y1="260" x2="780" y2="260"
+                  stroke="rgba(148,163,184,0.25)" stroke-width="1"
+                  style="transition:none;animation:none;" />
+
+            @* Barras Ventas (azul) *@
+            @foreach (var bar in _ventasBars)
+            {
+                <rect x="@F(bar.X)" y="@F(bar.Y)" width="@F(bar.W)" height="@F(bar.H)"
+                      rx="3" class="dual-bar__ventas" style="transition:none;animation:none;" />
+            }
+
+            @* Barras Compras (naranja) *@
+            @foreach (var bar in _comprasBars)
+            {
+                <rect x="@F(bar.X)" y="@F(bar.Y)" width="@F(bar.W)" height="@F(bar.H)"
+                      rx="3" class="dual-bar__compras" style="transition:none;animation:none;" />
+            }
+
+            @* Etiquetas eje X *@
+            @((MarkupString)_xLabels)
+
+            @* Etiquetas eje Y *@
+            @((MarkupString)_yLabels)
+
+            @* Leyenda *@
+            <rect x="570" y="6" width="12" height="12" rx="2" fill="#38bdf8"
+                  style="transition:none;animation:none;" />
+            <text x="586" y="17" class="line-chart__label-svg">@Label1</text>
+            <rect x="@F(570 + _legend2Offset)" y="6" width="12" height="12" rx="2" fill="#fb923c"
+                  style="transition:none;animation:none;" />
+            <text x="@F(586 + _legend2Offset)" y="17" class="line-chart__label-svg">@Label2</text>
+        </svg>
+    </div>
+}
+
+@code {
+    private static readonly System.Globalization.CultureInfo Inv =
+        System.Globalization.CultureInfo.InvariantCulture;
+    private static string F(double v) => v.ToString("F2", Inv);
+
+    private int _renderKey;
+
+    private List<BarRect>  _ventasBars  = [];
+    private List<BarRect>  _comprasBars = [];
+    private List<GridLine> _gridLines   = [];
+    private string _xLabels = string.Empty;
+    private string _yLabels = string.Empty;
+
+    [Parameter, EditorRequired] public IReadOnlyList<ComparativoMensualDto> Data { get; set; } = [];
+    [Parameter] public string Titulo    { get; set; } = string.Empty;
+    [Parameter] public string Subtitulo { get; set; } = string.Empty;
+    [Parameter] public string Label1    { get; set; } = "Ventas";
+    [Parameter] public string Label2    { get; set; } = "Compras";
+
+    private double _legend2Offset;
+
+    protected override void OnParametersSet()
+    {
+        _renderKey++;
+
+        _legend2Offset = Label1.Length * 7.5 + 25;
+
+        if (Data.Count == 0)
+        {
+            _ventasBars = []; _comprasBars = []; _gridLines = [];
+            _xLabels = _yLabels = string.Empty;
+            return;
+        }
+
+        const double chartW = 700;
+        const double chartH = 230;
+        const double startX = 80;
+
+        var maxVal = Data.Max(r => Math.Max(r.Ventas, r.Compras));
+        if (maxVal <= 0) maxVal = 1;
+
+        var slotW  = chartW / Data.Count;
+        var groupW = slotW * 0.78;
+        var barW   = groupW / 2 - 1.5;   // 1.5 px de separación entre barras del par
+
+        _ventasBars = Data.Select((row, i) =>
+        {
+            var h = (double)(row.Ventas / maxVal) * chartH;
+            return new BarRect(
+                X: startX + slotW * i + slotW * 0.11,
+                Y: 260 - h,
+                W: barW,
+                H: Math.Max(h, 1));
+        }).ToList();
+
+        _comprasBars = Data.Select((row, i) =>
+        {
+            var h = (double)(row.Compras / maxVal) * chartH;
+            return new BarRect(
+                X: startX + slotW * i + slotW * 0.11 + barW + 2,
+                Y: 260 - h,
+                W: barW,
+                H: Math.Max(h, 1));
+        }).ToList();
+
+        // Grid — 4 líneas horizontales
+        _gridLines = Enumerable.Range(1, 4)
+            .Select(i =>
+            {
+                var value = maxVal / 4m * i;
+                var y = 260 - (double)(value / maxVal) * chartH;
+                return new GridLine(y, value);
+            })
+            .Reverse()
+            .ToList();
+
+        // Etiquetas eje X (meses)
+        var esAr = System.Globalization.CultureInfo.GetCultureInfo("es-AR");
+        _xLabels = string.Join("", Data.Select((row, i) =>
+        {
+            var cx = startX + slotW * i + slotW / 2;
+            var label = string.Empty;
+            if (DateTime.TryParseExact(row.Periodo, "yyyy-MM", Inv,
+                    System.Globalization.DateTimeStyles.None, out var m))
+            {
+                var mes = m.ToString("MMM", esAr);
+                label = $"{char.ToUpper(mes[0])}{mes[1..]} '{m.ToString("yy", Inv)}";
+            }
+            else label = row.Periodo;
+
+            return $"<text x=\"{F(cx)}\" y=\"285\" class=\"line-chart__label-svg\" " +
+                   $"text-anchor=\"middle\">{System.Net.WebUtility.HtmlEncode(label)}</text>";
+        }));
+
+        // Etiquetas eje Y
+        var c = System.Globalization.CultureInfo.GetCultureInfo("es-AR");
+        _yLabels = string.Join("", _gridLines.Select(g =>
+        {
+            var label = g.Value switch
+            {
+                >= 1_000_000_000m => $"$ {(g.Value / 1_000_000_000m).ToString("N1", c)}B",
+                >= 1_000_000m     => $"$ {(g.Value / 1_000_000m).ToString("N0", c)}M",
+                >= 1_000m         => $"$ {(g.Value / 1_000m).ToString("N0", c)}K",
+                _                 => g.Value.ToString("$ #,##0", c)
+            };
+            return $"<text x=\"76\" y=\"{F(g.Y + 4)}\" class=\"line-chart__axis-svg\" " +
+                   $"text-anchor=\"end\">{System.Net.WebUtility.HtmlEncode(label)}</text>";
+        }));
+    }
+
+    private sealed record BarRect(double X, double Y, double W, double H);
+    private sealed record GridLine(double Y, decimal Value);
+}

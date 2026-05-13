@@ -230,6 +230,7 @@ public sealed class PosicionIvaDto
     public decimal NetoGravadoCompras { get; init; }
     public IReadOnlyList<PosicionIvaFilaDto> Filas { get; init; } = [];
     public IReadOnlyList<MonthlyPointDto> EvolucionSaldo { get; init; } = [];
+    public IReadOnlyList<ComparativoMensualDto> EvolucionIvaMensual { get; init; } = [];
     public IReadOnlyList<ResumenAlicuotaFilaDto> ResumenVentas { get; init; } = [];
     public IReadOnlyList<ResumenAlicuotaFilaDto> ResumenCompras { get; init; } = [];
 }
@@ -258,4 +259,19 @@ public sealed class BalanceSaldosDto
     public decimal TotalPasivo { get; init; }
     public decimal PatrimonioNeto { get; init; }
     public decimal TotalResultados { get; init; }
+}
+
+public sealed class ComparativoVentasComprasDto
+{
+    public decimal TotalVentas  { get; init; }
+    public decimal TotalCompras { get; init; }
+    public decimal Balance => TotalVentas - TotalCompras;
+    public IReadOnlyList<ComparativoMensualDto> EvolucionMensual { get; init; } = [];
+}
+
+public sealed class ComparativoMensualDto
+{
+    public string  Periodo  { get; init; } = string.Empty;
+    public decimal Ventas   { get; init; }
+    public decimal Compras  { get; init; }
 }

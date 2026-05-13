@@ -18,7 +18,7 @@
       "Usuario": "ALFANET",
       "Password": "ALFANET",
       "TrustServerCertificate": true,
-      "Activa": false
+      "Activa": true
     },
     {
       "Id": "a7860c47-5030-43e9-a6db-ee618fa9918f",
@@ -38,7 +38,17 @@
       "Usuario": "ALFANET2007",
       "Password": "ALFANET2007",
       "TrustServerCertificate": true,
-      "Activa": true
+      "Activa": false
+    },
+    {
+      "Id": "1e868fa4-a06b-47c6-9eab-2afd5165470c",
+      "Nombre": "LEXISTAPE - PRUEBAS",
+      "Servidor": "SERVER-ALFAVB6",
+      "BaseDatos": "LEXISTAPE",
+      "Usuario": "LEXISTAPE",
+      "Password": "LEXISTAPE",
+      "TrustServerCertificate": true,
+      "Activa": false
     }
   ]
 }

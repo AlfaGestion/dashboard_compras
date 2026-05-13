@@ -309,6 +309,124 @@ public sealed class GestionDashboardService(
         }, "No se pudo cargar el dashboard de ventas.", ct);
     }
 
+    public async Task<ComparativoVentasComprasDto> GetComparativoAsync(VentasDashboardFilters filters, CancellationToken ct = default)
+    {
+        filters ??= new VentasDashboardFilters();
+
+        return await ExecuteLoggedAsync("Ventas", "GetComparativo", async token =>
+        {
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+
+            // KPI — total ventas del período (misma fuente que el dashboard de ventas)
+            decimal totalVentas = 0;
+            await using (var cmd = new SqlCommand("""
+                SELECT ISNULL(SUM(l.IMPORTE), 0)
+                FROM dbo.Libro_VentasConFP l
+                WHERE (@FechaDesde IS NULL OR l.FECHA >= @FechaDesde)
+                  AND (@FechaHastaExclusive IS NULL OR l.FECHA < @FechaHastaExclusive)
+                """, cn))
+            {
+                BindDateRange(cmd, filters.FechaDesde, filters.FechaHasta);
+                await using var rd = await cmd.ExecuteReaderAsync(token);
+                if (await rd.ReadAsync(token)) totalVentas = GetDecimal(rd, 0);
+            }
+
+            // KPI — total compras del período (libro IVA compras: base gravada + IVA por alícuota)
+            decimal totalCompras = 0;
+            await using (var cmd = new SqlCommand("""
+                SELECT ISNULL(SUM(
+                           ISNULL(c.NETO_GRAVADO, 0)
+                         + ISNULL(c.IVA_21,       0)
+                         + ISNULL(c.IVA_105,      0)
+                         + ISNULL(c.IVA_27,       0)
+                         + ISNULL(c.IVA_1735,     0)
+                       ), 0)
+                FROM dbo.LibroIvaCompras_Contadores c
+                WHERE (@FechaDesde IS NULL OR c.FECHA >= @FechaDesde)
+                  AND (@FechaHastaExclusive IS NULL OR c.FECHA < @FechaHastaExclusive)
+                """, cn))
+            {
+                BindDateRange(cmd, filters.FechaDesde, filters.FechaHasta);
+                await using var rd = await cmd.ExecuteReaderAsync(token);
+                if (await rd.ReadAsync(token)) totalCompras = GetDecimal(rd, 0);
+            }
+
+            // Evolución mensual — ventas (últimos 12 meses respecto a FechaHasta)
+            var meses = BuildLast12Months(filters.FechaHasta);
+            var fechaHastaExcl = filters.FechaHasta.HasValue
+                ? (object)filters.FechaHasta.Value.Date.AddDays(1)
+                : DBNull.Value;
+
+            var ventasMes = new Dictionary<string, decimal>();
+            await using (var cmd = new SqlCommand("""
+                SELECT FORMAT(l.FECHA, 'yyyy-MM'), ISNULL(SUM(l.IMPORTE), 0)
+                FROM dbo.Libro_VentasConFP l
+                WHERE l.FECHA >= @EvolucionDesde
+                  AND (@FechaHastaExclusive IS NULL OR l.FECHA < @FechaHastaExclusive)
+                GROUP BY FORMAT(l.FECHA, 'yyyy-MM')
+                """, cn))
+            {
+                cmd.Parameters.AddWithValue("@EvolucionDesde", meses[0]);
+                cmd.Parameters.AddWithValue("@FechaHastaExclusive", fechaHastaExcl);
+                await using var rd = await cmd.ExecuteReaderAsync(token);
+                while (await rd.ReadAsync(token))
+                    ventasMes[rd.GetString(0)] = GetDecimal(rd, 1);
+            }
+
+            // Evolución mensual — compras (últimos 12 meses)
+            var comprasMes = new Dictionary<string, decimal>();
+            await using (var cmd = new SqlCommand("""
+                SELECT FORMAT(c.FECHA, 'yyyy-MM'),
+                       ISNULL(SUM(
+                           ISNULL(c.NETO_GRAVADO, 0)
+                         + ISNULL(c.IVA_21,       0)
+                         + ISNULL(c.IVA_105,      0)
+                         + ISNULL(c.IVA_27,       0)
+                         + ISNULL(c.IVA_1735,     0)
+                       ), 0)
+                FROM dbo.LibroIvaCompras_Contadores c
+                WHERE c.FECHA >= @EvolucionDesde
+                  AND (@FechaHastaExclusive IS NULL OR c.FECHA < @FechaHastaExclusive)
+                GROUP BY FORMAT(c.FECHA, 'yyyy-MM')
+                """, cn))
+            {
+                cmd.Parameters.AddWithValue("@EvolucionDesde", meses[0]);
+                cmd.Parameters.AddWithValue("@FechaHastaExclusive", fechaHastaExcl);
+                await using var rd = await cmd.ExecuteReaderAsync(token);
+                while (await rd.ReadAsync(token))
+                    comprasMes[rd.GetString(0)] = GetDecimal(rd, 1);
+            }
+
+            var evolucion = meses
+                .Select(m =>
+                {
+                    var key = m.ToString("yyyy-MM");
+                    return new ComparativoMensualDto
+                    {
+                        Periodo = key,
+                        Ventas  = ventasMes.TryGetValue(key,  out var v) ? v : 0,
+                        Compras = comprasMes.TryGetValue(key, out var c) ? c : 0
+                    };
+                })
+                .ToList();
+
+            return new ComparativoVentasComprasDto
+            {
+                TotalVentas      = totalVentas,
+                TotalCompras     = totalCompras,
+                EvolucionMensual = evolucion
+            };
+        }, "No se pudo cargar el comparativo de ventas y compras.", ct);
+    }
+
+    private static List<DateTime> BuildLast12Months(DateTime? referencia)
+    {
+        var hasta   = referencia ?? DateTime.Today;
+        var inicio  = new DateTime(hasta.Year, hasta.Month, 1).AddMonths(-11);
+        return Enumerable.Range(0, 12).Select(i => inicio.AddMonths(i)).ToList();
+    }
+
     public async Task<VentasClientesPageDto> GetVentasClientesAsync(VentasDashboardFilters filters, CancellationToken ct = default)
     {
         filters ??= new VentasDashboardFilters();
@@ -1233,6 +1351,9 @@ public sealed class GestionDashboardService(
             var evolucionSaldo = periods
                 .Select(p => new MonthlyPointDto { Periodo = p, Total = vm.GetValueOrDefault(p) - cm2.GetValueOrDefault(p) })
                 .ToList();
+            var evolucionIvaMensual = periods
+                .Select(p => new ComparativoMensualDto { Periodo = p, Ventas = vm.GetValueOrDefault(p), Compras = cm2.GetValueOrDefault(p) })
+                .ToList();
 
             // Resumen por condición IVA y alícuota
             const string condIva =
@@ -1295,6 +1416,7 @@ public sealed class GestionDashboardService(
                 NetoGravadoCompras = c[7],
                 Filas              = filas,
                 EvolucionSaldo     = evolucionSaldo,
+                EvolucionIvaMensual = evolucionIvaMensual,
                 ResumenVentas      = resumenVentas,
                 ResumenCompras     = resumenCompras,
             };

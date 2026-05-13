@@ -467,6 +467,13 @@ select {
     transform: translateY(-1px);
 }
 
+.btn--xs {
+    padding: 0.2rem 0.55rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    border-radius: 6px;
+}
+
 .btn--primary {
     background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
     color: white;
@@ -1716,12 +1723,83 @@ html[data-theme="light"] .resumen-alicuota-table tr.row-subtotal td {
     stroke-width: 2.5;
     stroke-linecap: round;
     stroke-linejoin: round;
+    transition: none;
+    animation: none;
 }
 
 .line-chart__point {
     fill: #ecfeff;
     stroke: #14b8a6;
     stroke-width: 2.5;
+    transition: none;
+    animation: none;
+}
+
+.line-chart__bar {
+    fill: #38bdf8;
+    opacity: .82;
+    transition: none;
+    animation: none;
+}
+
+.dual-bar__ventas {
+    fill: #38bdf8;
+    opacity: .85;
+    transition: none;
+    animation: none;
+}
+
+.dual-bar__compras {
+    fill: #fb923c;
+    opacity: .85;
+    transition: none;
+    animation: none;
+}
+
+.dual-bar__svg {
+    overflow: visible;
+}
+
+.line-chart__svg * {
+    transition: none !important;
+    animation: none !important;
+}
+
+/* Chart-type selector */
+.chart-type-switch {
+    display: inline-flex;
+    gap: .15rem;
+    background: rgba(255,255,255,.04);
+    border: 1px solid var(--color-border);
+    border-radius: 7px;
+    padding: .18rem;
+}
+
+.chart-type-switch__btn {
+    padding: .28rem .6rem;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--color-muted);
+    font-size: .82rem;
+    cursor: pointer;
+    line-height: 1;
+    transition: background .12s, color .12s;
+}
+
+.chart-type-switch__btn--active {
+    background: rgba(14,165,233,.2);
+    color: #7dd3fc;
+}
+
+html[data-theme="light"] .chart-type-switch {
+    background: rgba(0,0,0,.04);
+    border-color: rgba(0,0,0,.12);
+}
+
+html[data-theme="light"] .chart-type-switch__btn--active {
+    background: rgba(14,165,233,.15);
+    color: #0284c7;
 }
 
 .line-chart__label-svg {
@@ -3626,7 +3704,6 @@ html[data-theme="light"] .conv-config-status--pending {
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
-    max-width: 1100px;
 }
 
 .consulta-detalle__back {
@@ -3720,6 +3797,36 @@ html[data-theme="light"] .conv-config-status--pending {
     outline: none;
     border-color: var(--color-primary);
 }
+
+.consulta-params__date-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.quick-range--sm {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+.consulta-stale-warn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.85rem;
+    border-radius: 8px;
+    background: rgba(234, 179, 8, 0.12);
+    border: 1px solid rgba(234, 179, 8, 0.4);
+    color: #fbbf24;
+    font-size: 0.85rem;
+}
+
+@keyframes btn-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.5); }
+    50%       { box-shadow: 0 0 0 6px rgba(37, 99, 235, 0); }
+}
+.btn--pulse { animation: btn-pulse 1.5s ease-in-out infinite; }
 
 .consulta-actions {
     display: flex;
@@ -5191,6 +5298,116 @@ th.sort-desc .sort-icon { opacity: 1; color: var(--color-primary); }
     cursor: pointer;
 }
 
+/* ── View switch (Ventas / Comparativo) ── */
+.view-switch {
+    display: inline-flex;
+    gap: .2rem;
+    background: rgba(255, 255, 255, .05);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: .2rem;
+}
+
+.view-switch__btn {
+    padding: .3rem 1rem;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--color-muted);
+    font-size: .85rem;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+}
+
+.view-switch__btn--active {
+    background: rgba(14, 165, 233, .18);
+    color: #7dd3fc;
+    font-weight: 600;
+}
+
+html[data-theme="light"] .view-switch {
+    background: rgba(0, 0, 0, .04);
+    border-color: rgba(0, 0, 0, .12);
+}
+
+html[data-theme="light"] .view-switch__btn--active {
+    background: rgba(14, 165, 233, .15);
+    color: #0284c7;
+}
+
+.comparativo-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .88rem;
+}
+
+.comparativo-table th,
+.comparativo-table td {
+    padding: .45rem .75rem;
+    text-align: right;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.comparativo-table th:first-child,
+.comparativo-table td:first-child {
+    text-align: left;
+}
+
+.comparativo-table th {
+    color: var(--color-muted);
+    font-weight: 600;
+    font-size: .82rem;
+}
+
+.comparativo-table tbody tr:hover td {
+    background: rgba(125, 211, 252, .06);
+}
+
+.comparativo-table .balance-pos { color: #4ade80; }
+.comparativo-table .balance-neg { color: #f87171; }
+
+html[data-theme="light"] .comparativo-table .balance-pos { color: #16a34a; }
+html[data-theme="light"] .comparativo-table .balance-neg { color: #dc2626; }
+
+.kpi-card--compras {
+    border-color: rgba(251, 146, 60, .35);
+    background: linear-gradient(135deg,
+        rgba(251, 146, 60, .08),
+        rgba(13, 27, 48, .96) 60%
+    );
+}
+
+.kpi-card--balance-pos {
+    border-color: rgba(74, 222, 128, .35);
+    background: linear-gradient(135deg,
+        rgba(74, 222, 128, .08),
+        rgba(13, 27, 48, .96) 60%
+    );
+}
+
+.kpi-card--balance-neg {
+    border-color: rgba(248, 113, 113, .35);
+    background: linear-gradient(135deg,
+        rgba(248, 113, 113, .08),
+        rgba(13, 27, 48, .96) 60%
+    );
+}
+
+html[data-theme="light"] .kpi-card--compras {
+    background: linear-gradient(135deg, #fff7ed, #ffffff);
+    border-color: rgba(234, 88, 12, .25);
+}
+
+html[data-theme="light"] .kpi-card--balance-pos {
+    background: linear-gradient(135deg, #f0fdf4, #ffffff);
+    border-color: rgba(22, 163, 74, .25);
+}
+
+html[data-theme="light"] .kpi-card--balance-neg {
+    background: linear-gradient(135deg, #fef2f2, #ffffff);
+    border-color: rgba(220, 38, 38, .25);
+}
+
 /* ── Breadcrumb de consulta ── */
 .breadcrumb {
     display: flex;
@@ -6384,6 +6601,14 @@ html[data-theme="light"] .balance-row--detalle td {
 
 .usuarios-table__row.is-selected td {
     background: rgba(37, 99, 235, 0.1);
+}
+
+.data-grid__row {
+    transition: background-color .2s ease;
+}
+
+.data-grid__row:hover td {
+    background: rgba(37, 99, 235, 0.06);
 }
 
 .usuarios-table__name {

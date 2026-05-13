@@ -6,6 +6,7 @@ public interface IGestionDashboardService
 {
     Task<VentasFilterOptionsDto> GetVentasFilterOptionsAsync(CancellationToken ct = default);
     Task<VentasDashboardDto> GetVentasAsync(VentasDashboardFilters filters, CancellationToken ct = default);
+    Task<ComparativoVentasComprasDto> GetComparativoAsync(VentasDashboardFilters filters, CancellationToken ct = default);
     Task<VentasClientesPageDto> GetVentasClientesAsync(VentasDashboardFilters filters, CancellationToken ct = default);
     Task<VentasRubrosPageDto> GetVentasRubrosAsync(VentasDashboardFilters filters, CancellationToken ct = default);
     Task<VentasFamiliasPageDto> GetVentasFamiliasAsync(VentasDashboardFilters filters, CancellationToken ct = default);
