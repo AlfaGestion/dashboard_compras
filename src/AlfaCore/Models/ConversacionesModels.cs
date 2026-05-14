@@ -76,6 +76,7 @@ public sealed class ConversacionMensajeDto
     public string Direction { get; set; } = string.Empty;
     public string EstadoEnvio { get; set; } = string.Empty;
     public string Texto { get; set; } = string.Empty;
+    public string PayloadJson { get; set; } = string.Empty;
     public DateTime FechaHora { get; set; }
     public string UsuarioAutor { get; set; } = string.Empty;
     public string SistemaAutor { get; set; } = string.Empty;
