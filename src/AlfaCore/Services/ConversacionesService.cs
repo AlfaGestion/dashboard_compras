@@ -344,6 +344,7 @@ public sealed class ConversacionesService(
                     Direction = GetString(rd, 6),
                     EstadoEnvio = GetString(rd, 7),
                     Texto = GetString(rd, 8),
+                    PayloadJson = GetString(rd, 14),
                     FechaHora = rd.IsDBNull(9) ? DateTime.MinValue : rd.GetDateTime(9),
                     UsuarioAutor = GetString(rd, 10),
                     SistemaAutor = GetString(rd, 11),
@@ -352,7 +353,7 @@ public sealed class ConversacionesService(
                     TieneAdjuntos = GetInt(rd, 15) == 1
                 };
 
-                var payloadJson = GetString(rd, 14);
+                var payloadJson = item.PayloadJson;
                 if (ShouldHydrateIncomingMedia(item, payloadJson))
                 {
                     pendingMediaHydration.Add(new PendingMediaHydration
@@ -2537,6 +2538,30 @@ public sealed class ConversacionesService(
             text.TryGetProperty("body", out var body))
             return body.GetString() ?? string.Empty;
 
+        if (string.Equals(type, "location", StringComparison.OrdinalIgnoreCase))
+            return ExtractLocationText(message);
+
+        if (string.Equals(type, "contacts", StringComparison.OrdinalIgnoreCase))
+            return ExtractContactsText(message);
+
+        if (string.Equals(type, "button", StringComparison.OrdinalIgnoreCase))
+            return ExtractButtonText(message);
+
+        if (string.Equals(type, "interactive", StringComparison.OrdinalIgnoreCase))
+            return ExtractInteractiveText(message);
+
+        if (string.Equals(type, "reaction", StringComparison.OrdinalIgnoreCase))
+            return ExtractReactionText(message);
+
+        if (string.Equals(type, "order", StringComparison.OrdinalIgnoreCase))
+            return ExtractOrderText(message);
+
+        if (string.Equals(type, "system", StringComparison.OrdinalIgnoreCase))
+            return ExtractSystemText(message);
+
+        if (string.Equals(type, "unsupported", StringComparison.OrdinalIgnoreCase))
+            return ExtractUnsupportedText(message);
+
         if (TryGetMediaPayload(message, type, out var media))
         {
             if (media.TryGetProperty("caption", out var caption))
@@ -2556,6 +2581,160 @@ public sealed class ConversacionesService(
 
         return $"[{type}]";
     }
+
+    private static string ExtractLocationText(JsonElement message)
+    {
+        if (!message.TryGetProperty("location", out var location))
+            return "Ubicación compartida.";
+
+        var name = location.TryGetProperty("name", out var nameProp) ? nameProp.GetString() ?? string.Empty : string.Empty;
+        var address = location.TryGetProperty("address", out var addressProp) ? addressProp.GetString() ?? string.Empty : string.Empty;
+        var latitude = location.TryGetProperty("latitude", out var latProp) ? latProp.ToString() : string.Empty;
+        var longitude = location.TryGetProperty("longitude", out var lonProp) ? lonProp.ToString() : string.Empty;
+        var coordinates = string.IsNullOrWhiteSpace(latitude) || string.IsNullOrWhiteSpace(longitude)
+            ? string.Empty
+            : $"{latitude}, {longitude}";
+
+        return FirstNonEmpty(
+            JoinText("Ubicación compartida", name),
+            JoinText("Ubicación compartida", address),
+            JoinText("Ubicación compartida", coordinates),
+            "Ubicación compartida.");
+    }
+
+    private static string ExtractContactsText(JsonElement message)
+    {
+        if (!message.TryGetProperty("contacts", out var contacts) || contacts.ValueKind != JsonValueKind.Array)
+            return "Contacto compartido.";
+
+        var names = new List<string>();
+        foreach (var contact in contacts.EnumerateArray())
+        {
+            if (contact.TryGetProperty("name", out var name) &&
+                name.TryGetProperty("formatted_name", out var formattedName))
+            {
+                var value = formattedName.GetString();
+                if (!string.IsNullOrWhiteSpace(value))
+                    names.Add(value);
+            }
+        }
+
+        return names.Count == 0
+            ? "Contacto compartido."
+            : $"Contacto compartido: {string.Join(", ", names)}";
+    }
+
+    private static string ExtractButtonText(JsonElement message)
+    {
+        if (!message.TryGetProperty("button", out var button))
+            return "Botón seleccionado.";
+
+        var text = button.TryGetProperty("text", out var textProp) ? textProp.GetString() ?? string.Empty : string.Empty;
+        var payload = button.TryGetProperty("payload", out var payloadProp) ? payloadProp.GetString() ?? string.Empty : string.Empty;
+        return JoinText("Botón seleccionado", FirstNonEmpty(text, payload));
+    }
+
+    private static string ExtractInteractiveText(JsonElement message)
+    {
+        if (!message.TryGetProperty("interactive", out var interactive))
+            return "Respuesta interactiva recibida.";
+
+        if (interactive.TryGetProperty("button_reply", out var buttonReply))
+            return JoinText("Respuesta interactiva", ExtractReplyTitle(buttonReply));
+
+        if (interactive.TryGetProperty("list_reply", out var listReply))
+            return JoinText("Respuesta de lista", ExtractReplyTitle(listReply));
+
+        if (interactive.TryGetProperty("nfm_reply", out var flowReply))
+            return JoinText("Respuesta de formulario", ExtractReplyTitle(flowReply));
+
+        var type = interactive.TryGetProperty("type", out var typeProp) ? typeProp.GetString() ?? string.Empty : string.Empty;
+        return JoinText("Respuesta interactiva recibida", type);
+    }
+
+    private static string ExtractReactionText(JsonElement message)
+    {
+        if (!message.TryGetProperty("reaction", out var reaction))
+            return "Reacción recibida.";
+
+        var emoji = reaction.TryGetProperty("emoji", out var emojiProp) ? emojiProp.GetString() ?? string.Empty : string.Empty;
+        var messageId = reaction.TryGetProperty("message_id", out var messageIdProp) ? messageIdProp.GetString() ?? string.Empty : string.Empty;
+        var detail = FirstNonEmpty(emoji, messageId);
+        return string.IsNullOrWhiteSpace(detail)
+            ? "Reacción recibida."
+            : $"Reacción recibida: {detail}";
+    }
+
+    private static string ExtractOrderText(JsonElement message)
+    {
+        if (!message.TryGetProperty("order", out var order))
+            return "Pedido de catálogo recibido.";
+
+        var catalog = order.TryGetProperty("catalog_id", out var catalogProp) ? catalogProp.GetString() ?? string.Empty : string.Empty;
+        var count = 0;
+        if (order.TryGetProperty("product_items", out var items) && items.ValueKind == JsonValueKind.Array)
+            count = items.GetArrayLength();
+
+        var detail = count > 0 ? $"{count} producto(s)" : catalog;
+        return JoinText("Pedido de catálogo recibido", detail);
+    }
+
+    private static string ExtractSystemText(JsonElement message)
+    {
+        if (!message.TryGetProperty("system", out var system))
+            return "Evento de sistema de WhatsApp.";
+
+        var body = system.TryGetProperty("body", out var bodyProp) ? bodyProp.GetString() ?? string.Empty : string.Empty;
+        var type = system.TryGetProperty("type", out var typeProp) ? typeProp.GetString() ?? string.Empty : string.Empty;
+        return JoinText("Evento de sistema de WhatsApp", FirstNonEmpty(body, type));
+    }
+
+    private static string ExtractUnsupportedText(JsonElement message)
+    {
+        var unsupportedType = string.Empty;
+        if (message.TryGetProperty("unsupported", out var unsupported) &&
+            unsupported.TryGetProperty("type", out var unsupportedTypeProp))
+        {
+            unsupportedType = unsupportedTypeProp.GetString() ?? string.Empty;
+        }
+
+        var reason = ExtractFirstErrorDetail(message);
+        return JoinText("Mensaje no compatible recibido", FirstNonEmpty(unsupportedType, reason));
+    }
+
+    private static string ExtractReplyTitle(JsonElement reply)
+    {
+        var title = reply.TryGetProperty("title", out var titleProp) ? titleProp.GetString() ?? string.Empty : string.Empty;
+        var body = reply.TryGetProperty("body", out var bodyProp) ? bodyProp.GetString() ?? string.Empty : string.Empty;
+        var name = reply.TryGetProperty("name", out var nameProp) ? nameProp.GetString() ?? string.Empty : string.Empty;
+        var id = reply.TryGetProperty("id", out var idProp) ? idProp.GetString() ?? string.Empty : string.Empty;
+        return FirstNonEmpty(title, body, name, id);
+    }
+
+    private static string ExtractFirstErrorDetail(JsonElement message)
+    {
+        if (!message.TryGetProperty("errors", out var errors) || errors.ValueKind != JsonValueKind.Array)
+            return string.Empty;
+
+        foreach (var error in errors.EnumerateArray())
+        {
+            var details = string.Empty;
+            if (error.TryGetProperty("error_data", out var errorData) &&
+                errorData.TryGetProperty("details", out var detailsProp))
+                details = detailsProp.GetString() ?? string.Empty;
+
+            var errorMessage = error.TryGetProperty("message", out var messageProp) ? messageProp.GetString() ?? string.Empty : string.Empty;
+            var title = error.TryGetProperty("title", out var titleProp) ? titleProp.GetString() ?? string.Empty : string.Empty;
+            var result = FirstNonEmpty(details, errorMessage, title);
+            if (!string.IsNullOrWhiteSpace(result))
+                return result;
+        }
+
+        return string.Empty;
+    }
+
+    private static string JoinText(string label, string detail)
+        => string.IsNullOrWhiteSpace(detail) ? $"{label}." : $"{label}: {detail}";
 
     private async Task<string> SaveIncomingAttachmentAsync(long conversationId, string fileName, byte[] bytes, CancellationToken ct)
     {
@@ -2982,7 +3161,13 @@ public sealed class ConversacionesService(
             "STICKER" => normalized,
             "LOCATION" => normalized,
             "CONTACT" => normalized,
+            "CONTACTS" => normalized,
+            "BUTTON" => normalized,
+            "INTERACTIVE" => normalized,
+            "REACTION" => normalized,
+            "ORDER" => normalized,
             "SYSTEM" => normalized,
+            "UNSUPPORTED" => normalized,
             _ => "UNKNOWN"
         };
     }

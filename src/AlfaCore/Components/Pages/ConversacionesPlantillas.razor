@@ -13,12 +13,25 @@
             <a class="btn btn--ghost" href="/conversaciones">
                 <i class="bi bi-inbox-fill"></i> Inbox
             </a>
-            <button type="button" class="btn btn--primary" @onclick="NuevaPlantilla">
-                <i class="bi bi-plus-circle-fill"></i> Nueva plantilla
-            </button>
-            <button type="button" class="btn btn--ghost" @onclick="AplicarModeloCobranzaAsync">
-                <i class="bi bi-receipt"></i> Modelo cobranza
-            </button>
+            <div style="position: relative;">
+                <button type="button" class="btn btn--primary" style="@CrearButtonStyle" @onclick="ToggleMenuCrear">
+                    <i class="bi @CrearButtonIcon"></i> @CrearButtonLabel
+                </button>
+                @if (_mostrarMenuCrear)
+                {
+                    <div style="position: absolute; right: 0; top: calc(100% + .45rem); z-index: 40; min-width: 170px; padding: .35rem; border: 1px solid rgba(71, 85, 105, .95); border-radius: 12px; background: #0f172a; box-shadow: 0 16px 36px rgba(0, 0, 0, .32);">
+                        <button type="button" class="btn btn--ghost" style="width: 100%; justify-content: flex-start; margin-bottom: .25rem;" @onclick="CrearPlantillaBase">
+                            <i class="bi bi-file-text"></i> Plantilla
+                        </button>
+                        <button type="button" class="btn btn--ghost" style="width: 100%; justify-content: flex-start; margin-bottom: .25rem;" @onclick="AplicarPlantillaFacturaMantenimientoAsync">
+                            <i class="bi bi-file-earmark-text"></i> Factura
+                        </button>
+                        <button type="button" class="btn btn--ghost" style="width: 100%; justify-content: flex-start;" @onclick="AplicarPlantillaCobranzaAsync">
+                            <i class="bi bi-receipt"></i> Cobranza
+                        </button>
+                    </div>
+                }
+            </div>
         </div>
     </div>
 
@@ -164,8 +177,12 @@
                     <div class="templates-variable-guide">
                         <span class="context-card__label">Variables automáticas sugeridas</span>
                         <button type="button" class="templates-variable-chip" @onclick='() => InsertVariable("{{1}}")'>@("{{1}} Nombre")</button>
-                        <button type="button" class="templates-variable-chip" @onclick='() => InsertVariable("{{2}}")'>@("{{2}} Detalle de deuda")</button>
-                        <button type="button" class="templates-variable-chip" @onclick='() => InsertVariable("{{3}}")'>@("{{3}} Forma de pago")</button>
+                        <button type="button" class="templates-variable-chip" @onclick='() => InsertVariable("{{2}}")'>@($"{{{{2}}}} {(EsFormularioFacturaMantenimiento ? "Periodo" : "Detalle de deuda")}")</button>
+                        <button type="button" class="templates-variable-chip" @onclick='() => InsertVariable("{{3}}")'>@($"{{{{3}}}} {(EsFormularioFacturaMantenimiento ? "Detalle factura" : "Forma de pago")}")</button>
+                        @if (EsFormularioFacturaMantenimiento)
+                        {
+                            <button type="button" class="templates-variable-chip" @onclick='() => InsertVariable("{{4}}")'>@("{{4}} Forma de pago")</button>
+                        }
                     </div>
                     <label class="field">
                         <span>Plantilla activa</span>
@@ -226,6 +243,7 @@
 
 @code {
     private ConversacionPlantillaFilters _filters = new();
+    private List<ConversacionPlantillaDto> _allTemplates = [];
     private List<ConversacionPlantillaDto> _templates = [];
     private ConversacionPlantillaDto _form = NewForm();
     private long _selectedId;
@@ -236,27 +254,62 @@
     private string? _loadError;
     private string? _feedback;
     private string? _error;
+    private bool _mostrarMenuCrear;
+    private string _crearSeleccion = CrearOpciones.Crear;
+    private int _crearPulseVersion;
 
     private const string MultiValueSeparator = "---";
     private const int MetaBodyMaxLength = 550;
+
+    private static readonly string FacturaMantenimientoTemplateBody = string.Join(Environment.NewLine,
+    [
+        "Hola {{1}}, buen día.",
+        string.Empty,
+        "Te adjuntamos la factura del servicio de mantenimiento mensual. Este servicio incluye soporte, asistencia y acompañamiento ante consultas o inconvenientes sobre el sistema.",
+        string.Empty,
+        "Período: {{2}}",
+        string.Empty,
+        "Datos del comprobante:",
+        "{{3}}",
+        string.Empty,
+        "Datos para el pago:",
+        "{{4}}",
+        string.Empty,
+        "Agradecemos su pronta atención. Para consultas, quedamos a disposición.",
+        string.Empty,
+        "Saludos,",
+        "Equipo ALFANET",
+        "ALFA NET Soluciones Informáticas",
+        "WhatsApp: +54 9 11 5148-0148"
+    ]);
+
+    private static readonly string FacturaMantenimientoDetalleEjemplo = string.Join(Environment.NewLine,
+    [
+        "Factura A 0001-00001234",
+        "Fecha: 10/05/2026",
+        "Importe total: $ 150.000,00",
+        "Vencimiento: 20/05/2026"
+    ]);
+
+    private static readonly string FacturaMantenimientoFormaPagoEjemplo = string.Join(Environment.NewLine,
+    [
+        "TRANSFERENCIA BANCARIA",
+        "Alias: alfa.net.plus.mp",
+        "CVU: 0000003100085700504735",
+        "Titular: ALFA NET Soluciones Informáticas"
+    ]);
 
     private static readonly string CobranzaTemplateBody = string.Join(Environment.NewLine,
     [
         "Estimado {{1}}",
         "Esperamos que se encuentre bien.",
         string.Empty,
-        "Le recordamos que registra facturas pendientes. Para continuar brindandole el servicio, solicitamos realizar el pago o transferencia a la brevedad.",
+        "Le recordamos que registra facturas pendientes. Para continuar brindándole el servicio, solicitamos realizar el pago o transferencia a la brevedad.",
         string.Empty,
         "Detalle de cuenta:",
-        string.Empty,
         "{{2}}",
         string.Empty,
-        "Si ya realizo el pago, envie el comprobante respondiendo este mensaje o a administracion@alfagestion.com.ar.",
-        string.Empty,
-        "Alfa Net Plus",
-        "Soluciones Informaticas",
-        "Marta Ester Saez",
-        "whatsapp:+5491151480148",
+        "Si ya realizó el pago, envíe el comprobante respondiendo este mensaje o a administracion@alfagestion.com.ar.",
         string.Empty,
         "Datos para transferencia:",
         "{{3}}",
@@ -266,27 +319,34 @@
 
     private static readonly string CobranzaDetalleEjemplo = string.Join(Environment.NewLine,
     [
-        "SALDO ACTUAL............................................: 1,520,963.04",
+        "SALDO ACTUAL: $ 1.520.963,04",
         "Cantidad de comprobantes pendientes de pago: 3",
-        "Dias de atraso...............................................: 73",
-        "Fecha comprobante mas antiguo....................: 01/03/2026"
+        "Días de atraso: 73",
+        "Fecha comprobante más antiguo: 01/03/2026"
     ]);
 
     private static readonly string CobranzaFormaPagoEjemplo = string.Join(Environment.NewLine,
     [
-        "FORMA DE PAGO:",
-        "TRANSFERENCIAS",
-        "Alias",
-        "alfa.net.plus.mp",
-        "CVU",
-        "0000003100085700504735",
-        string.Empty,
-        "ANTUNEZ ALBERTO FAVIO"
+        "TRANSFERENCIA BANCARIA",
+        "Alias: alfa.net.plus.mp",
+        "CVU: 0000003100085700504735",
+        "Titular: ALFA NET Soluciones Informáticas"
     ]);
 
     private string PreviewBody => RenderPreview(_form.CuerpoTexto, ParseExamples(_examplesText));
     private int BodyLength => _form.CuerpoTexto?.Length ?? 0;
     private bool IsBodyTooLong => BodyLength > MetaBodyMaxLength;
+    private bool EsFormularioFacturaMantenimiento => EsPlantillaFacturaMantenimiento(_form);
+    private string CrearButtonLabel => _crearSeleccion;
+    private string CrearButtonIcon => _crearSeleccion switch
+    {
+        CrearOpciones.Plantilla => "bi-file-text",
+        CrearOpciones.Factura => "bi-file-earmark-text",
+        CrearOpciones.Cobranza => "bi-receipt",
+        _ => "bi-plus-circle-fill"
+    };
+    private string CrearButtonStyle
+        => $"transition: transform .18s ease, box-shadow .18s ease, background .18s ease; transform: scale({(_crearPulseVersion % 2 == 0 ? "1" : "1.035")}); box-shadow: {(_crearPulseVersion % 2 == 0 ? "0 0 0 0 rgba(45, 212, 191, 0)" : "0 0 0 3px rgba(45, 212, 191, .28)")};";
     private bool CanSaveDraft
         => !_busy
            && !string.IsNullOrWhiteSpace(_form.NombreVisible)
@@ -302,7 +362,8 @@
         _loadError = null;
         try
         {
-            _templates = (await ConversacionesSvc.GetTemplatesAsync(_filters)).ToList();
+            _allTemplates = (await ConversacionesSvc.GetTemplatesAsync(_filters)).ToList();
+            AplicarFiltroModeloSeleccionado();
             if (_selectedId > 0 && _templates.All(x => x.IdPlantilla != _selectedId))
                 NuevaPlantilla();
         }
@@ -314,6 +375,76 @@
         {
             _loading = false;
         }
+    }
+
+    private void ToggleMenuCrear()
+    {
+        _mostrarMenuCrear = !_mostrarMenuCrear;
+    }
+
+    private void CrearPlantillaBase()
+    {
+        _mostrarMenuCrear = false;
+        MarcarOpcionCrear(CrearOpciones.Plantilla);
+        AplicarFiltroModeloSeleccionado();
+        NuevaPlantilla();
+    }
+
+    private async Task AplicarPlantillaFacturaMantenimientoAsync()
+    {
+        _mostrarMenuCrear = false;
+        MarcarOpcionCrear(CrearOpciones.Factura);
+        AplicarFiltroModeloSeleccionado();
+        var model = NewFacturaMantenimientoForm();
+        var existing = _allTemplates.FirstOrDefault(x =>
+            string.Equals(x.NombreMeta, model.NombreMeta, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(x.Idioma, model.Idioma, StringComparison.OrdinalIgnoreCase));
+
+        _selectedId = existing?.IdPlantilla ?? 0;
+        model.IdPlantilla = _selectedId;
+        _form = model;
+        _examplesText = JoinMultilineValues(
+        [
+            "Cliente Alfa",
+            "Mayo 2026",
+            FacturaMantenimientoDetalleEjemplo,
+            FacturaMantenimientoFormaPagoEjemplo
+        ]);
+        _formEstadoMeta = string.IsNullOrWhiteSpace(existing?.EstadoMeta) ? "DRAFT" : existing.EstadoMeta;
+        _feedback = _selectedId > 0
+            ? "Plantilla de factura de mantenimiento cargada sobre la existente. Revisa los datos y guarda los cambios."
+            : "Plantilla de factura de mantenimiento cargada. Revisa los ejemplos y guarda el borrador.";
+        _error = null;
+
+        await Task.CompletedTask;
+    }
+
+    private async Task AplicarPlantillaCobranzaAsync()
+    {
+        _mostrarMenuCrear = false;
+        MarcarOpcionCrear(CrearOpciones.Cobranza);
+        AplicarFiltroModeloSeleccionado();
+        var model = NewCobranzaForm();
+        var existing = _allTemplates.FirstOrDefault(x =>
+            string.Equals(x.NombreMeta, model.NombreMeta, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(x.Idioma, model.Idioma, StringComparison.OrdinalIgnoreCase));
+
+        _selectedId = existing?.IdPlantilla ?? 0;
+        model.IdPlantilla = _selectedId;
+        _form = model;
+        _examplesText = JoinMultilineValues(
+        [
+            "Cliente Alfa",
+            CobranzaDetalleEjemplo,
+            CobranzaFormaPagoEjemplo
+        ]);
+        _formEstadoMeta = string.IsNullOrWhiteSpace(existing?.EstadoMeta) ? "DRAFT" : existing.EstadoMeta;
+        _feedback = _selectedId > 0
+            ? "Plantilla de cobranza cargada sobre la existente. Revisa los datos y guarda los cambios."
+            : "Plantilla de cobranza cargada. Revisa los ejemplos y guarda el borrador.";
+        _error = null;
+
+        await Task.CompletedTask;
     }
 
     private async Task HandleSearchEnter(KeyboardEventArgs args)
@@ -353,6 +484,7 @@
 
     private void NuevaPlantilla()
     {
+        _mostrarMenuCrear = false;
         _selectedId = 0;
         _form = NewForm();
         _examplesText = "Evelyn";
@@ -361,29 +493,10 @@
         _error = null;
     }
 
-    private async Task AplicarModeloCobranzaAsync()
+    private void MarcarOpcionCrear(string opcion)
     {
-        var model = NewCobranzaForm();
-        var existing = _templates.FirstOrDefault(x =>
-            string.Equals(x.NombreMeta, model.NombreMeta, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(x.Idioma, model.Idioma, StringComparison.OrdinalIgnoreCase));
-
-        _selectedId = existing?.IdPlantilla ?? 0;
-        model.IdPlantilla = _selectedId;
-        _form = model;
-        _examplesText = JoinMultilineValues(
-        [
-            "ANTU MALAL- ROLO GUAJARDO",
-            CobranzaDetalleEjemplo,
-            CobranzaFormaPagoEjemplo
-        ]);
-        _formEstadoMeta = "DRAFT";
-        _feedback = _selectedId > 0
-            ? "Modelo de cobranza cargado sobre la plantilla existente. Revisa y guarda los cambios."
-            : "Modelo de cobranza cargado. Revisa los ejemplos y guarda el borrador.";
-        _error = null;
-
-        await Task.CompletedTask;
+        _crearSeleccion = opcion;
+        _crearPulseVersion++;
     }
 
     private void InsertVariable(string variable)
@@ -498,6 +611,18 @@
             CuerpoTexto = "Hola {{1}}, te escribimos para continuar con la conversación pendiente. Respondé este mensaje y seguimos desde donde quedamos."
         };
 
+    private static ConversacionPlantillaDto NewFacturaMantenimientoForm()
+        => new()
+        {
+            NombreVisible = "Factura de mantenimiento",
+            NombreMeta = "factura_mantenimiento_soporte",
+            Categoria = ConversacionPlantillaCategorias.Utility,
+            Idioma = "es_AR",
+            Activa = true,
+            EstadoMeta = "DRAFT",
+            CuerpoTexto = FacturaMantenimientoTemplateBody
+        };
+
     private static ConversacionPlantillaDto NewCobranzaForm()
         => new()
         {
@@ -600,6 +725,36 @@
             ? "Utilidad"
             : "Marketing";
 
+    private void AplicarFiltroModeloSeleccionado()
+    {
+        _templates = _crearSeleccion switch
+        {
+            CrearOpciones.Factura => _allTemplates.Where(EsPlantillaFacturaMantenimiento).ToList(),
+            CrearOpciones.Cobranza => _allTemplates.Where(EsPlantillaCobranza).ToList(),
+            CrearOpciones.Plantilla => _allTemplates
+                .Where(x => !EsPlantillaFacturaMantenimiento(x) && !EsPlantillaCobranza(x))
+                .ToList(),
+            _ => _allTemplates.ToList()
+        };
+    }
+
+    private static bool EsPlantillaFacturaMantenimiento(ConversacionPlantillaDto item)
+    {
+        var text = $"{item.NombreVisible} {item.NombreMeta} {item.CuerpoTexto}".ToUpperInvariant();
+        return text.Contains("FACTURA", StringComparison.Ordinal)
+               && (text.Contains("MANTENIMIENTO", StringComparison.Ordinal)
+                   || text.Contains("SOPORTE", StringComparison.Ordinal));
+    }
+
+    private static bool EsPlantillaCobranza(ConversacionPlantillaDto item)
+    {
+        var text = $"{item.NombreVisible} {item.NombreMeta} {item.CuerpoTexto}".ToUpperInvariant();
+        return !EsPlantillaFacturaMantenimiento(item)
+               && (text.Contains("DEUDA", StringComparison.Ordinal)
+                   || text.Contains("COBRANZA", StringComparison.Ordinal)
+                   || text.Contains("TRANSFERENCIA", StringComparison.Ordinal));
+    }
+
     private static string FormatDate(DateTime value)
         => value == DateTime.MinValue ? "--" : value.ToString("dd/MM HH:mm");
 
@@ -610,4 +765,13 @@
         => message.Contains("CONV_PLANTILLAS", StringComparison.OrdinalIgnoreCase)
            || message.Contains("CONV_*", StringComparison.OrdinalIgnoreCase)
            || message.Contains("inicializado", StringComparison.OrdinalIgnoreCase);
+
+    private static class CrearOpciones
+    {
+        public const string Crear = "Crear";
+        public const string Plantilla = "Plantilla";
+        public const string Factura = "Factura";
+        public const string Cobranza = "Cobranza";
+    }
+
 }

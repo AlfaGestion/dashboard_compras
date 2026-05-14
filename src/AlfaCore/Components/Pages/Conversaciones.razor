@@ -1,4 +1,5 @@
 @page "/conversaciones"
+@using System.Text.Json
 @inject AlfaCore.Services.IConversacionesService ConversacionesSvc
 @inject IJSRuntime JS
 @implements IAsyncDisposable
@@ -242,7 +243,13 @@
                                     </div>
                                     @if (ShouldShowMessageText(message))
                                     {
-                                        <p class="message-card__text">@message.Texto</p>
+                                        <p class="message-card__text">@GetMessageDisplayText(message)</p>
+                                        @if (IsUnsupportedMessage(message))
+                                        {
+                                            <div class="message-card__footer">
+                                                <span>@GetUnsupportedMessageTrace(message)</span>
+                                            </div>
+                                        }
                                     }
                                     @if (message.TieneAdjuntos && _adjuntosPorMensaje.TryGetValue(message.IdMensaje, out var adjuntos))
                                     {
@@ -562,6 +569,36 @@
                         </div>
                     }
 
+                    <div class="field">
+                        <label>Adjuntos</label>
+                        <label class="btn btn--ghost" title="Adjuntar archivo" style="cursor:pointer; width: fit-content;">
+                            <i class="bi @(_uploadingTemplateFile ? "bi-hourglass-split" : "bi-paperclip")"></i>
+                            Adjuntar PDF / imagen / archivo
+                            <InputFile OnChange="HandleTemplateFileSelectedAsync" style="display:none" multiple
+                                       accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" />
+                        </label>
+                    </div>
+
+                    @if (_templatePendingAttachments.Count > 0)
+                    {
+                        <div class="conversations-pending-list">
+                            @foreach (var pending in _templatePendingAttachments)
+                            {
+                                <div class="conversations-pending-attachment @(pending.HasError ? "has-error" : string.Empty)">
+                                    <i class="bi @GetPendingAttachmentIcon(pending.TipoArchivo)"></i>
+                                    <span title="@pending.NombreArchivo">@pending.NombreArchivo</span>
+                                    @if (pending.HasError)
+                                    {
+                                        <i class="bi bi-exclamation-circle-fill" title="@pending.Error"></i>
+                                    }
+                                    <button type="button" class="btn btn--ghost btn--sm" @onclick="() => RemoveTemplatePendingAttachment(pending.Id)" title="Quitar adjunto">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    }
+
                     <div class="context-card">
                         <span class="context-card__label">Destino</span>
                         <strong>@DisplayOrFallback(_selectedConversation?.NombreVisible, _selectedConversation?.ContactoNombre)</strong>
@@ -681,6 +718,7 @@
     private bool _loadingTemplates;
     private string _templateValuesText = string.Empty;
     private string? _templateAutoNotice;
+    private bool _uploadingTemplateFile;
 
     private ConversacionesInboxFilters _filters = new() { Canal = "WHATSAPP" };
     private List<ConversacionTecnicoOptionDto> _technicians = [];
@@ -715,6 +753,7 @@
     private ElementReference _replyTextArea;
     private long? _replyEnterHandlerConversationId;
     private List<PendingAttachment> _pendingAttachments = [];
+    private List<PendingAttachment> _templatePendingAttachments = [];
 
     private static readonly TimeSpan PollingInterval = TimeSpan.FromSeconds(5);
 
@@ -1143,23 +1182,7 @@
                 _replyText = string.Empty;
             }
 
-            foreach (var attachmentToSend in attachmentsToSend)
-            {
-                attachmentToSend.Error = null;
-                await using var stream = new MemoryStream(attachmentToSend.Contenido);
-                await ConversacionesSvc.UploadAttachmentAsync(new ConversacionUploadAdjuntoRequest
-                {
-                    IdConversacion = _selectedConversation.IdConversacion,
-                    NombreArchivo = attachmentToSend.NombreArchivo,
-                    MimeType = attachmentToSend.MimeType,
-                    TipoArchivo = attachmentToSend.TipoArchivo,
-                    Contenido = stream,
-                    TamanoBytes = attachmentToSend.TamanoBytes,
-                    IdTecnicoAutor = string.IsNullOrWhiteSpace(_assignmentTechnicianId) ? null : _assignmentTechnicianId
-                });
-
-                RemovePendingAttachment(attachmentToSend.Id);
-            }
+            await UploadPendingAttachmentsAsync(attachmentsToSend, RemovePendingAttachment);
 
             _actionMessage = "Mensaje registrado correctamente.";
             await SelectConversationAsync(_selectedConversation.IdConversacion);
@@ -1291,7 +1314,12 @@
                 IdTecnicoAutor = _assignmentTechnicianId
             });
 
-            _actionMessage = "Plantilla enviada correctamente.";
+            var templateAttachmentsToSend = _templatePendingAttachments.ToList();
+            await UploadPendingAttachmentsAsync(templateAttachmentsToSend, RemoveTemplatePendingAttachment);
+
+            _actionMessage = templateAttachmentsToSend.Count == 0
+                ? "Plantilla enviada correctamente."
+                : "Plantilla y adjunto(s) enviados correctamente.";
             _showTemplatePanel = false;
             ClearTemplateSelection();
             await SelectConversationAsync(_selectedConversation.IdConversacion);
@@ -1440,7 +1468,10 @@
     }
 
     private void CloseTemplatePanel()
-        => _showTemplatePanel = false;
+    {
+        _showTemplatePanel = false;
+        _templatePendingAttachments.Clear();
+    }
 
     private async Task CrearHiloInternoAsync()
     {
@@ -1487,25 +1518,7 @@
 
         try
         {
-            const long maxSize = 25 * 1024 * 1024;
-            foreach (var file in e.GetMultipleFiles(10))
-            {
-                if (file.Size == 0)
-                    continue;
-
-                await using var stream = file.OpenReadStream(maxSize);
-                using var buffer = new MemoryStream();
-                await stream.CopyToAsync(buffer);
-
-                _pendingAttachments.Add(new PendingAttachment
-                {
-                    NombreArchivo = file.Name,
-                    MimeType = file.ContentType,
-                    TipoArchivo = InferTipoArchivo(file.ContentType),
-                    Contenido = buffer.ToArray(),
-                    TamanoBytes = file.Size
-                });
-            }
+            await AddFilesToPendingAttachmentsAsync(e, _pendingAttachments);
 
             _actionMessage = _pendingAttachments.Count == 1
                 ? "Adjunto listo para enviar."
@@ -1518,6 +1531,55 @@
         finally
         {
             _uploadingFile = false;
+        }
+    }
+
+    private async Task HandleTemplateFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        if (_selectedConversation is null) return;
+
+        _uploadingTemplateFile = true;
+        _actionMessage = null;
+        _actionError = null;
+
+        try
+        {
+            await AddFilesToPendingAttachmentsAsync(e, _templatePendingAttachments);
+
+            _actionMessage = _templatePendingAttachments.Count == 1
+                ? "Adjunto listo para enviar con la plantilla."
+                : $"{_templatePendingAttachments.Count} adjuntos listos para enviar con la plantilla.";
+        }
+        catch (Exception ex)
+        {
+            _actionError = $"No se pudo preparar el adjunto: {ex.Message}";
+        }
+        finally
+        {
+            _uploadingTemplateFile = false;
+        }
+    }
+
+    private static async Task AddFilesToPendingAttachmentsAsync(InputFileChangeEventArgs e, List<PendingAttachment> target)
+    {
+        const long maxSize = 25 * 1024 * 1024;
+        foreach (var file in e.GetMultipleFiles(10))
+        {
+            if (file.Size == 0)
+                continue;
+
+            await using var stream = file.OpenReadStream(maxSize);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+
+            target.Add(new PendingAttachment
+            {
+                NombreArchivo = file.Name,
+                MimeType = file.ContentType,
+                TipoArchivo = InferTipoArchivo(file.ContentType),
+                Contenido = buffer.ToArray(),
+                TamanoBytes = file.Size
+            });
         }
     }
 
@@ -1581,6 +1643,33 @@
     private void RemovePendingAttachment(Guid id)
         => _pendingAttachments.RemoveAll(x => x.Id == id);
 
+    private void RemoveTemplatePendingAttachment(Guid id)
+        => _templatePendingAttachments.RemoveAll(x => x.Id == id);
+
+    private async Task UploadPendingAttachmentsAsync(IReadOnlyList<PendingAttachment> attachmentsToSend, Action<Guid> removeAttachment)
+    {
+        if (_selectedConversation is null)
+            return;
+
+        foreach (var attachmentToSend in attachmentsToSend)
+        {
+            attachmentToSend.Error = null;
+            await using var stream = new MemoryStream(attachmentToSend.Contenido);
+            await ConversacionesSvc.UploadAttachmentAsync(new ConversacionUploadAdjuntoRequest
+            {
+                IdConversacion = _selectedConversation.IdConversacion,
+                NombreArchivo = attachmentToSend.NombreArchivo,
+                MimeType = attachmentToSend.MimeType,
+                TipoArchivo = attachmentToSend.TipoArchivo,
+                Contenido = stream,
+                TamanoBytes = attachmentToSend.TamanoBytes,
+                IdTecnicoAutor = string.IsNullOrWhiteSpace(_assignmentTechnicianId) ? null : _assignmentTechnicianId
+            });
+
+            removeAttachment(attachmentToSend.Id);
+        }
+    }
+
     private void CerrarNuevoHilo()
     {
         _showNuevoHilo = false;
@@ -1614,6 +1703,7 @@
         _selectedTemplateId = 0;
         _templateValuesText = string.Empty;
         _templateAutoNotice = null;
+        _templatePendingAttachments = [];
     }
 
     private static string GetDisplayName(ConversacionInboxItemDto item)
@@ -1755,6 +1845,7 @@
         => message.Direction switch
         {
             "NOTA_INTERNA" => "Nota interna",
+            _ when IsUnsupportedMessage(message) => "No compatible",
             _ => message.MessageType
         };
 
@@ -1816,6 +1907,92 @@
         }
 
         return true;
+    }
+
+    private static string GetMessageDisplayText(ConversacionMensajeDto message)
+        => IsUnsupportedMessage(message)
+            ? "WhatsApp envió un tipo de mensaje que todavía no es compatible con el módulo."
+            : message.Texto;
+
+    private static string GetUnsupportedMessageTrace(ConversacionMensajeDto message)
+    {
+        var parts = new List<string>();
+        var originalType = ExtractPayloadString(message.PayloadJson, "type");
+        if (!string.IsNullOrWhiteSpace(originalType))
+            parts.Add($"Tipo recibido: {originalType}");
+
+        var metaReason = ExtractUnsupportedReason(message.PayloadJson);
+        if (!string.IsNullOrWhiteSpace(metaReason))
+            parts.Add(metaReason);
+
+        if (!string.IsNullOrWhiteSpace(message.WhatsAppMessageId))
+            parts.Add($"ID WhatsApp: {message.WhatsAppMessageId}");
+
+        return parts.Count == 0
+            ? "Sin detalle técnico disponible en el webhook."
+            : string.Join(" · ", parts);
+    }
+
+    private static bool IsUnsupportedMessage(ConversacionMensajeDto message)
+    {
+        var text = (message.Texto ?? string.Empty).Trim();
+        return string.Equals(message.MessageType, "UNKNOWN", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(message.MessageType, "UNSUPPORTED", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(text, "[unsupported]", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(text, "[unknown]", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ExtractPayloadString(string payloadJson, string propertyName)
+    {
+        if (string.IsNullOrWhiteSpace(payloadJson))
+            return string.Empty;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(payloadJson);
+            return doc.RootElement.TryGetProperty(propertyName, out var prop)
+                ? prop.GetString() ?? string.Empty
+                : string.Empty;
+        }
+        catch (JsonException)
+        {
+            return string.Empty;
+        }
+    }
+
+    private static string ExtractUnsupportedReason(string payloadJson)
+    {
+        if (string.IsNullOrWhiteSpace(payloadJson))
+            return string.Empty;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(payloadJson);
+            if (!doc.RootElement.TryGetProperty("errors", out var errors) || errors.ValueKind != JsonValueKind.Array)
+                return string.Empty;
+
+            foreach (var error in errors.EnumerateArray())
+            {
+                var title = error.TryGetProperty("title", out var titleProp) ? titleProp.GetString() ?? string.Empty : string.Empty;
+                var message = error.TryGetProperty("message", out var messageProp) ? messageProp.GetString() ?? string.Empty : string.Empty;
+                var details = string.Empty;
+                if (error.TryGetProperty("error_data", out var errorData) &&
+                    errorData.TryGetProperty("details", out var detailsProp))
+                {
+                    details = detailsProp.GetString() ?? string.Empty;
+                }
+
+                var reason = FirstNonEmpty(details, message, title);
+                if (!string.IsNullOrWhiteSpace(reason))
+                    return $"Motivo: {reason}";
+            }
+        }
+        catch (JsonException)
+        {
+            return string.Empty;
+        }
+
+        return string.Empty;
     }
 
     private void ToggleAttachmentMenu(long idAdjunto)
