@@ -1,58 +1,60 @@
 @page "/interfaces"
 @using AlfaCore.Models
-@using Microsoft.AspNetCore.Components.Forms
-@inject IJSRuntime JS
 @inject AlfaCore.Services.IInterfacesService InterfacesSvc
-@inject AlfaCore.Services.IInterfacesConfigService InterfacesConfigSvc
 @inject AlfaCore.Services.IAppUiOperationService UiOps
 @inject AlfaCore.Services.IAppUserSessionService AppUserSession
+@implements IDisposable
 
 <PageTitle>Interfaces | Alfa Gestión</PageTitle>
 
-<div class="page-grid interfaces-page">
-    <section class="page-intro interfaces-hero">
+<div class="page-grid">
+    <section class="page-intro">
         <div>
             <h2 class="page-intro__title">Recepción documental</h2>
-            <p class="page-intro__text">Centralizá carga, seguimiento y resolución documental con una experiencia tipo inbox pensada para trabajar rápido en dark y light mode.</p>
+            <p class="page-intro__text">Listado principal del módulo con formato estándar del sistema: filtros, grilla configurable y acceso a la ficha completa del documento.</p>
         </div>
         <div class="actions">
-            <button type="button" class="btn btn--primary" @onclick="AbrirNuevoDocumento" disabled="@_saving">
+            <a class="btn btn--primary" href="/interfaces/nuevo">
                 <i class="bi bi-plus-circle"></i> Nuevo
-            </button>
+            </a>
             <a class="btn btn--ghost" href="/interfaces/configuracion">
                 <i class="bi bi-sliders"></i> Configuración
             </a>
-            <button type="button" class="btn btn--ghost" @onclick="RecargarAsync" disabled="@_loading">
+            <button type="button" class="btn btn--ghost" @onclick="RecargarAsync" disabled="@_loadingList">
                 <i class="bi bi-arrow-clockwise"></i> Recargar
             </button>
         </div>
     </section>
 
-    @if (!string.IsNullOrWhiteSpace(_message))
+    @if (_feedback is not null)
     {
         <section class="panel-card">
-            <div class="editor-msg @(_isError ? "editor-msg--error" : "editor-msg--ok")">
-                <i class="bi @(_isError ? "bi-exclamation-circle" : "bi-check-circle")"></i> @_message
+            <div class="editor-msg @GetFeedbackClass(_feedback)">
+                <div>
+                    <strong>@_feedback.Title</strong>
+                    <p>@_feedback.Message</p>
+                    @if (_feedback.HasSuggestion)
+                    {
+                        <small>@_feedback.Suggestion</small>
+                    }
+                    @if (_feedback.HasCode)
+                    {
+                        <small>Código: @_feedback.Code</small>
+                    }
+                </div>
             </div>
         </section>
     }
 
-    <section class="panel-card interfaces-filters-panel">
+    <section class="panel-card">
         <div class="panel-card__header">
             <div>
                 <h3 class="panel-card__title">Filtros</h3>
-                @if (_settings is not null)
-                {
-                    <p class="panel-card__subtitle">Destino activo: @_settings.GetDestinoResumen() · máximo @_settings.TamanoMaximoMb MB por archivo</p>
-                }
-            </div>
-            <div class="interfaces-filters-summary">
-                <span class="interfaces-summary-chip"><i class="bi bi-collection"></i> @_items.Count documento(s)</span>
-                <span class="interfaces-summary-chip"><i class="bi bi-circle-fill"></i> @GetPendingSummary()</span>
+                <p class="panel-card__subtitle">La búsqueda muestra primero los documentos más recientes y permite filtrar por rango, estado, tipo y texto.</p>
             </div>
         </div>
 
-        <div class="filters-grid interfaces-filters-grid">
+        <div class="filters-grid">
             <div class="field">
                 <label>Desde</label>
                 <input type="date" @bind="_filtersDesde" />
@@ -83,1438 +85,493 @@
             </div>
             <div class="field field--wide">
                 <label>Buscar</label>
-                <input type="search" placeholder="Observación, usuario o número interno..." @bind="_filters.Texto" @bind:event="oninput" />
+                <input type="search"
+                       placeholder="Observación, usuario o número interno..."
+                       @bind="_filters.Texto"
+                       @bind:event="oninput" />
             </div>
-            <div class="actions interfaces-filters-actions">
-                <button type="button" class="btn btn--primary" @onclick="BuscarAsync" disabled="@_loading">
+            <div class="actions">
+                <button type="button" class="btn btn--primary" @onclick="AplicarFiltrosAsync" disabled="@_loadingList">
                     <i class="bi bi-funnel"></i> Aplicar
                 </button>
-                <button type="button" class="btn btn--ghost" @onclick="LimpiarFiltros" disabled="@_loading">
+                <button type="button" class="btn btn--ghost" @onclick="LimpiarFiltros" disabled="@_loadingList">
                     <i class="bi bi-eraser"></i> Limpiar
                 </button>
             </div>
         </div>
     </section>
 
-    <div class="interfaces-workspace">
-        <aside class="panel-card interfaces-inbox-panel">
+    @if (_showViewSettings)
+    {
+        <section class="panel-card">
             <div class="panel-card__header">
                 <div>
-                    <h3 class="panel-card__title">Documentos pendientes</h3>
-                    <p class="panel-card__subtitle">Inbox operativo con foco en escaneo rápido, acciones compactas y selección inmediata.</p>
+                    <h3 class="panel-card__title">Configuración de vista</h3>
+                    <p class="panel-card__subtitle">Elegí columnas visibles, orden y agrupación para la grilla de recepción documental.</p>
                 </div>
             </div>
 
-            @if (_loading)
-            {
-                <div class="loading">Cargando comprobantes...</div>
-            }
-            else if (_items.Count == 0)
-            {
-                <div class="conversations-empty interfaces-empty-state">
-                    No hay documentos para los filtros seleccionados.
+            <div class="usuarios-view-settings">
+                <div class="field">
+                    <label>Agrupar por</label>
+                    <select @bind="_draftAgruparPor">
+                        <option value="@InterfacesViewGroupKeys.None">Sin agrupar</option>
+                        <option value="@InterfacesViewGroupKeys.Estado">Estado</option>
+                        <option value="@InterfacesViewGroupKeys.Tipo">Tipo</option>
+                    </select>
                 </div>
-            }
-            else
-            {
-                <div class="interfaces-inbox-list">
-                    @foreach (var item in _items)
+
+                <div class="usuarios-view-settings__list">
+                    @foreach (var column in _viewSettingsDraft.OrderBy(c => c.Order))
                     {
-                        var quickState = GetRowSelectedState(item.IdComprobanteRecibido);
-                        <article class="interfaces-inbox-item @(item.IdComprobanteRecibido == _selectedId ? "is-selected" : string.Empty)">
-                            <button type="button"
-                                    class="interfaces-inbox-item__main"
-                                    @onclick="() => SeleccionarAsync(item.IdComprobanteRecibido)">
-                                <div class="interfaces-inbox-item__active-bar"></div>
-                                <div class="interfaces-inbox-item__top">
-                                    <div class="interfaces-inbox-item__identity">
-                                        <strong>#@item.IdComprobanteRecibido</strong>
-                                        <span class="interfaces-priority-chip @GetPriorityCssClass(item)">@GetPriorityLabel(item)</span>
-                                    </div>
-                                    <span class="interfaces-status-pill @GetStateCssClass(item.EstadoCodigo, item.EstadoDescripcion)">@item.EstadoDescripcion</span>
-                                </div>
-                                <div class="interfaces-inbox-item__meta">
-                                    <span><i class="bi bi-files"></i> @item.TipoDocumentoDescripcion</span>
-                                    <span><i class="bi bi-person"></i> @item.UsuarioAlta</span>
-                                    <span><i class="bi bi-clock"></i> @item.FechaHoraGrabacion.ToString("dd/MM/yyyy HH:mm")</span>
-                                </div>
-                                <p class="interfaces-inbox-item__summary">@GetSummary(item.Observacion)</p>
-                                <div class="interfaces-inbox-item__footer">
-                                    <span><i class="bi bi-paperclip"></i> @item.CantidadAdjuntos adj.</span>
-                                    <span><i class="bi bi-record-circle"></i> @GetPendingAgeLabel(item.FechaHoraGrabacion)</span>
-                                </div>
-                            </button>
-
-                            <div class="interfaces-inbox-item__actions">
-                                <div class="interfaces-inbox-item__quick">
-                                    @if (CanQuickProcess())
-                                    {
-                                        <button type="button" class="btn btn--ghost btn--sm interfaces-icon-action" title="Procesar" aria-label="Procesar" @onclick="() => CambiarEstadoRapidoAsync(item.IdComprobanteRecibido, InterfacesQuickAction.Procesar)">
-                                            <i class="bi bi-play-circle"></i>
-                                            <span>Procesar</span>
-                                        </button>
-                                    }
-                                    @if (CanQuickFinalize())
-                                    {
-                                        <button type="button" class="btn btn--ghost btn--sm interfaces-icon-action" title="Finalizar" aria-label="Finalizar" @onclick="() => CambiarEstadoRapidoAsync(item.IdComprobanteRecibido, InterfacesQuickAction.Finalizar)">
-                                            <i class="bi bi-check2-circle"></i>
-                                            <span>Finalizar</span>
-                                        </button>
-                                    }
-                                    @if (CanQuickReject())
-                                    {
-                                        <button type="button" class="btn btn--ghost btn--sm interfaces-icon-action" title="Rechazar" aria-label="Rechazar" @onclick="() => CambiarEstadoRapidoAsync(item.IdComprobanteRecibido, InterfacesQuickAction.Rechazar)">
-                                            <i class="bi bi-x-circle"></i>
-                                            <span>Rechazar</span>
-                                        </button>
-                                    }
-                                    <button type="button" class="btn btn--ghost btn--sm interfaces-icon-action" title="Ver detalle" aria-label="Ver detalle" @onclick="() => SeleccionarAsync(item.IdComprobanteRecibido)">
-                                        <i class="bi bi-eye"></i>
-                                        <span>Detalle</span>
-                                    </button>
-                                </div>
-
-                                <div class="interfaces-inline-state">
-                                    <select value="@quickState"
-                                            @onchange="e => CambiarSeleccionEstadoLista(item.IdComprobanteRecibido, e.Value?.ToString())">
-                                        @foreach (var state in _states)
-                                        {
-                                            <option value="@state.IdEstado">@state.Descripcion</option>
-                                        }
-                                    </select>
-                                    <button type="button"
-                                            class="btn btn--secondary btn--sm"
-                                            @onclick="() => AplicarCambioEstadoListaAsync(item.IdComprobanteRecibido)"
-                                            disabled="@(_changingState || quickState == item.IdEstado)">
-                                        <i class="bi bi-arrow-repeat"></i>
-                                    </button>
-                                </div>
+                        <div class="usuarios-view-settings__item">
+                            <label class="checkbox">
+                                <input type="checkbox" checked="@column.Visible" @onchange="args => ToggleViewColumn(column.Key, args)" />
+                                <span>@column.Label</span>
+                            </label>
+                            <div class="actions">
+                                <button type="button" class="btn btn--ghost btn--sm" @onclick="() => MoveViewColumn(column.Key, -1)">
+                                    <i class="bi bi-arrow-up"></i>
+                                </button>
+                                <button type="button" class="btn btn--ghost btn--sm" @onclick="() => MoveViewColumn(column.Key, 1)">
+                                    <i class="bi bi-arrow-down"></i>
+                                </button>
                             </div>
-                        </article>
+                        </div>
                     }
                 </div>
-            }
-        </aside>
 
-        <section id="interfaces-editor-panel" class="panel-card interfaces-editor-panel">
-            <div class="panel-card__header">
-                <div>
-                    <h3 class="panel-card__title">@GetEditorTitle()</h3>
-                    <p class="panel-card__subtitle">@GetEditorSubtitle()</p>
-                </div>
-                <div class="interfaces-editor-header-actions">
-                    @if (_editorMode == InterfacesEditorMode.Edicion)
-                    {
-                        <button type="button" class="btn btn--ghost" @onclick="CancelarSeleccionActual">
-                            <i class="bi bi-x-circle"></i> Cancelar
-                        </button>
-                        <button type="button" class="btn btn--ghost" @onclick="AbrirNuevoDocumento">
-                            <i class="bi bi-plus-circle"></i> Nuevo
-                        </button>
-                    }
-                    @if (_editorMode == InterfacesEditorMode.Nuevo)
-                    {
-                        <button type="button" class="btn btn--ghost" @onclick="CancelarNuevoDocumento" disabled="@_saving">
-                            <i class="bi bi-arrow-left"></i> Volver a la lista
-                        </button>
-                    }
+                <div class="actions">
+                    <button type="button" class="btn btn--primary" @onclick="GuardarConfiguracionVistaAsync">
+                        <i class="bi bi-floppy"></i> Guardar vista
+                    </button>
+                    <button type="button" class="btn btn--ghost" @onclick="CancelarConfiguracionVista">
+                        <i class="bi bi-x-circle"></i> Cancelar
+                    </button>
                 </div>
             </div>
-
-            @if (_editorMode == InterfacesEditorMode.Vacio)
-            {
-                <div class="interfaces-editor-empty">
-                    <div class="interfaces-editor-empty__icon">
-                        <i class="bi bi-inboxes"></i>
-                    </div>
-                    <h4>Seleccioná un documento o empezá uno nuevo</h4>
-                    <p>La columna derecha concentra carga, edición, adjuntos e historial para que todo el flujo se resuelva desde el mismo lugar.</p>
-                    <div class="actions">
-                        <button type="button" class="btn btn--primary" @onclick="AbrirNuevoDocumento">
-                            <i class="bi bi-plus-circle"></i> Crear documento
-                        </button>
-                    </div>
-                </div>
-            }
-            else if (_editorMode == InterfacesEditorMode.Nuevo)
-            {
-                <div class="interfaces-editor-shell">
-                    <div class="interfaces-editor-ribbon">
-                        <span class="interfaces-status-pill interfaces-status-pill--info">Nuevo</span>
-                        <span class="interfaces-priority-chip interfaces-priority-chip--normal">Carga inicial</span>
-                        <span class="interfaces-summary-chip"><i class="bi bi-person"></i> @CurrentUserName</span>
-                        <span class="interfaces-summary-chip"><i class="bi bi-clock"></i> @DateTime.Now.ToString("dd/MM/yyyy HH:mm")</span>
-                    </div>
-
-                    <div class="interfaces-editor-layout">
-                        <div class="interfaces-editor-column interfaces-editor-column--main">
-                            <section class="interfaces-section interfaces-section--soft">
-                                <div class="interfaces-section__head">
-                                    <div>
-                                        <h4>Información principal</h4>
-                                        <p>Alta rápida con la misma estructura visual que luego se usa al editar.</p>
-                                    </div>
-                                </div>
-
-                                <div class="interfaces-form-grid">
-                                    <div class="field">
-                                        <label>Tipo documental</label>
-                                        @if (_documentTypes.Count == 0)
-                                        {
-                                            <div class="interfaces-empty-upload">No hay tipos documentales disponibles.</div>
-                                        }
-                                        else
-                                        {
-                                            <select @bind="_nuevo.IdTipoDocumento" disabled="@_saving">
-                                                <option value="0">Seleccionar...</option>
-                                                @foreach (var item in _documentTypes)
-                                                {
-                                                    <option value="@item.IdTipoDocumento">@item.Descripcion</option>
-                                                }
-                                            </select>
-                                        }
-                                    </div>
-                                    <div class="field">
-                                        <label>Estado inicial</label>
-                                        <input value="@GetInitialStateLabel()" readonly />
-                                    </div>
-                                    <div class="field">
-                                        <label>Usuario</label>
-                                        <input value="@CurrentUserName" readonly />
-                                    </div>
-                                    <div class="field">
-                                        <label>Fecha</label>
-                                        <input value="@DateTime.Now.ToString("dd/MM/yyyy HH:mm")" readonly />
-                                    </div>
-                                </div>
-                            </section>
-
-                            <section class="interfaces-section interfaces-section--feature">
-                                <div class="interfaces-section__head">
-                                    <div>
-                                        <h4>Observación</h4>
-                                        <p>Usá este espacio para contexto operativo, referencias o aclaraciones del documento.</p>
-                                    </div>
-                                </div>
-                                <div class="field field--full interfaces-field-shell">
-                                    <textarea rows="7"
-                                              placeholder="Comentario, referencia o contexto del comprobante..."
-                                              @bind="_nuevo.Observacion"
-                                              disabled="@_saving"></textarea>
-                                </div>
-                            </section>
-
-                            <div class="actions interfaces-editor-actions">
-                                <button type="button" class="btn btn--primary" @onclick="GuardarAsync" disabled="@(_saving || _selectedFiles.Count == 0)">
-                                    <i class="bi bi-upload"></i> @(_saving ? "Guardando..." : "Registrar comprobante")
-                                </button>
-                                <button type="button" class="btn btn--ghost" @onclick="LimpiarFormulario" disabled="@_saving">
-                                    <i class="bi bi-eraser"></i> Limpiar
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="interfaces-editor-column interfaces-editor-column--aside">
-                            <section class="interfaces-section">
-                                <div class="interfaces-section__head">
-                                    <div>
-                                        <h4>Adjuntos</h4>
-                                        <p>Preparado para sumar archivos ahora y evolucionar luego a drag & drop sin tocar el flujo principal.</p>
-                                    </div>
-                                    <div class="interfaces-upload-actions">
-                                        <InputFile id="interfaces-file-picker"
-                                                   @key="@($"file-{_filePickerVersion}")"
-                                                   style="display:none"
-                                                   OnChange="HandleFilesSelectedAsync"
-                                                   multiple
-                                                   disabled="@_saving" />
-                                        <InputFile id="interfaces-camera-picker"
-                                                   @key="@($"camera-{_cameraPickerVersion}")"
-                                                   style="display:none"
-                                                   OnChange="HandlePhotoSelectedAsync"
-                                                   accept="image/*"
-                                                   capture="environment"
-                                                   disabled="@_saving" />
-                                        <label class="btn btn--secondary interfaces-file-trigger interfaces-file-trigger--desktop @(_saving ? "is-disabled" : string.Empty)"
-                                               for="interfaces-file-picker"
-                                               aria-disabled="@_saving">
-                                            <i class="bi bi-plus-circle"></i>
-                                            <span>Agregar archivos</span>
-                                        </label>
-                                        <label class="btn btn--ghost interfaces-file-trigger interfaces-file-trigger--mobile @(_saving ? "is-disabled" : string.Empty)"
-                                               for="interfaces-camera-picker"
-                                               aria-disabled="@_saving">
-                                            <i class="bi bi-camera"></i>
-                                            <span>Tomar foto</span>
-                                        </label>
-                                    </div>
-                                </div>
-
-                                @if (_settings is not null && _settings.ExtensionesPermitidas.Count > 0)
-                                {
-                                    <p class="interfaces-upload-hint">Permitidos: @string.Join(", ", _settings.ExtensionesPermitidas) · máximo @_settings.TamanoMaximoMb MB por archivo</p>
-                                }
-
-                                @if (_selectedFiles.Count == 0)
-                                {
-                                    <div class="interfaces-empty-upload">
-                                        Sumá uno o varios archivos para dejar el comprobante listo desde el alta.
-                                    </div>
-                                }
-                                else
-                                {
-                                    <div class="interfaces-attachments-modern">
-                                        @foreach (var file in _selectedFiles)
-                                        {
-                                            <div class="interfaces-attachment-row interfaces-attachment-row--pending">
-                                                <div class="interfaces-attachment-row__icon">
-                                                    <i class="bi @GetAttachmentIcon(file.NombreArchivo)"></i>
-                                                </div>
-                                                <div class="interfaces-attachment-row__content">
-                                                    <strong>@file.NombreArchivo</strong>
-                                                    <span>@FormatSize(file.TamanoBytes) · pendiente de registrar</span>
-                                                </div>
-                                                <div class="interfaces-attachment-row__actions">
-                                                    <button type="button" class="btn btn--ghost btn--sm" @onclick="() => QuitarArchivoPendiente(file.Id)" disabled="@_saving">
-                                                        <i class="bi bi-trash3"></i> Quitar
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                            </section>
-                        </div>
-                    </div>
-                </div>
-            }
-            else if (_selectedDetail is not null)
-            {
-                <div class="interfaces-editor-shell">
-                    <div class="interfaces-editor-ribbon">
-                        <span class="interfaces-status-pill @GetStateCssClass(_selectedDetail.EstadoCodigo, _selectedDetail.EstadoDescripcion)">@_selectedDetail.EstadoDescripcion</span>
-                        <span class="interfaces-priority-chip @GetPriorityCssClass(_selectedDetail)">@GetPriorityLabel(_selectedDetail)</span>
-                        <span class="interfaces-summary-chip"><i class="bi bi-person"></i> @_selectedDetail.UsuarioAlta</span>
-                        <span class="interfaces-summary-chip"><i class="bi bi-clock"></i> @_selectedDetail.FechaHoraGrabacion.ToString("dd/MM/yyyy HH:mm")</span>
-                    </div>
-
-                    <div class="interfaces-editor-layout">
-                        <div class="interfaces-editor-column interfaces-editor-column--main">
-                            <section class="interfaces-section interfaces-section--soft">
-                                <div class="interfaces-section__head">
-                                    <div>
-                                        <h4>Información principal</h4>
-                                        <p>Edición directa sin salir de la bandeja, con foco en velocidad y lectura clara.</p>
-                                    </div>
-                                </div>
-
-                                <div class="interfaces-form-grid">
-                                    <div class="field">
-                                        <label>Tipo documental</label>
-                                        <select @bind="_editForm.IdTipoDocumento" disabled="@(!_selectedDetail.PermiteEdicion || _savingEdit)">
-                                            <option value="0">Seleccionar...</option>
-                                            @foreach (var item in _documentTypes)
-                                            {
-                                                <option value="@item.IdTipoDocumento">@item.Descripcion</option>
-                                            }
-                                        </select>
-                                    </div>
-                                    <div class="field">
-                                        <label>Estado</label>
-                                        <select @bind="_statusChange.IdEstadoNuevo" disabled="@_changingState">
-                                            @foreach (var state in _states)
-                                            {
-                                                <option value="@state.IdEstado">@state.Descripcion</option>
-                                            }
-                                        </select>
-                                    </div>
-                                    <div class="field">
-                                        <label>Usuario</label>
-                                        <input value="@_selectedDetail.UsuarioAlta" readonly />
-                                    </div>
-                                    <div class="field">
-                                        <label>Fecha</label>
-                                        <input value="@_selectedDetail.FechaHoraGrabacion.ToString("dd/MM/yyyy HH:mm")" readonly />
-                                    </div>
-                                    <div class="field">
-                                        <label>Prioridad visual</label>
-                                        <input value="@GetPriorityLabel(_selectedDetail)" readonly />
-                                    </div>
-                                    <div class="field">
-                                        <label>Referencia</label>
-                                        <input value="@GetDisplayValue(_selectedDetail.ReferenciaExterna)" readonly />
-                                    </div>
-                                </div>
-                            </section>
-
-                            <section class="interfaces-section interfaces-section--feature">
-                                <div class="interfaces-section__head">
-                                    <div>
-                                        <h4>Observación</h4>
-                                        <p>Editor principal del documento, pensado para trabajar sin una vista rígida de ERP.</p>
-                                    </div>
-                                </div>
-
-                                @if (!_selectedDetail.PermiteEdicion)
-                                {
-                                    <div class="interfaces-inline-note">
-                                        <i class="bi bi-info-circle"></i>
-                                        <div>
-                                            <strong>Edición limitada por estado</strong>
-                                            <span>Este documento ya no permite cambiar tipo, adjuntos ni acciones estructurales. En este punto solo se pueden agregar o corregir notas en la observación.</span>
-                                        </div>
-                                    </div>
-                                }
-
-                                <div class="field field--full interfaces-field-shell">
-                                    <textarea rows="7" @bind="_editForm.Observacion" disabled="@_savingEdit"></textarea>
-                                </div>
-
-                                <div class="field field--full interfaces-field-shell interfaces-field-shell--subtle">
-                                    <label>Motivo / nota de estado</label>
-                                    <textarea rows="3" @bind="_statusChange.Observacion" disabled="@_changingState" placeholder="Opcional: explicación del cambio de estado"></textarea>
-                                </div>
-                            </section>
-
-                            <div class="actions interfaces-editor-actions">
-                                <button type="button"
-                                        class="btn btn--primary"
-                                        @onclick="GuardarEdicionAsync"
-                                        disabled="@_savingEdit">
-                                    <i class="bi bi-save"></i> @(_savingEdit ? "Guardando..." : "Guardar")
-                                </button>
-                                <button type="button"
-                                        class="btn btn--secondary"
-                                        @onclick="GuardarEstadoDetalleAsync"
-                                        disabled="@(_changingState || _statusChange.IdEstadoNuevo == _selectedDetail.IdEstado)">
-                                    <i class="bi bi-arrow-repeat"></i> @(_changingState ? "Actualizando..." : "Cambiar estado")
-                                </button>
-                                @if (_selectedDetail is not null)
-                                {
-                                    <button type="button" class="btn btn--ghost" @onclick="ResetEditarDetalle" disabled="@_savingEdit">
-                                        <i class="bi bi-arrow-counterclockwise"></i> Revertir
-                                    </button>
-                                }
-                                @if (_selectedDetail?.PermiteEdicion == true)
-                                {
-                                    <button type="button" class="btn btn--ghost" @onclick="AnularAsync" disabled="@_changingState">
-                                        <i class="bi bi-slash-circle"></i> Anular
-                                    </button>
-                                }
-                            </div>
-                        </div>
-
-                        <div class="interfaces-editor-column interfaces-editor-column--aside">
-                            <section class="interfaces-section">
-                                <div class="interfaces-section__head">
-                                    <div>
-                                        <h4>Adjuntos</h4>
-                                        <p>Visualización moderna con acceso rápido a descargar, abrir y quitar archivos.</p>
-                                    </div>
-                                    @if (_selectedDetail?.PermiteEdicion == true)
-                                    {
-                                        <div class="interfaces-upload-actions">
-                                            <InputFile id="interfaces-extra-picker"
-                                                       @key="@($"extra-{_extraPickerVersion}")"
-                                                       style="display:none"
-                                                       OnChange="HandleExtraFilesSelectedAsync"
-                                                       multiple
-                                                       disabled="@_savingExtraAttachments" />
-                                            <label class="btn btn--secondary interfaces-file-trigger @(_savingExtraAttachments ? "is-disabled" : string.Empty)"
-                                                   for="interfaces-extra-picker"
-                                                   aria-disabled="@_savingExtraAttachments">
-                                                <i class="bi bi-folder-plus"></i>
-                                                <span>Agregar adjuntos</span>
-                                            </label>
-                                            <button type="button"
-                                                    class="btn btn--ghost"
-                                                    @onclick="AgregarAdjuntosAsync"
-                                                    disabled="@(_savingExtraAttachments || _extraFiles.Count == 0)">
-                                                <i class="bi bi-upload"></i> @(_savingExtraAttachments ? "Agregando..." : "Subir")
-                                            </button>
-                                        </div>
-                                    }
-                                </div>
-
-                                @if (_extraFiles.Count > 0)
-                                {
-                                    <div class="interfaces-attachments-modern interfaces-attachments-modern--draft">
-                                        @foreach (var file in _extraFiles)
-                                        {
-                                            <div class="interfaces-attachment-row interfaces-attachment-row--pending">
-                                                <div class="interfaces-attachment-row__icon">
-                                                    <i class="bi @GetAttachmentIcon(file.Name)"></i>
-                                                </div>
-                                                <div class="interfaces-attachment-row__content">
-                                                    <strong>@file.Name</strong>
-                                                    <span>@FormatSize(file.Size) · pendiente de subir</span>
-                                                </div>
-                                            </div>
-                                        }
-                                    </div>
-                                }
-
-                                @if (_selectedDetail!.Adjuntos.Count == 0)
-                                {
-                                    <div class="interfaces-empty-upload">
-                                        Este comprobante todavía no tiene adjuntos activos.
-                                    </div>
-                                }
-                                else
-                                {
-                                    <div class="interfaces-attachments-modern">
-                                        @foreach (var attachment in _selectedDetail!.Adjuntos)
-                                        {
-                                            <div class="interfaces-attachment-row">
-                                                <div class="interfaces-attachment-row__icon">
-                                                    <i class="bi @GetAttachmentIcon(attachment.NombreOriginal)"></i>
-                                                </div>
-                                                <div class="interfaces-attachment-row__content">
-                                                    <strong>@attachment.NombreOriginal</strong>
-                                                    <span>@FormatSize(attachment.TamanoBytes) · @attachment.FechaHoraGrabacion.ToString("dd/MM/yyyy HH:mm")</span>
-                                                </div>
-                                                <div class="interfaces-attachment-row__actions">
-                                                    <a class="btn btn--ghost btn--sm"
-                                                       href="@GetAttachmentDownloadUrl(attachment.IdAdjunto)"
-                                                       target="_blank">
-                                                        <i class="bi bi-eye"></i> Ver
-                                                    </a>
-                                                    <a class="btn btn--ghost btn--sm"
-                                                       href="@GetAttachmentDownloadUrl(attachment.IdAdjunto)"
-                                                       download="@attachment.NombreOriginal">
-                                                        <i class="bi bi-download"></i> Descargar
-                                                    </a>
-                                                    @if (_selectedDetail!.PermiteEdicion)
-                                                    {
-                                                        <button type="button"
-                                                                class="btn btn--ghost btn--sm"
-                                                                @onclick="() => QuitarAdjuntoAsync(attachment.IdAdjunto)"
-                                                                disabled="@_removingAttachment">
-                                                            <i class="bi bi-trash3"></i> Eliminar
-                                                        </button>
-                                                    }
-                                                </div>
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                            </section>
-
-                            <section class="interfaces-section interfaces-section--timeline">
-                                <div class="interfaces-section__head">
-                                    <div>
-                                        <h4>Historial</h4>
-                                        <p>Timeline compacta con la secuencia real del documento.</p>
-                                    </div>
-                                    <span class="interfaces-summary-chip"><i class="bi bi-clock-history"></i> @_selectedDetail.Historial.Count movimiento(s)</span>
-                                </div>
-
-                                @if (_selectedDetail.Historial.Count == 0)
-                                {
-                                    <div class="interfaces-empty-upload">
-                                        No hay movimientos registrados.
-                                    </div>
-                                }
-                                else
-                                {
-                                    <div class="interfaces-history-modern">
-                                        @foreach (var item in _selectedDetail.Historial)
-                                        {
-                                            <div class="interfaces-history-modern__item">
-                                                <div class="interfaces-history-modern__top">
-                                                    <strong>@item.Accion</strong>
-                                                    <span>@item.FechaHora.ToString("dd/MM/yyyy HH:mm")</span>
-                                                </div>
-                                                <div class="interfaces-history-modern__meta">
-                                                    <span>@item.Usuario</span>
-                                                    <span>@item.Pc</span>
-                                                    @if (!string.IsNullOrWhiteSpace(item.EstadoNuevoDescripcion))
-                                                    {
-                                                        <span>@item.EstadoNuevoDescripcion</span>
-                                                    }
-                                                </div>
-                                                @if (!string.IsNullOrWhiteSpace(item.Observacion))
-                                                {
-                                                    <p>@item.Observacion</p>
-                                                }
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                            </section>
-                        </div>
-                    </div>
-                </div>
-            }
         </section>
-    </div>
+    }
+
+    @{
+        var visibleColumns = GetVisibleColumns();
+        var groups = BuildGridGroups();
+    }
+
+    <section class="panel-card">
+        <div class="panel-card__header">
+            <div>
+                <h3 class="panel-card__title">Documentos recibidos</h3>
+                <p class="panel-card__subtitle">@_pagedTotal registro(s) · Página @_pageNumber de @_totalPages · doble clic para abrir la ficha.</p>
+            </div>
+            <div class="actions">
+                <button type="button" class="btn btn--ghost" @onclick="AbrirConfiguracionVista">
+                    <i class="bi bi-sliders"></i> Configurar vista
+                </button>
+                <span class="panel-card__subtitle">Agrupación: @GetGroupingLabel(_viewSettings.AgruparPor)</span>
+            </div>
+        </div>
+
+        @if (_loadingList)
+        {
+            <div class="usuarios-empty">Cargando documentos...</div>
+        }
+        else if (_items.Count == 0)
+        {
+            <div class="usuarios-empty">No hay documentos para los filtros seleccionados.</div>
+        }
+        else
+        {
+            <div class="usuarios-table-wrap">
+                <table class="data-table usuarios-table">
+                    <thead>
+                        <tr>
+                            @foreach (var col in visibleColumns)
+                            {
+                                <th>@col.Label</th>
+                            }
+                        </tr>
+                    </thead>
+                    @foreach (var group in groups)
+                    {
+                        <tbody>
+                            @if (group.ShowHeader)
+                            {
+                                <tr class="usuarios-group-row">
+                                    <td colspan="@visibleColumns.Count">@group.Label</td>
+                                </tr>
+                            }
+
+                            @foreach (var item in group.Items)
+                            {
+                                <tr class="@(_selectedId == item.IdComprobanteRecibido ? "usuarios-table__row is-selected" : "usuarios-table__row")"
+                                    @onclick="() => _selectedId = item.IdComprobanteRecibido"
+                                    @ondblclick="() => AbrirFicha(item.IdComprobanteRecibido)">
+                                    @foreach (var col in visibleColumns)
+                                    {
+                                        <td>
+                                            @switch (col.Key)
+                                            {
+                                                case InterfacesViewColumnKeys.Numero:
+                                                    <strong>#@item.IdComprobanteRecibido</strong>
+                                                    break;
+                                                case InterfacesViewColumnKeys.Fecha:
+                                                    @item.FechaHoraGrabacion.ToString("dd/MM/yyyy HH:mm")
+                                                    break;
+                                                case InterfacesViewColumnKeys.Tipo:
+                                                    @item.TipoDocumentoDescripcion
+                                                    break;
+                                                case InterfacesViewColumnKeys.Estado:
+                                                    <span class="interfaces-status-pill @GetStateCssClass(item.EstadoCodigo, item.EstadoDescripcion)">@item.EstadoDescripcion</span>
+                                                    break;
+                                                case InterfacesViewColumnKeys.Usuario:
+                                                    @(string.IsNullOrWhiteSpace(item.UsuarioAlta) ? "—" : item.UsuarioAlta)
+                                                    break;
+                                                case InterfacesViewColumnKeys.Observacion:
+                                                    @GetSummary(item.Observacion)
+                                                    break;
+                                                case InterfacesViewColumnKeys.Adjuntos:
+                                                    @item.CantidadAdjuntos
+                                                    break;
+                                            }
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    }
+                </table>
+            </div>
+
+            <div class="result-pagination">
+                <span class="result-pagination__info">@_pagedTotal registro(s)</span>
+                <div class="result-pagination__controls">
+                    <button class="result-pagination__btn" title="Página anterior"
+                            @onclick="() => CambiarPaginaAsync(_pageNumber - 1)"
+                            disabled="@(!_hasPrev || _loadingList)">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                    <span class="result-pagination__btn result-pagination__btn--active">@_pageNumber / @_totalPages</span>
+                    <button class="result-pagination__btn" title="Página siguiente"
+                            @onclick="() => CambiarPaginaAsync(_pageNumber + 1)"
+                            disabled="@(!_hasNext || _loadingList)">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+                <select class="result-pagination__size" title="Registros por página"
+                        value="@_filters.PageSize"
+                        @onchange="OnPageSizeChangedAsync"
+                        disabled="@_loadingList">
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+            </div>
+        }
+    </section>
 </div>
 
 @code {
-    private InterfacesEditorMode _editorMode = InterfacesEditorMode.Vacio;
     private readonly InterfacesFilters _filters = new();
-    private readonly InterfacesCrearComprobanteRequest _nuevo = new();
-    private readonly InterfacesCambioEstadoRequest _statusChange = new();
-    private readonly List<PendingUploadFile> _selectedFiles = [];
-    private readonly InterfacesActualizarComprobanteRequest _editForm = new();
-    private readonly List<IBrowserFile> _extraFiles = [];
-    private readonly Dictionary<long, int> _rowStateSelections = [];
-    private IReadOnlyList<InterfacesEstadoOptionDto> _states = [];
-    private IReadOnlyList<InterfacesTipoDocumentoOptionDto> _documentTypes = [];
-    private IReadOnlyList<InterfacesInboxItemDto> _items = [];
-    private InterfacesUploadSettingsDto? _settings;
-    private InterfacesDetalleDto? _selectedDetail;
-    private long? _selectedId;
-    private bool _loading;
-    private bool _saving;
-    private bool _savingEdit;
-    private bool _savingExtraAttachments;
-    private bool _removingAttachment;
-    private bool _changingState;
-    private string _message = string.Empty;
-    private bool _isError;
-    private int _filePickerVersion;
-    private int _cameraPickerVersion;
-    private int _extraPickerVersion;
-
+    private readonly List<InterfacesInboxItemDto> _items = [];
+    private readonly List<InterfacesEstadoOptionDto> _states = [];
+    private readonly List<InterfacesTipoDocumentoOptionDto> _documentTypes = [];
+    private readonly List<InterfacesViewColumnDto> _viewSettingsDraft = [];
+    private AppUiMessage? _feedback;
+    private InterfacesViewSettingsDto _viewSettings = BuildDefaultViewSettings();
+    private bool _loadingList;
+    private bool _showViewSettings;
+    private bool _viewSettingsLoaded;
+    private long _selectedId;
+    private int _pagedTotal;
+    private int _pageNumber = 1;
+    private int _totalPages = 1;
+    private bool _hasPrev;
+    private bool _hasNext;
+    private string _draftAgruparPor = InterfacesViewGroupKeys.None;
+    private string _viewSettingsUserName = string.Empty;
     private DateTime? _filtersDesde = DateTime.Today.AddDays(-30);
     private DateTime? _filtersHasta = DateTime.Today;
 
     protected override async Task OnInitializedAsync()
     {
-        await CargarInicialAsync();
+        AppUserSession.StateChanged += OnAppUserSessionChanged;
+        await EnsureViewSettingsLoadedAsync();
+        await CargarCatalogosAsync();
+        await BuscarAsync();
     }
 
-    private async Task CargarInicialAsync()
+    public void Dispose()
+        => AppUserSession.StateChanged -= OnAppUserSessionChanged;
+
+    private async Task CargarCatalogosAsync()
     {
-        _loading = true;
-        try
+        var statesResult = await UiOps.RunAsync(() => InterfacesSvc.GetStatesAsync(), "No se pudieron cargar los estados.");
+        if (statesResult.Success && statesResult.Value is not null)
         {
-            var statesResult = await UiOps.RunAsync(() => InterfacesSvc.GetStatesAsync(), "No se pudieron cargar los estados.");
-            if (!statesResult.Success)
-            {
-                SetMessage(BuildFeedbackText(statesResult.Feedback), true);
-                return;
-            }
-
-            var typesResult = await UiOps.RunAsync(() => InterfacesSvc.GetDocumentTypesAsync(), "No se pudieron cargar los tipos documentales.");
-            if (!typesResult.Success)
-            {
-                SetMessage(BuildFeedbackText(typesResult.Feedback), true);
-                return;
-            }
-
-            var settingsResult = await UiOps.RunAsync(() => InterfacesConfigSvc.GetUploadSettingsAsync(), "No se pudo cargar la configuración de Interfaces.");
-            if (!settingsResult.Success)
-            {
-                SetMessage(BuildFeedbackText(settingsResult.Feedback), true);
-                return;
-            }
-
-            _states = statesResult.Value ?? [];
-            _documentTypes = typesResult.Value ?? [];
-            _settings = settingsResult.Value;
-
-            await BuscarAsync();
+            _states.Clear();
+            _states.AddRange(statesResult.Value);
         }
-        finally
+
+        var typesResult = await UiOps.RunAsync(() => InterfacesSvc.GetDocumentTypesAsync(), "No se pudieron cargar los tipos documentales.");
+        if (typesResult.Success && typesResult.Value is not null)
         {
-            _loading = false;
+            _documentTypes.Clear();
+            _documentTypes.AddRange(typesResult.Value);
         }
+    }
+
+    private async Task RecargarAsync()
+    {
+        await CargarCatalogosAsync();
+        await BuscarAsync();
+    }
+
+    private async Task AplicarFiltrosAsync()
+    {
+        _filters.PageNumber = 1;
+        await BuscarAsync();
     }
 
     private async Task BuscarAsync()
     {
-        _loading = true;
+        _loadingList = true;
         _filters.Desde = _filtersDesde;
         _filters.Hasta = _filtersHasta;
 
         try
         {
-            var result = await UiOps.RunAsync(() => InterfacesSvc.SearchAsync(_filters), "No se pudieron cargar los comprobantes.");
-            if (!result.Success)
+            var result = await UiOps.RunAsync(() => InterfacesSvc.SearchAsync(_filters), "No se pudieron cargar los documentos.");
+            if (!result.Success || result.Value is null)
             {
-                SetMessage(BuildFeedbackText(result.Feedback), true);
+                SetFeedback(result.Feedback);
                 return;
             }
 
-            _items = OrdenarItems(result.Value ?? []);
-            SyncRowStateSelections();
-
-            if (_selectedId.HasValue)
-            {
-                var stillExists = _items.Any(x => x.IdComprobanteRecibido == _selectedId.Value);
-                if (stillExists)
-                    await SeleccionarAsync(_selectedId.Value);
-                else
-                    ClearSelection(showEmptyState: _editorMode != InterfacesEditorMode.Nuevo);
-            }
-            else if (_editorMode == InterfacesEditorMode.Vacio && _items.Count > 0)
-            {
-                await SeleccionarAsync(_items[0].IdComprobanteRecibido);
-            }
+            _items.Clear();
+            _items.AddRange(result.Value.Items);
+            _pagedTotal = result.Value.Total;
+            _pageNumber = result.Value.PageNumber;
+            _totalPages = result.Value.TotalPages;
+            _hasPrev = result.Value.HasPrev;
+            _hasNext = result.Value.HasNext;
         }
         finally
         {
-            _loading = false;
+            _loadingList = false;
         }
     }
 
-    private async Task SeleccionarAsync(long id)
+    private void AbrirFicha(long id)
+        => Navigation.NavigateTo($"/interfaces/{id}");
+
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    private async Task CambiarPaginaAsync(int page)
     {
-        _selectedId = id;
-        _editorMode = InterfacesEditorMode.Edicion;
-
-        var result = await UiOps.RunAsync(() => InterfacesSvc.GetByIdAsync(id), "No se pudo cargar el detalle.");
-        if (!result.Success)
-        {
-            SetMessage(BuildFeedbackText(result.Feedback), true);
-            return;
-        }
-
-        _selectedDetail = result.Value;
-        if (_selectedDetail is null)
-        {
-            ClearSelection(showEmptyState: true);
-            return;
-        }
-
-        _statusChange.IdComprobanteRecibido = id;
-        _statusChange.IdEstadoNuevo = _selectedDetail.IdEstado;
-        _statusChange.Observacion = string.Empty;
-        ResetEditarDetalle();
-        _extraFiles.Clear();
-        _extraPickerVersion++;
-        await ScrollEditorIntoViewAsync();
-    }
-
-    private async Task AbrirNuevoDocumento()
-    {
-        SetMessage(string.Empty, false);
-        _editorMode = InterfacesEditorMode.Nuevo;
-        _selectedId = null;
-        _selectedDetail = null;
-        _statusChange.IdComprobanteRecibido = 0;
-        _statusChange.IdEstadoNuevo = 0;
-        _statusChange.Observacion = string.Empty;
-        _extraFiles.Clear();
-        LimpiarFormulario();
-        await ScrollEditorIntoViewAsync();
-    }
-
-    private async Task CancelarNuevoDocumento()
-    {
-        if (_items.Count > 0)
-        {
-            await SeleccionarAsync(_items[0].IdComprobanteRecibido);
-            return;
-        }
-
-        ClearSelection(showEmptyState: true);
-        await ScrollEditorIntoViewAsync();
-    }
-
-    private void ClearSelection(bool showEmptyState)
-    {
-        _selectedId = null;
-        _selectedDetail = null;
-        _statusChange.IdComprobanteRecibido = 0;
-        _statusChange.IdEstadoNuevo = 0;
-        _statusChange.Observacion = string.Empty;
-        _extraFiles.Clear();
-        _editorMode = showEmptyState ? InterfacesEditorMode.Vacio : InterfacesEditorMode.Nuevo;
-    }
-
-    private void CancelarSeleccionActual()
-    {
-        ClearSelection(showEmptyState: true);
-    }
-
-    private async Task ScrollEditorIntoViewAsync()
-    {
-        await InvokeAsync(StateHasChanged);
-
-        try
-        {
-            await JS.InvokeVoidAsync("eval",
-                "document.getElementById('interfaces-editor-panel')?.scrollIntoView({behavior:'smooth', block:'start'})");
-        }
-        catch
-        {
-        }
-    }
-
-    private async Task HandleFilesSelectedAsync(InputFileChangeEventArgs e)
-    {
-        if (_settings is null)
-        {
-            SetMessage("No se pudo cargar la configuración de carga.", true);
-            return;
-        }
-
-        await AgregarArchivosPendientesAsync(_selectedFiles, e.GetMultipleFiles(20), 20, _settings.TamanoMaximoBytes);
-        _filePickerVersion++;
-        await InvokeAsync(StateHasChanged);
-    }
-
-    private async Task HandlePhotoSelectedAsync(InputFileChangeEventArgs e)
-    {
-        if (_settings is null)
-        {
-            SetMessage("No se pudo cargar la configuración de carga.", true);
-            return;
-        }
-
-        await AgregarArchivosPendientesAsync(_selectedFiles, e.GetMultipleFiles(10), 20, _settings.TamanoMaximoBytes);
-        _cameraPickerVersion++;
-        await InvokeAsync(StateHasChanged);
-    }
-
-    private async Task HandleExtraFilesSelectedAsync(InputFileChangeEventArgs e)
-    {
-        _extraFiles.Clear();
-        _extraFiles.AddRange(e.GetMultipleFiles(20));
-        _extraPickerVersion++;
-        await InvokeAsync(StateHasChanged);
-    }
-
-    private async Task GuardarAsync()
-    {
-        if (_settings is null)
-        {
-            SetMessage("No se pudo cargar la configuración de carga.", true);
-            return;
-        }
-
-        _saving = true;
-        try
-        {
-            var attachments = new List<InterfacesCrearAdjuntoRequest>();
-            var openedStreams = new List<Stream>();
-
-            try
-            {
-                foreach (var file in _selectedFiles)
-                {
-                    var stream = file.OpenReadStream();
-                    openedStreams.Add(stream);
-                    attachments.Add(new InterfacesCrearAdjuntoRequest
-                    {
-                        NombreArchivo = file.NombreArchivo,
-                        MimeType = file.MimeType,
-                        TamanoBytes = file.TamanoBytes,
-                        Contenido = stream
-                    });
-                }
-
-                var request = new InterfacesCrearComprobanteRequest
-                {
-                    IdTipoDocumento = _nuevo.IdTipoDocumento,
-                    Observacion = _nuevo.Observacion,
-                    UsuarioAccion = CurrentUserName,
-                    PcAccion = Environment.MachineName,
-                    Adjuntos = attachments
-                };
-
-                var result = await UiOps.RunAsync(() => InterfacesSvc.CreateAsync(request), "No se pudo registrar el comprobante.");
-                if (!result.Success)
-                {
-                    SetMessage(BuildFeedbackText(result.Feedback), true);
-                    return;
-                }
-
-                var createdId = result.Value;
-                SetMessage($"Comprobante #{createdId} registrado correctamente.", false);
-                LimpiarFormulario();
-                await BuscarAsync();
-                await SeleccionarAsync(createdId);
-            }
-            finally
-            {
-                foreach (var stream in openedStreams)
-                    await stream.DisposeAsync();
-            }
-        }
-        catch (Exception ex)
-        {
-            SetMessage(BuildFeedbackText(UiOps.BuildMessage(ex, "No se pudo registrar el comprobante.")), true);
-        }
-        finally
-        {
-            _saving = false;
-        }
-    }
-
-    private async Task GuardarEstadoDetalleAsync()
-    {
-        if (_selectedDetail is null || !_selectedId.HasValue)
+        if (page < 1 || page > _totalPages || _loadingList)
             return;
 
-        if (_statusChange.IdEstadoNuevo == _selectedDetail.IdEstado)
-            return;
-
-        if (string.IsNullOrWhiteSpace(_statusChange.Observacion))
-            _statusChange.Observacion = "Estado actualizado desde el editor de Recepción documental.";
-
-        await CambiarEstadoAsync();
+        _filters.PageNumber = page;
+        await BuscarAsync();
     }
 
-    private async Task CambiarEstadoAsync()
+    private async Task OnPageSizeChangedAsync(ChangeEventArgs e)
     {
-        if (!_selectedId.HasValue)
-            return;
-
-        _changingState = true;
-        try
-        {
-            _statusChange.IdComprobanteRecibido = _selectedId.Value;
-            _statusChange.UsuarioAccion = CurrentUserName;
-            _statusChange.PcAccion = Environment.MachineName;
-
-            var result = await UiOps.RunAsync(async () =>
-            {
-                await InterfacesSvc.ChangeStatusAsync(_statusChange);
-                return true;
-            }, "No se pudo actualizar el estado.");
-
-            if (!result.Success)
-            {
-                SetMessage(BuildFeedbackText(result.Feedback), true);
-                return;
-            }
-
-            SetMessage("Estado actualizado correctamente.", false);
-            await BuscarAsync();
-            await SeleccionarAsync(_selectedId.Value);
-        }
-        finally
-        {
-            _changingState = false;
-        }
-    }
-
-    private async Task GuardarEdicionAsync()
-    {
-        if (_selectedDetail is null || !_selectedId.HasValue)
-            return;
-
-        _savingEdit = true;
-        try
-        {
-            _editForm.IdComprobanteRecibido = _selectedId.Value;
-            _editForm.UsuarioAccion = CurrentUserName;
-            _editForm.PcAccion = Environment.MachineName;
-
-            var result = await UiOps.RunAsync(async () =>
-            {
-                await InterfacesSvc.UpdateAsync(_editForm);
-                return true;
-            }, "No se pudo guardar el comprobante.");
-
-            if (!result.Success)
-            {
-                SetMessage(BuildFeedbackText(result.Feedback), true);
-                return;
-            }
-
-            if (_selectedDetail.PermiteEdicion)
-                SetMessage("Comprobante actualizado correctamente.", false);
-            else
-                SetMessage("Nota guardada correctamente. En este estado el documento solo permite actualizar la observación.", false);
-            await BuscarAsync();
-            await SeleccionarAsync(_selectedId.Value);
-        }
-        finally
-        {
-            _savingEdit = false;
-        }
-    }
-
-    private async Task AgregarAdjuntosAsync()
-    {
-        if (_selectedDetail is null || !_selectedId.HasValue || _settings is null)
-            return;
-
-        _savingExtraAttachments = true;
-        try
-        {
-            var attachments = new List<InterfacesCrearAdjuntoRequest>();
-            var openedStreams = new List<Stream>();
-
-            try
-            {
-                foreach (var file in _extraFiles)
-                {
-                    var stream = file.OpenReadStream(_settings.TamanoMaximoBytes);
-                    openedStreams.Add(stream);
-                    attachments.Add(new InterfacesCrearAdjuntoRequest
-                    {
-                        NombreArchivo = file.Name,
-                        MimeType = file.ContentType,
-                        TamanoBytes = file.Size,
-                        Contenido = stream
-                    });
-                }
-
-                var request = new InterfacesAgregarAdjuntosRequest
-                {
-                    IdComprobanteRecibido = _selectedId.Value,
-                    UsuarioAccion = CurrentUserName,
-                    PcAccion = Environment.MachineName,
-                    Adjuntos = attachments
-                };
-
-                var result = await UiOps.RunAsync(async () =>
-                {
-                    await InterfacesSvc.AddAttachmentsAsync(request);
-                    return true;
-                }, "No se pudieron agregar adjuntos.");
-
-                if (!result.Success)
-                {
-                    SetMessage(BuildFeedbackText(result.Feedback), true);
-                    return;
-                }
-
-                _extraFiles.Clear();
-                _extraPickerVersion++;
-                SetMessage("Adjuntos agregados correctamente.", false);
-                await BuscarAsync();
-                await SeleccionarAsync(_selectedId.Value);
-            }
-            finally
-            {
-                foreach (var stream in openedStreams)
-                    await stream.DisposeAsync();
-            }
-        }
-        catch (Exception ex)
-        {
-            SetMessage(BuildFeedbackText(UiOps.BuildMessage(ex, "No se pudieron agregar adjuntos.")), true);
-        }
-        finally
-        {
-            _savingExtraAttachments = false;
-        }
-    }
-
-    private async Task QuitarAdjuntoAsync(long idAdjunto)
-    {
-        if (_selectedDetail is null || !_selectedId.HasValue)
-            return;
-
-        _removingAttachment = true;
-        try
-        {
-            var request = new InterfacesEliminarAdjuntoRequest
-            {
-                IdAdjunto = idAdjunto,
-                UsuarioAccion = CurrentUserName,
-                PcAccion = Environment.MachineName,
-                Observacion = "Adjunto quitado desde la bandeja de Interfaces."
-            };
-
-            var result = await UiOps.RunAsync(async () =>
-            {
-                await InterfacesSvc.RemoveAttachmentAsync(request);
-                return true;
-            }, "No se pudo quitar el adjunto.");
-
-            if (!result.Success)
-            {
-                SetMessage(BuildFeedbackText(result.Feedback), true);
-                return;
-            }
-
-            SetMessage("Adjunto quitado correctamente.", false);
-            await BuscarAsync();
-            await SeleccionarAsync(_selectedId.Value);
-        }
-        finally
-        {
-            _removingAttachment = false;
-        }
-    }
-
-    private async Task AnularAsync()
-    {
-        if (_selectedDetail is null || !_selectedId.HasValue)
-            return;
-
-        var anuladoState = _states.FirstOrDefault(x => string.Equals(x.Codigo, "ANULADO", StringComparison.OrdinalIgnoreCase));
-        if (anuladoState is null)
-        {
-            SetMessage("No existe el estado ANULADO configurado para Interfaces.", true);
-            return;
-        }
-
-        _statusChange.IdEstadoNuevo = anuladoState.IdEstado;
-        if (string.IsNullOrWhiteSpace(_statusChange.Observacion))
-            _statusChange.Observacion = "Comprobante anulado desde la bandeja de Interfaces.";
-        await CambiarEstadoAsync();
-    }
-
-    private async Task RecargarAsync()
-    {
-        _message = string.Empty;
+        if (int.TryParse(e.Value?.ToString(), out var size) && size > 0)
+            _filters.PageSize = size;
+        _filters.PageNumber = 1;
         await BuscarAsync();
     }
 
     private void LimpiarFiltros()
     {
-        _filtersDesde = DateTime.Today.AddDays(-30);
-        _filtersHasta = DateTime.Today;
+        _filters.Texto = string.Empty;
         _filters.IdEstado = null;
         _filters.IdTipoDocumento = null;
-        _filters.Texto = string.Empty;
+        _filtersDesde = DateTime.Today.AddDays(-30);
+        _filtersHasta = DateTime.Today;
     }
 
-    private void LimpiarFormulario()
+    private void OnAppUserSessionChanged()
     {
-        _nuevo.IdTipoDocumento = 0;
-        _nuevo.Observacion = string.Empty;
-        _selectedFiles.Clear();
-        _filePickerVersion++;
-        _cameraPickerVersion++;
-    }
-
-    private void QuitarArchivoPendiente(Guid id)
-    {
-        var index = _selectedFiles.FindIndex(x => x.Id == id);
-        if (index >= 0)
-            _selectedFiles.RemoveAt(index);
-        _filePickerVersion++;
-        _cameraPickerVersion++;
-    }
-
-    private async Task AgregarArchivosPendientesAsync(List<PendingUploadFile> target, IReadOnlyList<IBrowserFile> files, int maxFiles, long maxBytes)
-    {
-        var signatures = target
-            .Select(static x => x.Signature)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        var added = 0;
-        foreach (var file in files)
+        _ = InvokeAsync(async () =>
         {
-            if (target.Count >= maxFiles)
-                break;
-
-            var pending = await PendingUploadFile.CreateAsync(file, maxBytes);
-            if (!signatures.Add(pending.Signature))
-                continue;
-
-            target.Add(pending);
-            added++;
-        }
-
-        if (added == 0 && target.Count >= maxFiles)
-            SetMessage($"Se permite cargar hasta {maxFiles} archivos por comprobante.", true);
+            await EnsureViewSettingsLoadedAsync(force: true);
+            StateHasChanged();
+        });
     }
 
-    private void ResetEditarDetalle()
+    private async Task EnsureViewSettingsLoadedAsync(bool force = false)
     {
-        if (_selectedDetail is null)
+        var currentUser = AppUserSession.GetCurrentUserName(string.Empty).Trim();
+        if (!force && _viewSettingsLoaded && string.Equals(_viewSettingsUserName, currentUser, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        if (string.IsNullOrWhiteSpace(currentUser))
         {
-            _editForm.IdComprobanteRecibido = 0;
-            _editForm.IdTipoDocumento = 0;
-            _editForm.Observacion = string.Empty;
+            ApplyViewSettings(BuildDefaultViewSettings(), string.Empty);
             return;
         }
 
-        _editForm.IdComprobanteRecibido = _selectedDetail.IdComprobanteRecibido;
-        _editForm.IdTipoDocumento = _selectedDetail.IdTipoDocumento;
-        _editForm.Observacion = _selectedDetail.Observacion;
-        _statusChange.IdEstadoNuevo = _selectedDetail.IdEstado;
-        _statusChange.Observacion = string.Empty;
+        var result = await UiOps.RunAsync(() => InterfacesSvc.GetViewSettingsAsync(currentUser), "No se pudo cargar la configuración de vista.");
+        if (!result.Success || result.Value is null)
+        {
+            ApplyViewSettings(BuildDefaultViewSettings(), currentUser);
+            return;
+        }
+
+        ApplyViewSettings(result.Value, currentUser);
     }
 
-    private void SyncRowStateSelections()
+    private void ApplyViewSettings(InterfacesViewSettingsDto settings, string userName)
     {
-        var validIds = _items.Select(static x => x.IdComprobanteRecibido).ToHashSet();
-
-        foreach (var item in _items)
-            _rowStateSelections[item.IdComprobanteRecibido] = item.IdEstado;
-
-        var stale = _rowStateSelections.Keys.Where(id => !validIds.Contains(id)).ToList();
-        foreach (var id in stale)
-            _rowStateSelections.Remove(id);
+        _viewSettings = settings;
+        _viewSettingsUserName = userName;
+        _viewSettingsLoaded = true;
+        _draftAgruparPor = settings.AgruparPor;
+        _viewSettingsDraft.Clear();
+        _viewSettingsDraft.AddRange(CloneColumns(settings.Columnas));
     }
 
-    private IReadOnlyList<InterfacesInboxItemDto> OrdenarItems(IReadOnlyList<InterfacesInboxItemDto> items)
+    private void AbrirConfiguracionVista()
     {
-        if (items.Count == 0)
-            return items;
+        _showViewSettings = true;
+        _draftAgruparPor = _viewSettings.AgruparPor;
+        _viewSettingsDraft.Clear();
+        _viewSettingsDraft.AddRange(CloneColumns(_viewSettings.Columnas));
+    }
 
-        var stateOrder = _states.ToDictionary(x => x.IdEstado, x => x.Orden);
+    private void CancelarConfiguracionVista()
+    {
+        _showViewSettings = false;
+    }
 
-        return items
-            .OrderBy(x => stateOrder.TryGetValue(x.IdEstado, out var order) ? order : int.MaxValue)
-            .ThenBy(x => x.EstadoDescripcion)
-            .ThenByDescending(x => x.FechaHoraGrabacion)
-            .ThenByDescending(x => x.IdComprobanteRecibido)
+    private void ToggleViewColumn(string key, ChangeEventArgs args)
+    {
+        var column = _viewSettingsDraft.FirstOrDefault(c => string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase));
+        if (column is null) return;
+        column.Visible = args.Value is bool flag && flag;
+        if (!_viewSettingsDraft.Any(c => c.Visible))
+            column.Visible = true;
+    }
+
+    private void MoveViewColumn(string key, int offset)
+    {
+        var ordered = _viewSettingsDraft.OrderBy(c => c.Order).ToList();
+        var index = ordered.FindIndex(c => string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase));
+        if (index < 0) return;
+        var target = index + offset;
+        if (target < 0 || target >= ordered.Count) return;
+        (ordered[index], ordered[target]) = (ordered[target], ordered[index]);
+        for (var i = 0; i < ordered.Count; i++) ordered[i].Order = i;
+        _viewSettingsDraft.Clear();
+        _viewSettingsDraft.AddRange(ordered);
+    }
+
+    private async Task GuardarConfiguracionVistaAsync()
+    {
+        var currentUser = AppUserSession.GetCurrentUserName(string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(currentUser))
+        {
+            SetFeedback(new AppUiMessage { Severity = AppUiFeedbackSeverity.Warning, Title = "Sesión requerida", Message = "Necesitás iniciar sesión para guardar la configuración de vista." });
+            return;
+        }
+
+        var settings = new InterfacesViewSettingsDto { AgruparPor = _draftAgruparPor, Columnas = CloneColumns(_viewSettingsDraft) };
+        var result = await UiOps.RunAsync(async () => { await InterfacesSvc.SaveViewSettingsAsync(currentUser, settings); return true; }, "No se pudo guardar la configuración de vista.");
+        if (!result.Success) { SetFeedback(result.Feedback); return; }
+
+        ApplyViewSettings(settings, currentUser);
+        _showViewSettings = false;
+        SetFeedback(AppUiMessage.Success("Vista guardada", "La configuración de la grilla quedó actualizada para tu usuario."));
+    }
+
+    private IReadOnlyList<InterfacesViewColumnDto> GetVisibleColumns()
+        => _viewSettings.Columnas.Where(c => c.Visible).OrderBy(c => c.Order).ToList();
+
+    private IReadOnlyList<InterfacesGridGroup> BuildGridGroups()
+    {
+        if (_viewSettings.AgruparPor == InterfacesViewGroupKeys.None)
+            return [new InterfacesGridGroup { Label = string.Empty, ShowHeader = false, Items = _items.ToList() }];
+
+        return _items
+            .GroupBy(item => ResolveGroupValue(item, _viewSettings.AgruparPor))
+            .OrderBy(group => group.Key, StringComparer.CurrentCultureIgnoreCase)
+            .Select(group => new InterfacesGridGroup { Label = group.Key, ShowHeader = true, Items = group.ToList() })
             .ToList();
     }
 
-    private int GetRowSelectedState(long idComprobanteRecibido)
-        => _rowStateSelections.TryGetValue(idComprobanteRecibido, out var value)
-            ? value
-            : _items.FirstOrDefault(x => x.IdComprobanteRecibido == idComprobanteRecibido)?.IdEstado ?? 0;
-
-    private void CambiarSeleccionEstadoLista(long idComprobanteRecibido, string? value)
-    {
-        if (int.TryParse(value, out var parsed))
-            _rowStateSelections[idComprobanteRecibido] = parsed;
-    }
-
-    private async Task AplicarCambioEstadoListaAsync(long idComprobanteRecibido)
-    {
-        var selectedState = GetRowSelectedState(idComprobanteRecibido);
-        if (selectedState <= 0)
-            return;
-
-        _selectedId = idComprobanteRecibido;
-        _statusChange.IdComprobanteRecibido = idComprobanteRecibido;
-        _statusChange.IdEstadoNuevo = selectedState;
-        _statusChange.Observacion = "Estado actualizado desde Documentos pendientes.";
-
-        await CambiarEstadoAsync();
-    }
-
-    private async Task CambiarEstadoRapidoAsync(long idComprobanteRecibido, InterfacesQuickAction action)
-    {
-        var targetState = ResolveQuickState(action);
-        if (targetState is null)
+    private static string ResolveGroupValue(InterfacesInboxItemDto item, string grouping)
+        => grouping switch
         {
-            SetMessage("No se encontró un estado compatible para la acción rápida seleccionada.", true);
-            return;
-        }
-
-        _rowStateSelections[idComprobanteRecibido] = targetState.IdEstado;
-        _selectedId = idComprobanteRecibido;
-        _statusChange.IdComprobanteRecibido = idComprobanteRecibido;
-        _statusChange.IdEstadoNuevo = targetState.IdEstado;
-        _statusChange.Observacion = action switch
-        {
-            InterfacesQuickAction.Procesar => "Estado actualizado a procesar desde Documentos pendientes.",
-            InterfacesQuickAction.Finalizar => "Estado finalizado desde Documentos pendientes.",
-            InterfacesQuickAction.Rechazar => "Estado rechazado desde Documentos pendientes.",
-            _ => "Estado actualizado desde Documentos pendientes."
+            InterfacesViewGroupKeys.Estado => item.EstadoDescripcion,
+            InterfacesViewGroupKeys.Tipo => item.TipoDocumentoDescripcion,
+            _ => string.Empty
         };
 
-        await CambiarEstadoAsync();
-    }
-
-    private InterfacesEstadoOptionDto? ResolveQuickState(InterfacesQuickAction action)
-        => action switch
+    private static string GetGroupingLabel(string grouping)
+        => grouping switch
         {
-            InterfacesQuickAction.Procesar => FindState("PROCES"),
-            InterfacesQuickAction.Finalizar => FindState("FINAL", requireFinal: false) ?? _states.FirstOrDefault(x => x.EsFinal),
-            InterfacesQuickAction.Rechazar => FindState("RECHAZ") ?? FindState("OBSERV"),
-            _ => null
+            InterfacesViewGroupKeys.Estado => "Estado",
+            InterfacesViewGroupKeys.Tipo => "Tipo",
+            _ => "Sin agrupar"
         };
 
-    private InterfacesEstadoOptionDto? FindState(string keyword, bool requireFinal = false)
-        => _states.FirstOrDefault(x =>
-            (!requireFinal || x.EsFinal) &&
-            (x.Codigo.Contains(keyword, StringComparison.OrdinalIgnoreCase) ||
-             x.Descripcion.Contains(keyword, StringComparison.OrdinalIgnoreCase)));
-
-    private bool CanQuickProcess() => ResolveQuickState(InterfacesQuickAction.Procesar) is not null;
-    private bool CanQuickFinalize() => ResolveQuickState(InterfacesQuickAction.Finalizar) is not null;
-    private bool CanQuickReject() => ResolveQuickState(InterfacesQuickAction.Rechazar) is not null;
-
-    private string GetEditorTitle()
-        => _editorMode switch
+    private static InterfacesViewSettingsDto BuildDefaultViewSettings()
+        => new()
         {
-            InterfacesEditorMode.Nuevo => "Nuevo documento",
-            InterfacesEditorMode.Edicion when _selectedDetail is not null => $"Documento #{_selectedDetail.IdComprobanteRecibido}",
-            _ => "Editor documental"
+            AgruparPor = InterfacesViewGroupKeys.None,
+            Columnas =
+            [
+                new() { Key = InterfacesViewColumnKeys.Numero, Label = "Número", Visible = true, Order = 0 },
+                new() { Key = InterfacesViewColumnKeys.Fecha, Label = "Fecha", Visible = true, Order = 1 },
+                new() { Key = InterfacesViewColumnKeys.Tipo, Label = "Tipo", Visible = true, Order = 2 },
+                new() { Key = InterfacesViewColumnKeys.Estado, Label = "Estado", Visible = true, Order = 3 },
+                new() { Key = InterfacesViewColumnKeys.Usuario, Label = "Usuario", Visible = true, Order = 4 },
+                new() { Key = InterfacesViewColumnKeys.Observacion, Label = "Observación", Visible = true, Order = 5 },
+                new() { Key = InterfacesViewColumnKeys.Adjuntos, Label = "Adjuntos", Visible = true, Order = 6 }
+            ]
         };
 
-    private string GetEditorSubtitle()
-        => _editorMode switch
-        {
-            InterfacesEditorMode.Nuevo => "Workspace de carga pensado para mantener el foco y evitar formularios largos tradicionales.",
-            InterfacesEditorMode.Edicion when _selectedDetail is not null => $"{_selectedDetail.TipoDocumentoDescripcion} · edición integrada en la misma vista",
-            _ => "Seleccioná un documento para revisar datos, estado, adjuntos e historial."
-        };
-
-    private string GetPendingSummary()
-    {
-        if (_items.Count == 0)
-            return "Sin pendientes";
-
-        var active = _items.Count(x => !x.Eliminado);
-        return $"{active} activos";
-    }
-
-    private string GetInitialStateLabel()
-    {
-        var initialState = _states.FirstOrDefault(x =>
-            x.EsInicial ||
-            string.Equals(x.Codigo, _settings?.EstadoInicialCodigo, StringComparison.OrdinalIgnoreCase));
-        return initialState?.Descripcion ?? "A procesar";
-    }
-
-    private static string GetDisplayValue(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "Sin referencia" : value;
+    private static List<InterfacesViewColumnDto> CloneColumns(IEnumerable<InterfacesViewColumnDto> columns)
+        => columns.OrderBy(c => c.Order)
+                  .Select(c => new InterfacesViewColumnDto { Key = c.Key, Label = c.Label, Visible = c.Visible, Order = c.Order })
+                  .ToList();
 
     private static string GetSummary(string value)
-        => string.IsNullOrWhiteSpace(value) ? "Sin observación." : value.Length <= 88 ? value : value[..88] + "...";
-
-    private static string FormatSize(long bytes)
     {
-        if (bytes < 1024)
-            return $"{bytes} B";
-        if (bytes < 1024 * 1024)
-            return $"{bytes / 1024.0:F1} KB";
-        return $"{bytes / 1024.0 / 1024.0:F1} MB";
+        var normalized = string.IsNullOrWhiteSpace(value) ? "Sin observación." : value.Trim().Replace(Environment.NewLine, " ").Replace('\n', ' ');
+        return normalized.Length > 100 ? normalized[..97] + "..." : normalized;
     }
 
-    private static string GetPendingAgeLabel(DateTime fechaHora)
-    {
-        var age = DateTime.Now - fechaHora;
-        if (age.TotalHours < 1)
-            return "recién ingresado";
-        if (age.TotalDays >= 1)
-            return $"{Math.Floor(age.TotalDays)} día(s)";
-        return $"{Math.Floor(age.TotalHours)} h";
-    }
-
-    private static string BuildFeedbackText(AppUiMessage? feedback)
-    {
-        if (feedback is null)
-            return string.Empty;
-
-        var parts = new List<string> { feedback.Message };
-        if (feedback.HasSuggestion)
-            parts.Add(feedback.Suggestion);
-        if (feedback.HasCode)
-            parts.Add($"Código: {feedback.Code}");
-        return string.Join(" ", parts.Where(static x => !string.IsNullOrWhiteSpace(x)));
-    }
-
-    private static string GetAttachmentDownloadUrl(long idAdjunto)
-        => $"/api/interfaces/adjuntos/{idAdjunto}";
-
-    private static string GetAttachmentIcon(string fileName)
-    {
-        var extension = Path.GetExtension(fileName)?.TrimStart('.').ToLowerInvariant();
-        return extension switch
+    private static string GetFeedbackClass(AppUiMessage message)
+        => message.Severity switch
         {
-            "pdf" => "bi-filetype-pdf",
-            "jpg" or "jpeg" or "png" or "gif" or "bmp" or "webp" => "bi-file-earmark-image",
-            "xls" or "xlsx" or "csv" => "bi-file-earmark-spreadsheet",
-            "txt" or "log" => "bi-file-earmark-text",
-            _ => "bi-file-earmark"
-        };
-    }
-
-    private string GetPriorityLabel(InterfacesInboxItemDto item)
-    {
-        if (item.Observacion.Contains("URGENTE", StringComparison.OrdinalIgnoreCase))
-            return "Urgente";
-        if ((DateTime.Now - item.FechaHoraGrabacion).TotalDays >= 2 && !item.EstadoDescripcion.Contains("Final", StringComparison.OrdinalIgnoreCase))
-            return "Alta";
-        return "Normal";
-    }
-
-    private string GetPriorityLabel(InterfacesDetalleDto item)
-    {
-        if (item.Observacion.Contains("URGENTE", StringComparison.OrdinalIgnoreCase))
-            return "Urgente";
-        if ((DateTime.Now - item.FechaHoraGrabacion).TotalDays >= 2 && !item.EstadoDescripcion.Contains("Final", StringComparison.OrdinalIgnoreCase))
-            return "Alta";
-        return "Normal";
-    }
-
-    private string GetPriorityCssClass(InterfacesInboxItemDto item)
-        => GetPriorityLabel(item) switch
-        {
-            "Urgente" => "interfaces-priority-chip--urgent",
-            "Alta" => "interfaces-priority-chip--high",
-            _ => "interfaces-priority-chip--normal"
+            AppUiFeedbackSeverity.Success => "editor-msg--ok",
+            AppUiFeedbackSeverity.Warning => "editor-msg--warning",
+            _ => "editor-msg--error"
         };
 
-    private string GetPriorityCssClass(InterfacesDetalleDto item)
-        => GetPriorityLabel(item) switch
-        {
-            "Urgente" => "interfaces-priority-chip--urgent",
-            "Alta" => "interfaces-priority-chip--high",
-            _ => "interfaces-priority-chip--normal"
-        };
-
-    private static string GetStateCssClass(string codigo, string descripcion)
+    private static string GetStateCssClass(string estadoCodigo, string estadoDescripcion)
     {
-        if (codigo.Contains("ANUL", StringComparison.OrdinalIgnoreCase) || descripcion.Contains("anul", StringComparison.OrdinalIgnoreCase))
+        var key = $"{estadoCodigo} {estadoDescripcion}".ToUpperInvariant();
+        if (key.Contains("ANUL"))
             return "interfaces-status-pill--danger";
-        if (codigo.Contains("RECHAZ", StringComparison.OrdinalIgnoreCase) || descripcion.Contains("rechaz", StringComparison.OrdinalIgnoreCase))
+        if (key.Contains("PEND") || key.Contains("PROCES"))
             return "interfaces-status-pill--warning";
-        if (codigo.Contains("FINAL", StringComparison.OrdinalIgnoreCase) || descripcion.Contains("final", StringComparison.OrdinalIgnoreCase))
+        if (key.Contains("FINAL") || key.Contains("CERR") || key.Contains("APROB"))
             return "interfaces-status-pill--success";
         return "interfaces-status-pill--info";
     }
 
-    private void SetMessage(string message, bool isError)
+    private void SetFeedback(AppUiMessage? message)
+        => _feedback = message;
+
+    private sealed class InterfacesGridGroup
     {
-        _message = message;
-        _isError = isError;
-    }
-
-    private string CurrentUserName => AppUserSession.GetCurrentUserName(Environment.UserName);
-
-    private sealed class PendingUploadFile
-    {
-        private PendingUploadFile(
-            string nombreArchivo,
-            string mimeType,
-            long tamanoBytes,
-            byte[] contenido,
-            string signature)
-        {
-            NombreArchivo = nombreArchivo;
-            MimeType = mimeType;
-            TamanoBytes = tamanoBytes;
-            Contenido = contenido;
-            Signature = signature;
-        }
-
-        public Guid Id { get; } = Guid.NewGuid();
-        public string NombreArchivo { get; }
-        public string MimeType { get; }
-        public long TamanoBytes { get; }
-        public byte[] Contenido { get; }
-        public string Signature { get; }
-
-        public static async Task<PendingUploadFile> CreateAsync(IBrowserFile file, long maxBytes)
-        {
-            await using var source = file.OpenReadStream(maxBytes);
-            await using var ms = new MemoryStream();
-            await source.CopyToAsync(ms);
-
-            return new PendingUploadFile(
-                file.Name,
-                file.ContentType,
-                file.Size,
-                ms.ToArray(),
-                $"{file.Name}|{file.Size}|{file.LastModified.UtcDateTime.Ticks}");
-        }
-
-        public Stream OpenReadStream()
-            => new MemoryStream(Contenido, writable: false);
-    }
-
-    private enum InterfacesEditorMode
-    {
-        Vacio,
-        Nuevo,
-        Edicion
-    }
-
-    private enum InterfacesQuickAction
-    {
-        Procesar,
-        Finalizar,
-        Rechazar
+        public string Label { get; init; } = string.Empty;
+        public bool ShowHeader { get; init; }
+        public List<InterfacesInboxItemDto> Items { get; init; } = [];
     }
 }

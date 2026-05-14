@@ -7574,6 +7574,95 @@ html[data-theme="light"] .interfaces-inline-note {
     background: linear-gradient(180deg, rgba(232, 244, 251, 0.96), rgba(240, 247, 252, 0.98));
 }
 
+.updates-overview {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.updates-stat .panel-card__title {
+    margin-bottom: .35rem;
+}
+
+.updates-config-grid {
+    align-items: end;
+}
+
+.updates-config-actions {
+    justify-content: flex-start;
+}
+
+.updates-grid {
+    align-items: start;
+}
+
+.updates-script-list,
+.updates-history-list {
+    display: grid;
+    gap: .9rem;
+}
+
+.updates-script-item,
+.updates-history-item {
+    padding: 1rem 1.05rem;
+    border-radius: 20px;
+    border: 1px solid var(--color-border);
+    background: linear-gradient(180deg, rgba(12, 24, 43, 0.9), rgba(9, 18, 32, 0.94));
+}
+
+html[data-theme="light"] .updates-script-item,
+html[data-theme="light"] .updates-history-item {
+    background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(246,249,252,0.98));
+}
+
+.updates-script-item__top,
+.updates-history-item__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .8rem;
+    margin-bottom: .45rem;
+}
+
+.updates-script-item p,
+.updates-history-item p {
+    margin: 0 0 .35rem;
+    color: var(--color-text);
+}
+
+.updates-script-item span,
+.updates-history-item span {
+    color: var(--color-muted);
+    font-size: .85rem;
+}
+
+.updates-history-item details {
+    margin-top: .7rem;
+}
+
+.updates-history-item summary {
+    cursor: pointer;
+    color: var(--color-accent);
+    font-size: .84rem;
+}
+
+.updates-history-item pre {
+    margin: .7rem 0 0;
+    padding: .85rem;
+    border-radius: 16px;
+    background: rgba(3, 10, 20, 0.42);
+    color: var(--color-muted);
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: .78rem;
+}
+
+@media (max-width: 980px) {
+    .updates-overview {
+        grid-template-columns: 1fr;
+    }
+}
+
 .interfaces-inbox-item__summary {
     font-size: .91rem;
     line-height: 1.4;

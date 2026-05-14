@@ -1,0 +1,765 @@
+@page "/interfaces/nuevo"
+@page "/interfaces/{IdComprobanteRecibido:long}"
+@using AlfaCore.Models
+@using Microsoft.AspNetCore.Components.Forms
+@inject AlfaCore.Services.IInterfacesService InterfacesSvc
+@inject AlfaCore.Services.IInterfacesConfigService InterfacesConfigSvc
+@inject AlfaCore.Services.IAppUiOperationService UiOps
+@inject AlfaCore.Services.IAppUserSessionService AppUserSession
+@inject NavigationManager Navigation
+
+<PageTitle>@(_isNewMode ? "Nuevo documento | Interfaces" : $"Documento #{IdComprobanteRecibido} | Interfaces")</PageTitle>
+
+<div class="page-grid">
+    <section class="page-intro">
+        <div>
+            <h2 class="page-intro__title">@(_isNewMode ? "Nuevo documento recibido" : $"Documento #{IdComprobanteRecibido}")</h2>
+            <p class="page-intro__text">@(_isNewMode ? "Completá los datos del comprobante y adjuntá los archivos necesarios antes de registrarlo." : "Editá la ficha completa del documento desde una pantalla separada del listado principal.")</p>
+        </div>
+        <div class="actions">
+            <a class="btn btn--ghost" href="/interfaces">
+                <i class="bi bi-arrow-left"></i> Volver al listado
+            </a>
+        </div>
+    </section>
+
+    @if (_feedback is not null)
+    {
+        <section class="panel-card">
+            <div class="editor-msg @GetFeedbackClass(_feedback)">
+                <div>
+                    <strong>@_feedback.Title</strong>
+                    <p>@_feedback.Message</p>
+                    @if (_feedback.HasSuggestion)
+                    {
+                        <small>@_feedback.Suggestion</small>
+                    }
+                    @if (_feedback.HasCode)
+                    {
+                        <small>Código: @_feedback.Code</small>
+                    }
+                </div>
+            </div>
+        </section>
+    }
+
+    @if (_loading)
+    {
+        <section class="panel-card">
+            <div class="loading">Cargando ficha...</div>
+        </section>
+    }
+    else if (_isNewMode)
+    {
+        <section class="panel-card">
+            <div class="panel-card__header">
+                <div>
+                    <h3 class="panel-card__title">Alta de documento</h3>
+                    <p class="panel-card__subtitle">La carga usa la configuración activa del módulo y exige al menos un adjunto.</p>
+                </div>
+            </div>
+
+            <div class="contactos-form">
+                <div class="contactos-form__grid">
+                    <div class="field">
+                        <label>Tipo documental</label>
+                        <select @bind="_nuevo.IdTipoDocumento" disabled="@_saving">
+                            <option value="0">Seleccionar...</option>
+                            @foreach (var item in _documentTypes)
+                            {
+                                <option value="@item.IdTipoDocumento">@item.Descripcion</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field field--wide">
+                        <label>Observación</label>
+                        <textarea class="contactos-observaciones" @bind="_nuevo.Observacion" disabled="@_saving"></textarea>
+                    </div>
+                </div>
+
+                <div class="interfaces-upload-dropzone">
+                    <div class="interfaces-upload-dropzone__head">
+                        <div>
+                            <h4>Adjuntos iniciales</h4>
+                            <p>Podés cargar archivos desde explorador o cámara. Se requieren adjuntos para registrar el documento.</p>
+                        </div>
+                        <div class="interfaces-upload-actions">
+                            <InputFile id="interfaces-file-picker"
+                                       @key="@($"file-{_filePickerVersion}")"
+                                       style="display:none"
+                                       OnChange="HandleFilesSelectedAsync"
+                                       multiple
+                                       disabled="@_saving" />
+                            <label class="btn btn--secondary interfaces-file-trigger @(_saving ? "is-disabled" : string.Empty)"
+                                   for="interfaces-file-picker"
+                                   aria-disabled="@_saving">
+                                <i class="bi bi-paperclip"></i>
+                                <span>Seleccionar archivos</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    @if (_selectedFiles.Count == 0)
+                    {
+                        <div class="interfaces-empty-upload">Todavía no agregaste archivos para este documento.</div>
+                    }
+                    else
+                    {
+                        <div class="interfaces-pending-files">
+                            @foreach (var file in _selectedFiles)
+                            {
+                                <article class="interfaces-pending-file">
+                                    <div>
+                                        <strong>@file.NombreArchivo</strong>
+                                        <span>@FormatSize(file.TamanoBytes)</span>
+                                    </div>
+                                    <button type="button" class="btn btn--ghost btn--sm" @onclick="() => QuitarArchivoPendiente(file.Id)" disabled="@_saving">
+                                        <i class="bi bi-x-circle"></i> Quitar
+                                    </button>
+                                </article>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="actions usuarios-editor__actions">
+                    <button type="button" class="btn btn--primary" @onclick="GuardarNuevoAsync" disabled="@_saving">
+                        <i class="bi bi-floppy"></i>
+                        <span>@(_saving ? "Guardando..." : "Guardar documento")</span>
+                    </button>
+                    <button type="button" class="btn btn--ghost" @onclick="LimpiarNuevo" disabled="@_saving">
+                        <i class="bi bi-eraser"></i>
+                        <span>Limpiar</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+    }
+    else if (_detail is not null)
+    {
+        <section class="panel-card">
+            <div class="panel-card__header">
+                <div>
+                    <h3 class="panel-card__title">Ficha del documento</h3>
+                    <p class="panel-card__subtitle">Alta: @_detail.FechaHoraGrabacion.ToString("dd/MM/yyyy HH:mm") · Usuario: @_detail.UsuarioAlta · Estado actual: @_detail.EstadoDescripcion</p>
+                </div>
+            </div>
+
+            <div class="contactos-tabs">
+                <button type="button" class="btn @(_activeTab == InterfacesTab.Datos ? "btn--primary" : "btn--ghost")" @onclick="() => _activeTab = InterfacesTab.Datos">Datos</button>
+                <button type="button" class="btn @(_activeTab == InterfacesTab.Adjuntos ? "btn--primary" : "btn--ghost")" @onclick="() => _activeTab = InterfacesTab.Adjuntos">Adjuntos</button>
+                <button type="button" class="btn @(_activeTab == InterfacesTab.Historial ? "btn--primary" : "btn--ghost")" @onclick="() => _activeTab = InterfacesTab.Historial">Historial</button>
+            </div>
+
+            @if (_activeTab == InterfacesTab.Datos)
+            {
+                <div class="contactos-form">
+                    <div class="contactos-form__grid">
+                        <div class="field">
+                            <label>Tipo documental</label>
+                            <select @bind="_editForm.IdTipoDocumento" disabled="@(!_detail.PermiteEdicion || _savingEdit)">
+                                @foreach (var item in _documentTypes)
+                                {
+                                    <option value="@item.IdTipoDocumento">@item.Descripcion</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label>Estado actual</label>
+                            <input value="@_detail.EstadoDescripcion" readonly />
+                        </div>
+                        <div class="field">
+                            <label>Usuario</label>
+                            <input value="@_detail.UsuarioAlta" readonly />
+                        </div>
+                        <div class="field">
+                            <label>Fecha</label>
+                            <input value="@_detail.FechaHoraGrabacion.ToString("dd/MM/yyyy HH:mm")" readonly />
+                        </div>
+                    </div>
+
+                    @if (!_detail.PermiteEdicion)
+                    {
+                        <div class="interfaces-inline-note">
+                            <i class="bi bi-info-circle"></i>
+                            <div>
+                                <strong>Edición limitada por estado</strong>
+                                <span>En este estado no se modifican tipo ni adjuntos, pero sí podés agregar una nota al documento.</span>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="field">
+                        <label>Observación</label>
+                        <textarea class="contactos-observaciones" @bind="_editForm.Observacion" disabled="@_savingEdit"></textarea>
+                    </div>
+
+                    <div class="field">
+                        <label>@(_detail.PermiteEdicion ? "Motivo / nota de estado" : "Nueva nota para agregar")</label>
+                        <textarea class="contactos-observaciones"
+                                  @bind="_statusChange.Observacion"
+                                  disabled="@_changingState"
+                                  placeholder="@(_detail.PermiteEdicion ? "Opcional: explicación del cambio de estado" : "Escribí la nota que querés agregar al documento")"></textarea>
+                    </div>
+
+                    <div class="contactos-form__grid">
+                        <div class="field">
+                            <label>Cambiar estado a</label>
+                            <select @bind="_statusChange.IdEstadoNuevo" disabled="@_changingState">
+                                @foreach (var item in _states)
+                                {
+                                    <option value="@item.IdEstado">@item.Descripcion</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="actions usuarios-editor__actions">
+                        <button type="button" class="btn btn--primary" @onclick="GuardarEdicionAsync" disabled="@_savingEdit">
+                            <i class="bi bi-floppy"></i>
+                            <span>@(_savingEdit ? "Guardando..." : "Guardar")</span>
+                        </button>
+                        <button type="button" class="btn btn--ghost" @onclick="GuardarEstadoAsync" disabled="@(_changingState || _statusChange.IdEstadoNuevo == _detail.IdEstado)">
+                            <i class="bi bi-arrow-repeat"></i>
+                            <span>@(_changingState ? "Actualizando..." : "Cambiar estado")</span>
+                        </button>
+                        <button type="button" class="btn btn--ghost" @onclick="ResetEditarDetalle" disabled="@_savingEdit">
+                            <i class="bi bi-eraser"></i>
+                            <span>Revertir</span>
+                        </button>
+                    </div>
+                </div>
+            }
+            else if (_activeTab == InterfacesTab.Adjuntos)
+            {
+                <div class="interfaces-upload-dropzone">
+                    @if (_detail.PermiteEdicion)
+                    {
+                        <div class="interfaces-upload-dropzone__head">
+                            <div>
+                                <h4>Adjuntos activos</h4>
+                                <p>Podés sumar más archivos al documento desde esta ficha.</p>
+                            </div>
+                            <div class="interfaces-upload-actions">
+                                <InputFile id="interfaces-extra-picker"
+                                           @key="@($"extra-{_extraPickerVersion}")"
+                                           style="display:none"
+                                           OnChange="HandleExtraFilesSelectedAsync"
+                                           multiple
+                                           disabled="@_savingExtraAttachments" />
+                                <label class="btn btn--secondary interfaces-file-trigger @(_savingExtraAttachments ? "is-disabled" : string.Empty)"
+                                       for="interfaces-extra-picker"
+                                       aria-disabled="@_savingExtraAttachments">
+                                    <i class="bi bi-folder-plus"></i>
+                                    <span>Agregar adjuntos</span>
+                                </label>
+                                <button type="button" class="btn btn--ghost" @onclick="AgregarAdjuntosAsync" disabled="@(_savingExtraAttachments || _extraFiles.Count == 0)">
+                                    <i class="bi bi-upload"></i>
+                                    <span>@(_savingExtraAttachments ? "Subiendo..." : "Subir")</span>
+                                </button>
+                            </div>
+                        </div>
+                    }
+
+                    @if (_detail.Adjuntos.Count == 0)
+                    {
+                        <div class="interfaces-empty-upload">Este comprobante todavía no tiene adjuntos activos.</div>
+                    }
+                    else
+                    {
+                        <div class="interfaces-attachments-modern">
+                            @foreach (var attachment in _detail.Adjuntos)
+                            {
+                                <div class="interfaces-attachment-row">
+                                    <div class="interfaces-attachment-row__icon">
+                                        <i class="bi @GetAttachmentIcon(attachment.NombreOriginal)"></i>
+                                    </div>
+                                    <div class="interfaces-attachment-row__content">
+                                        <strong>@attachment.NombreOriginal</strong>
+                                        <span>@FormatSize(attachment.TamanoBytes) · @attachment.FechaHoraGrabacion.ToString("dd/MM/yyyy HH:mm")</span>
+                                    </div>
+                                    <div class="interfaces-attachment-row__actions">
+                                        <a class="btn btn--ghost btn--sm" href="@GetAttachmentDownloadUrl(attachment.IdAdjunto)" target="_blank">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                        <a class="btn btn--ghost btn--sm" href="@GetAttachmentDownloadUrl(attachment.IdAdjunto)" download="@attachment.NombreOriginal">
+                                            <i class="bi bi-download"></i> Descargar
+                                        </a>
+                                        @if (_detail.PermiteEdicion)
+                                        {
+                                            <button type="button" class="btn btn--ghost btn--sm" @onclick="() => QuitarAdjuntoAsync(attachment.IdAdjunto)" disabled="@_savingExtraAttachments">
+                                                <i class="bi bi-trash"></i> Quitar
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="updates-history-list">
+                    @foreach (var item in _detail.Historial)
+                    {
+                        <article class="updates-history-item">
+                            <div class="updates-history-item__head">
+                                <strong>@item.Accion</strong>
+                                <span>@item.FechaHora.ToString("dd/MM/yyyy HH:mm")</span>
+                            </div>
+                            <p>@item.Observacion</p>
+                            <span>@item.Usuario · @item.EstadoAnteriorDescripcion @(string.IsNullOrWhiteSpace(item.EstadoNuevoDescripcion) ? string.Empty : $"-> {item.EstadoNuevoDescripcion}")</span>
+                        </article>
+                    }
+                </div>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    [Parameter] public long? IdComprobanteRecibido { get; set; }
+
+    private readonly InterfacesCrearComprobanteRequest _nuevo = new();
+    private readonly InterfacesActualizarComprobanteRequest _editForm = new();
+    private readonly InterfacesCambioEstadoRequest _statusChange = new();
+    private readonly List<PendingUploadFile> _selectedFiles = [];
+    private readonly List<IBrowserFile> _extraFiles = [];
+    private readonly List<InterfacesEstadoOptionDto> _states = [];
+    private readonly List<InterfacesTipoDocumentoOptionDto> _documentTypes = [];
+    private AppUiMessage? _feedback;
+    private InterfacesDetalleDto? _detail;
+    private InterfacesUploadSettingsDto? _settings;
+    private bool _loading = true;
+    private bool _saving;
+    private bool _savingEdit;
+    private bool _changingState;
+    private bool _savingExtraAttachments;
+    private int _filePickerVersion;
+    private int _extraPickerVersion;
+    private InterfacesTab _activeTab = InterfacesTab.Datos;
+
+    private bool _isNewMode => !IdComprobanteRecibido.HasValue;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        try
+        {
+            await LoadCatalogsAsync();
+            _settings = await InterfacesConfigSvc.GetUploadSettingsAsync();
+
+            if (_isNewMode)
+            {
+                LimpiarNuevo();
+            }
+            else
+            {
+                await CargarDetalleAsync();
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadCatalogsAsync()
+    {
+        _states.Clear();
+        _states.AddRange(await InterfacesSvc.GetStatesAsync());
+        _documentTypes.Clear();
+        _documentTypes.AddRange(await InterfacesSvc.GetDocumentTypesAsync());
+    }
+
+    private async Task CargarDetalleAsync()
+    {
+        if (!IdComprobanteRecibido.HasValue)
+            return;
+
+        var result = await UiOps.RunAsync(() => InterfacesSvc.GetByIdAsync(IdComprobanteRecibido.Value), "No se pudo cargar el documento.");
+        if (!result.Success || result.Value is null)
+        {
+            SetFeedback(result.Feedback);
+            return;
+        }
+
+        _detail = result.Value;
+        ResetEditarDetalle();
+    }
+
+    private async Task GuardarNuevoAsync()
+    {
+        if (_settings is null)
+        {
+            SetFeedback(UiOps.BuildMessage(new InvalidOperationException("No se pudo cargar la configuración de carga."), "No se pudo guardar el documento."));
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var attachments = new List<InterfacesCrearAdjuntoRequest>();
+            var streams = new List<Stream>();
+            try
+            {
+                foreach (var file in _selectedFiles)
+                {
+                    var stream = file.OpenReadStream();
+                    streams.Add(stream);
+                    attachments.Add(new InterfacesCrearAdjuntoRequest
+                    {
+                        NombreArchivo = file.NombreArchivo,
+                        MimeType = file.MimeType,
+                        TamanoBytes = file.TamanoBytes,
+                        Contenido = stream
+                    });
+                }
+
+                var result = await UiOps.RunAsync(() => InterfacesSvc.CreateAsync(new InterfacesCrearComprobanteRequest
+                {
+                    IdTipoDocumento = _nuevo.IdTipoDocumento,
+                    Observacion = _nuevo.Observacion,
+                    UsuarioAccion = CurrentUserName,
+                    PcAccion = Environment.MachineName,
+                    Adjuntos = attachments
+                }), "No se pudo registrar el comprobante.");
+
+                if (!result.Success)
+                {
+                    SetFeedback(result.Feedback);
+                    return;
+                }
+
+                SetFeedback(AppUiMessage.Success("Documento registrado", $"El comprobante #{result.Value} se registró correctamente."));
+                Navigation.NavigateTo($"/interfaces/{result.Value}");
+            }
+            finally
+            {
+                foreach (var stream in streams)
+                    await stream.DisposeAsync();
+            }
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task GuardarEdicionAsync()
+    {
+        if (_detail is null || !IdComprobanteRecibido.HasValue)
+            return;
+
+        _savingEdit = true;
+        try
+        {
+            var originalObservation = _editForm.Observacion;
+            _editForm.IdComprobanteRecibido = IdComprobanteRecibido.Value;
+            _editForm.UsuarioAccion = CurrentUserName;
+            _editForm.PcAccion = Environment.MachineName;
+
+            if (!_detail.PermiteEdicion)
+            {
+                if (string.IsNullOrWhiteSpace(_statusChange.Observacion))
+                {
+                    SetFeedback(new AppUiMessage
+                    {
+                        Severity = AppUiFeedbackSeverity.Warning,
+                        Title = "Falta la nota",
+                        Message = "Escribí la nota en el bloque inferior para poder guardarla en este estado."
+                    });
+                    return;
+                }
+
+                _editForm.Observacion = AppendStatusNote(originalObservation, _statusChange.Observacion, CurrentUserName);
+            }
+
+            var result = await UiOps.RunAsync(async () =>
+            {
+                await InterfacesSvc.UpdateAsync(_editForm);
+                return true;
+            }, "No se pudo guardar el comprobante.");
+
+            if (!result.Success)
+            {
+                _editForm.Observacion = originalObservation;
+                SetFeedback(result.Feedback);
+                return;
+            }
+
+            SetFeedback(AppUiMessage.Success("Documento actualizado", _detail.PermiteEdicion
+                ? "La ficha se guardó correctamente."
+                : "La nota del bloque inferior se agregó a la observación del documento."));
+            await CargarDetalleAsync();
+        }
+        finally
+        {
+            _savingEdit = false;
+        }
+    }
+
+    private async Task GuardarEstadoAsync()
+    {
+        if (_detail is null || !IdComprobanteRecibido.HasValue)
+            return;
+
+        _changingState = true;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_statusChange.Observacion))
+                _statusChange.Observacion = "Estado actualizado desde la ficha de Interfaces.";
+
+            _statusChange.IdComprobanteRecibido = IdComprobanteRecibido.Value;
+            _statusChange.UsuarioAccion = CurrentUserName;
+            _statusChange.PcAccion = Environment.MachineName;
+
+            var result = await UiOps.RunAsync(async () =>
+            {
+                await InterfacesSvc.ChangeStatusAsync(_statusChange);
+                return true;
+            }, "No se pudo actualizar el estado del comprobante.");
+
+            if (!result.Success)
+            {
+                SetFeedback(result.Feedback);
+                return;
+            }
+
+            SetFeedback(AppUiMessage.Success("Estado actualizado", "El estado del documento quedó actualizado correctamente."));
+            await CargarDetalleAsync();
+        }
+        finally
+        {
+            _changingState = false;
+        }
+    }
+
+    private async Task AgregarAdjuntosAsync()
+    {
+        if (_detail is null || !IdComprobanteRecibido.HasValue)
+            return;
+
+        _savingExtraAttachments = true;
+        try
+        {
+            var attachments = new List<InterfacesCrearAdjuntoRequest>();
+            var streams = new List<Stream>();
+            try
+            {
+                foreach (var file in _extraFiles)
+                {
+                    var stream = file.OpenReadStream(_settings?.TamanoMaximoBytes ?? (25L * 1024L * 1024L));
+                    streams.Add(stream);
+                    attachments.Add(new InterfacesCrearAdjuntoRequest
+                    {
+                        NombreArchivo = file.Name,
+                        MimeType = file.ContentType,
+                        TamanoBytes = file.Size,
+                        Contenido = stream
+                    });
+                }
+
+                var result = await UiOps.RunAsync(async () =>
+                {
+                    await InterfacesSvc.AddAttachmentsAsync(new InterfacesAgregarAdjuntosRequest
+                    {
+                        IdComprobanteRecibido = IdComprobanteRecibido.Value,
+                        UsuarioAccion = CurrentUserName,
+                        PcAccion = Environment.MachineName,
+                        Adjuntos = attachments
+                    });
+                    return true;
+                }, "No se pudieron agregar adjuntos.");
+
+                if (!result.Success)
+                {
+                    SetFeedback(result.Feedback);
+                    return;
+                }
+
+                _extraFiles.Clear();
+                SetFeedback(AppUiMessage.Success("Adjuntos agregados", "Los archivos se sumaron correctamente al documento."));
+                await CargarDetalleAsync();
+            }
+            finally
+            {
+                foreach (var stream in streams)
+                    await stream.DisposeAsync();
+            }
+        }
+        finally
+        {
+            _savingExtraAttachments = false;
+        }
+    }
+
+    private async Task QuitarAdjuntoAsync(long idAdjunto)
+    {
+        var result = await UiOps.RunAsync(async () =>
+        {
+            await InterfacesSvc.RemoveAttachmentAsync(new InterfacesEliminarAdjuntoRequest
+            {
+                IdAdjunto = idAdjunto,
+                UsuarioAccion = CurrentUserName,
+                PcAccion = Environment.MachineName,
+                Observacion = "Adjunto quitado desde la ficha de Interfaces."
+            });
+            return true;
+        }, "No se pudo quitar el adjunto.");
+
+        if (!result.Success)
+        {
+            SetFeedback(result.Feedback);
+            return;
+        }
+
+        SetFeedback(AppUiMessage.Success("Adjunto quitado", "El archivo quedó dado de baja lógicamente."));
+        await CargarDetalleAsync();
+    }
+
+    private async Task HandleFilesSelectedAsync(InputFileChangeEventArgs e)
+    {
+        if (_settings is null)
+            return;
+
+        await AgregarArchivosPendientesAsync(_selectedFiles, e.GetMultipleFiles(20), 20, _settings.TamanoMaximoBytes);
+        _filePickerVersion++;
+    }
+
+    private async Task HandleExtraFilesSelectedAsync(InputFileChangeEventArgs e)
+    {
+        _extraFiles.Clear();
+        _extraFiles.AddRange(e.GetMultipleFiles(20));
+        _extraPickerVersion++;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task AgregarArchivosPendientesAsync(List<PendingUploadFile> target, IReadOnlyList<IBrowserFile> files, int maxFiles, long maxBytes)
+    {
+        var signatures = target.Select(static x => x.Signature).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in files)
+        {
+            if (target.Count >= maxFiles)
+                break;
+
+            var pending = await PendingUploadFile.CreateAsync(file, maxBytes);
+            if (!signatures.Add(pending.Signature))
+                continue;
+
+            target.Add(pending);
+        }
+    }
+
+    private void QuitarArchivoPendiente(Guid id)
+    {
+        var index = _selectedFiles.FindIndex(x => x.Id == id);
+        if (index >= 0)
+            _selectedFiles.RemoveAt(index);
+        _filePickerVersion++;
+    }
+
+    private void LimpiarNuevo()
+    {
+        _nuevo.IdTipoDocumento = 0;
+        _nuevo.Observacion = string.Empty;
+        _selectedFiles.Clear();
+        _filePickerVersion++;
+    }
+
+    private void ResetEditarDetalle()
+    {
+        if (_detail is null)
+            return;
+
+        _editForm.IdComprobanteRecibido = _detail.IdComprobanteRecibido;
+        _editForm.IdTipoDocumento = _detail.IdTipoDocumento;
+        _editForm.Observacion = _detail.Observacion;
+        _statusChange.IdEstadoNuevo = _detail.IdEstado;
+        _statusChange.Observacion = string.Empty;
+    }
+
+    private static string AppendStatusNote(string currentObservation, string note, string userName)
+    {
+        var cleanCurrent = currentObservation?.Trim() ?? string.Empty;
+        var cleanNote = note?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(cleanNote))
+            return cleanCurrent;
+
+        var header = $"[{DateTime.Now:dd/MM/yyyy HH:mm} - {userName}]";
+        return string.IsNullOrWhiteSpace(cleanCurrent)
+            ? $"{header}{Environment.NewLine}{cleanNote}"
+            : $"{cleanCurrent}{Environment.NewLine}{Environment.NewLine}------------------------------{Environment.NewLine}{header}{Environment.NewLine}{cleanNote}";
+    }
+
+    private string GetAttachmentDownloadUrl(long idAdjunto)
+        => $"/api/interfaces/adjuntos/{idAdjunto}";
+
+    private static string GetAttachmentIcon(string nombreArchivo)
+    {
+        var ext = Path.GetExtension(nombreArchivo).ToLowerInvariant();
+        return ext switch
+        {
+            ".pdf" => "bi-file-earmark-pdf",
+            ".jpg" or ".jpeg" or ".png" or ".webp" => "bi-file-earmark-image",
+            ".xls" or ".xlsx" or ".csv" => "bi-file-earmark-spreadsheet",
+            _ => "bi-file-earmark"
+        };
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024d:N1} KB";
+        return $"{bytes / 1024d / 1024d:N1} MB";
+    }
+
+    private string CurrentUserName => AppUserSession.GetCurrentUserName(Environment.UserName);
+
+    private void SetFeedback(AppUiMessage? message) => _feedback = message;
+
+    private static string GetFeedbackClass(AppUiMessage message)
+        => message.Severity switch
+        {
+            AppUiFeedbackSeverity.Success => "editor-msg--ok",
+            AppUiFeedbackSeverity.Warning => "editor-msg--warning",
+            _ => "editor-msg--error"
+        };
+
+    private sealed class PendingUploadFile
+    {
+        private PendingUploadFile(string nombreArchivo, string mimeType, long tamanoBytes, byte[] contenido, string signature)
+        {
+            NombreArchivo = nombreArchivo;
+            MimeType = mimeType;
+            TamanoBytes = tamanoBytes;
+            Contenido = contenido;
+            Signature = signature;
+        }
+
+        public Guid Id { get; } = Guid.NewGuid();
+        public string NombreArchivo { get; }
+        public string MimeType { get; }
+        public long TamanoBytes { get; }
+        public byte[] Contenido { get; }
+        public string Signature { get; }
+
+        public static async Task<PendingUploadFile> CreateAsync(IBrowserFile file, long maxBytes)
+        {
+            await using var source = file.OpenReadStream(maxBytes);
+            await using var ms = new MemoryStream();
+            await source.CopyToAsync(ms);
+            return new PendingUploadFile(file.Name, file.ContentType, file.Size, ms.ToArray(), $"{file.Name}|{file.Size}|{file.LastModified.UtcDateTime.Ticks}");
+        }
+
+        public Stream OpenReadStream() => new MemoryStream(Contenido, writable: false);
+    }
+
+    private enum InterfacesTab
+    {
+        Datos,
+        Adjuntos,
+        Historial
+    }
+}
