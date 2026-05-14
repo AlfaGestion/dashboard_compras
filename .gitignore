@@ -23,6 +23,7 @@ publish/
 # =========================
 *.log
 src/AlfaCore/App_Data/diagnostics/*.jsonl
+src/AlfaCore/App_Data/sessions.json
 src/AlfaCore/App_Data/uploads/
 
 # =========================
