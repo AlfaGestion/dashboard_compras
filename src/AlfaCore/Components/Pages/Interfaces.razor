@@ -455,8 +455,19 @@
                                     </div>
                                 </div>
 
+                                @if (!_selectedDetail.PermiteEdicion)
+                                {
+                                    <div class="interfaces-inline-note">
+                                        <i class="bi bi-info-circle"></i>
+                                        <div>
+                                            <strong>Edición limitada por estado</strong>
+                                            <span>Este documento ya no permite cambiar tipo, adjuntos ni acciones estructurales. En este punto solo se pueden agregar o corregir notas en la observación.</span>
+                                        </div>
+                                    </div>
+                                }
+
                                 <div class="field field--full interfaces-field-shell">
-                                    <textarea rows="7" @bind="_editForm.Observacion" disabled="@(!_selectedDetail.PermiteEdicion || _savingEdit)"></textarea>
+                                    <textarea rows="7" @bind="_editForm.Observacion" disabled="@_savingEdit"></textarea>
                                 </div>
 
                                 <div class="field field--full interfaces-field-shell interfaces-field-shell--subtle">
@@ -469,7 +480,7 @@
                                 <button type="button"
                                         class="btn btn--primary"
                                         @onclick="GuardarEdicionAsync"
-                                        disabled="@(!_selectedDetail.PermiteEdicion || _savingEdit)">
+                                        disabled="@_savingEdit">
                                     <i class="bi bi-save"></i> @(_savingEdit ? "Guardando..." : "Guardar")
                                 </button>
                                 <button type="button"
@@ -478,11 +489,14 @@
                                         disabled="@(_changingState || _statusChange.IdEstadoNuevo == _selectedDetail.IdEstado)">
                                     <i class="bi bi-arrow-repeat"></i> @(_changingState ? "Actualizando..." : "Cambiar estado")
                                 </button>
-                                @if (_selectedDetail.PermiteEdicion)
+                                @if (_selectedDetail is not null)
                                 {
                                     <button type="button" class="btn btn--ghost" @onclick="ResetEditarDetalle" disabled="@_savingEdit">
                                         <i class="bi bi-arrow-counterclockwise"></i> Revertir
                                     </button>
+                                }
+                                @if (_selectedDetail?.PermiteEdicion == true)
+                                {
                                     <button type="button" class="btn btn--ghost" @onclick="AnularAsync" disabled="@_changingState">
                                         <i class="bi bi-slash-circle"></i> Anular
                                     </button>
@@ -497,7 +511,7 @@
                                         <h4>Adjuntos</h4>
                                         <p>Visualización moderna con acceso rápido a descargar, abrir y quitar archivos.</p>
                                     </div>
-                                    @if (_selectedDetail.PermiteEdicion)
+                                    @if (_selectedDetail?.PermiteEdicion == true)
                                     {
                                         <div class="interfaces-upload-actions">
                                             <InputFile id="interfaces-extra-picker"
@@ -540,7 +554,7 @@
                                     </div>
                                 }
 
-                                @if (_selectedDetail.Adjuntos.Count == 0)
+                                @if (_selectedDetail!.Adjuntos.Count == 0)
                                 {
                                     <div class="interfaces-empty-upload">
                                         Este comprobante todavía no tiene adjuntos activos.
@@ -549,7 +563,7 @@
                                 else
                                 {
                                     <div class="interfaces-attachments-modern">
-                                        @foreach (var attachment in _selectedDetail.Adjuntos)
+                                        @foreach (var attachment in _selectedDetail!.Adjuntos)
                                         {
                                             <div class="interfaces-attachment-row">
                                                 <div class="interfaces-attachment-row__icon">
@@ -570,7 +584,7 @@
                                                        download="@attachment.NombreOriginal">
                                                         <i class="bi bi-download"></i> Descargar
                                                     </a>
-                                                    @if (_selectedDetail.PermiteEdicion)
+                                                    @if (_selectedDetail!.PermiteEdicion)
                                                     {
                                                         <button type="button"
                                                                 class="btn btn--ghost btn--sm"
@@ -1003,7 +1017,10 @@
                 return;
             }
 
-            SetMessage("Comprobante actualizado correctamente.", false);
+            if (_selectedDetail.PermiteEdicion)
+                SetMessage("Comprobante actualizado correctamente.", false);
+            else
+                SetMessage("Nota guardada correctamente. En este estado el documento solo permite actualizar la observación.", false);
             await BuscarAsync();
             await SeleccionarAsync(_selectedId.Value);
         }

@@ -435,8 +435,16 @@ public sealed class InterfacesService(
 
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync(token);
-            var current = await RequireEditableComprobanteAsync(request.IdComprobanteRecibido, token);
-            await EnsureDocumentTypeExistsAsync(cn, request.IdTipoDocumento, token);
+            var current = await GetByIdAsync(request.IdComprobanteRecibido, token)
+                ?? throw new InvalidOperationException("El comprobante indicado no existe.");
+            if (current.Eliminado)
+                throw new InvalidOperationException("El comprobante seleccionado está anulado y no permite nuevas modificaciones.");
+
+            var targetDocumentTypeId = current.PermiteEdicion
+                ? request.IdTipoDocumento
+                : current.IdTipoDocumento;
+
+            await EnsureDocumentTypeExistsAsync(cn, targetDocumentTypeId, token);
 
             await using var tx = await cn.BeginTransactionAsync(token);
             const string sql = """
@@ -452,7 +460,7 @@ public sealed class InterfacesService(
 
             await using (var cmd = new SqlCommand(sql, cn, (SqlTransaction)tx))
             {
-                cmd.Parameters.AddWithValue("@IdTipoDocumento", request.IdTipoDocumento);
+                cmd.Parameters.AddWithValue("@IdTipoDocumento", targetDocumentTypeId);
                 cmd.Parameters.AddWithValue("@Observacion", DbNullable(request.Observacion, 1000));
                 cmd.Parameters.AddWithValue("@UsuarioModificacion", DbNullable(user, 50));
                 cmd.Parameters.AddWithValue("@PcModificacion", DbNullable(pc, 100));
@@ -464,7 +472,8 @@ public sealed class InterfacesService(
                 new
                 {
                     TipoAnterior = current.IdTipoDocumento,
-                    TipoNuevo = request.IdTipoDocumento
+                    TipoNuevo = targetDocumentTypeId,
+                    SoloNota = !current.PermiteEdicion
                 }, token);
 
             await tx.CommitAsync(token);
@@ -478,7 +487,8 @@ public sealed class InterfacesService(
                 new
                 {
                     TipoAnterior = current.IdTipoDocumento,
-                    TipoNuevo = request.IdTipoDocumento
+                    TipoNuevo = targetDocumentTypeId,
+                    SoloNota = !current.PermiteEdicion
                 },
                 token);
         }, "No se pudo actualizar el comprobante.", ct);
