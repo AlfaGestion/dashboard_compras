@@ -9,7 +9,8 @@ public sealed class InterfacesFilters
     public int? IdEstado { get; set; }
     public int? IdTipoDocumento { get; set; }
     public string Texto { get; set; } = string.Empty;
-    public int MaxRows { get; set; } = 100;
+    public int PageNumber { get; set; } = 1;
+    public int PageSize { get; set; } = 50;
 }
 
 public sealed class InterfacesEstadoOptionDto
@@ -93,6 +94,38 @@ public sealed class InterfacesInboxItemDto
     public int IdTipoDocumento { get; set; }
     public string TipoDocumentoCodigo { get; set; } = string.Empty;
     public string TipoDocumentoDescripcion { get; set; } = string.Empty;
+}
+
+public sealed class InterfacesViewSettingsDto
+{
+    public string AgruparPor { get; set; } = InterfacesViewGroupKeys.None;
+    public List<InterfacesViewColumnDto> Columnas { get; set; } = [];
+}
+
+public sealed class InterfacesViewColumnDto
+{
+    public string Key { get; set; } = string.Empty;
+    public string Label { get; set; } = string.Empty;
+    public bool Visible { get; set; }
+    public int Order { get; set; }
+}
+
+public static class InterfacesViewColumnKeys
+{
+    public const string Numero = "numero";
+    public const string Fecha = "fecha";
+    public const string Tipo = "tipo";
+    public const string Estado = "estado";
+    public const string Usuario = "usuario";
+    public const string Observacion = "observacion";
+    public const string Adjuntos = "adjuntos";
+}
+
+public static class InterfacesViewGroupKeys
+{
+    public const string None = "none";
+    public const string Estado = "estado";
+    public const string Tipo = "tipo";
 }
 
 public sealed class InterfacesAdjuntoDto

@@ -1,0 +1,285 @@
+@page "/actualizaciones"
+@using AlfaCore.Models
+@inject AlfaCore.Services.IActualizacionesService ActualizacionesSvc
+@inject AlfaCore.Services.IAppUiOperationService UiOps
+@inject AlfaCore.Services.IAppUserSessionService AppUserSession
+
+<PageTitle>Actualizaciones | Alfa Gestión</PageTitle>
+
+<div class="page-grid updates-page">
+    <section class="page-intro">
+        <div>
+            <h2 class="page-intro__title">Actualizaciones de base de datos</h2>
+            <p class="page-intro__text">Controlá la versión `FECHAUPDATE`, elegí la carpeta de red para scripts SQL y revisá el historial de aplicaciones por base activa.</p>
+        </div>
+        <div class="actions">
+            <button type="button" class="btn btn--primary" @onclick="EjecutarPendientesAsync" disabled="@(_busy || !_loaded)">
+                <i class="bi bi-play-circle"></i> Ejecutar pendientes
+            </button>
+            <button type="button" class="btn btn--ghost" @onclick="RecargarAsync" disabled="@_busy">
+                <i class="bi bi-arrow-clockwise"></i> Recargar
+            </button>
+        </div>
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <section class="panel-card">
+            <div class="editor-msg @(_isError ? "editor-msg--error" : "editor-msg--ok")">
+                <i class="bi @(_isError ? "bi-exclamation-circle" : "bi-check-circle")"></i> @_message
+            </div>
+        </section>
+    }
+
+    @if (!_loaded)
+    {
+        <section class="panel-card">
+            <div class="loading">Cargando panel de actualizaciones...</div>
+        </section>
+    }
+    else if (_dashboard is not null)
+    {
+        <section class="updates-overview">
+            <article class="panel-card updates-stat">
+                <span class="panel-card__tag">VERSIÓN</span>
+                <h3 class="panel-card__title">@_dashboard.FechaUpdateActual</h3>
+                <p class="panel-card__subtitle">Valor actual de `TA_CONFIGURACION.CLAVE = FECHAUPDATE`.</p>
+            </article>
+
+            <article class="panel-card updates-stat">
+                <span class="panel-card__tag">PENDIENTES</span>
+                <h3 class="panel-card__title">@_dashboard.Pendientes.Count</h3>
+                <p class="panel-card__subtitle">Scripts listos para aplicar sobre la base activa.</p>
+            </article>
+
+            <article class="panel-card updates-stat">
+                <span class="panel-card__tag">ORIGEN</span>
+                <h3 class="panel-card__title">@(_dashboard.UsaRutaRed ? "Red local" : "Carpeta local")</h3>
+                <p class="panel-card__subtitle">@_dashboard.RutaOrigenActiva</p>
+            </article>
+        </section>
+
+        <section class="panel-card">
+            <div class="panel-card__header">
+                <div>
+                    <h3 class="panel-card__title">Configuración de origen</h3>
+                    <p class="panel-card__subtitle">Si la ruta de red está disponible, el sistema la prioriza. Si no, usa la carpeta local del servidor.</p>
+                </div>
+            </div>
+
+            <div class="filters-grid updates-config-grid">
+                <div class="field field--wide">
+                    <label>Ruta local del servidor</label>
+                    <input value="@_dashboard.RutaLocal" readonly />
+                </div>
+                <div class="field field--wide">
+                    <label>Ruta de red compartida</label>
+                    <input @bind="_settings.RutaRed" placeholder="Ej: \\SERVIDOR\AlfaGestion\UpdatesSQL" />
+                </div>
+                <div class="field">
+                    <label>Estado de la ruta de red</label>
+                    <input value="@(_dashboard.RutaRedDisponible ? "Disponible" : "No disponible o sin configurar")" readonly />
+                </div>
+                <div class="actions updates-config-actions">
+                    <button type="button" class="btn btn--secondary" @onclick="GuardarConfiguracionAsync" disabled="@_busy">
+                        <i class="bi bi-save"></i> Guardar ruta
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <div class="chart-grid updates-grid">
+            <section class="panel-card">
+                <div class="panel-card__header">
+                    <div>
+                        <h3 class="panel-card__title">Scripts disponibles</h3>
+                        <p class="panel-card__subtitle">@_dashboard.Scripts.Count script(s) detectados en la carpeta activa.</p>
+                    </div>
+                </div>
+
+                @if (_dashboard.Scripts.Count == 0)
+                {
+                    <div class="conversations-empty interfaces-empty-state">
+                        No se encontraron scripts `.sql` en la carpeta activa.
+                    </div>
+                }
+                else
+                {
+                    <div class="updates-script-list">
+                        @foreach (var item in _dashboard.Scripts)
+                        {
+                            var pendiente = _dashboard.Pendientes.Any(x => x.Archivo == item.Archivo);
+                            <article class="updates-script-item">
+                                <div>
+                                    <div class="updates-script-item__top">
+                                        <strong>@item.VersionKey</strong>
+                                        <span class="interfaces-status-pill @(pendiente ? "interfaces-status-pill--warning" : "interfaces-status-pill--success")">
+                                            @(pendiente ? "Pendiente" : "Aplicado")
+                                        </span>
+                                    </div>
+                                    <p>@item.Descripcion</p>
+                                    <span>@item.FechaVersionTexto · @item.Archivo</span>
+                                </div>
+                            </article>
+                        }
+                    </div>
+                }
+            </section>
+
+            <section class="panel-card">
+                <div class="panel-card__header">
+                    <div>
+                        <h3 class="panel-card__title">Historial</h3>
+                        <p class="panel-card__subtitle">Registro persistido por base en `dbo.AUX_ACTUALIZACION_HIST`.</p>
+                    </div>
+                </div>
+
+                @if (_dashboard.Historial.Count == 0)
+                {
+                    <div class="conversations-empty interfaces-empty-state">
+                        Todavía no hay corridas registradas para esta base.
+                    </div>
+                }
+                else
+                {
+                    <div class="updates-history-list">
+                        @foreach (var item in _dashboard.Historial)
+                        {
+                            <article class="updates-history-item">
+                                <div class="updates-history-item__head">
+                                    <strong>@item.ScriptArchivo</strong>
+                                    <span class="interfaces-status-pill @(string.Equals(item.Resultado, "OK", StringComparison.OrdinalIgnoreCase) ? "interfaces-status-pill--success" : "interfaces-status-pill--danger")">@item.Resultado</span>
+                                </div>
+                                <p>@item.Observacion</p>
+                                <span>@item.FechaHora.ToString("dd/MM/yyyy HH:mm") · @item.VersionAnterior -> @item.VersionNueva · @item.Usuario</span>
+                                @if (!string.IsNullOrWhiteSpace(item.ErrorDetalle))
+                                {
+                                    <details>
+                                        <summary>Ver detalle técnico</summary>
+                                        <pre>@item.ErrorDetalle</pre>
+                                    </details>
+                                }
+                            </article>
+                        }
+                    </div>
+                }
+            </section>
+        </div>
+    }
+</div>
+
+@code {
+    private ActualizacionesDashboardDto? _dashboard;
+    private ActualizacionesSettingsDto _settings = new();
+    private bool _loaded;
+    private bool _busy;
+    private string _message = string.Empty;
+    private bool _isError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RecargarAsync();
+    }
+
+    private async Task RecargarAsync()
+    {
+        _busy = true;
+        try
+        {
+            var result = await UiOps.RunAsync(() => ActualizacionesSvc.GetDashboardAsync(), "No se pudo cargar el panel de actualizaciones.");
+            if (!result.Success)
+            {
+                SetMessage(BuildFeedbackText(result.Feedback), true);
+                return;
+            }
+
+            _dashboard = result.Value;
+            _settings.RutaRed = _dashboard?.RutaRed ?? string.Empty;
+            _loaded = true;
+            if (string.IsNullOrWhiteSpace(_message) || !_isError)
+                SetMessage(string.Empty, false);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task GuardarConfiguracionAsync()
+    {
+        _busy = true;
+        try
+        {
+            var result = await UiOps.RunAsync(async () =>
+            {
+                await ActualizacionesSvc.SaveSettingsAsync(_settings);
+                return true;
+            }, "No se pudo guardar la configuración de actualizaciones.");
+
+            if (!result.Success)
+            {
+                SetMessage(BuildFeedbackText(result.Feedback), true);
+                return;
+            }
+
+            SetMessage("Ruta de actualizaciones guardada correctamente.", false);
+            await RecargarAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task EjecutarPendientesAsync()
+    {
+        _busy = true;
+        try
+        {
+            var result = await UiOps.RunAsync(async () =>
+            {
+                return await ActualizacionesSvc.ExecutePendingAsync(new ActualizacionesRunRequest
+                {
+                    UsuarioAccion = AppUserSession.GetCurrentUserName(Environment.UserName),
+                    PcAccion = Environment.MachineName
+                });
+            }, "No se pudieron aplicar las actualizaciones pendientes.");
+
+            if (!result.Success || result.Value is null)
+            {
+                SetMessage(BuildFeedbackText(result.Feedback), true);
+                return;
+            }
+
+            if (result.Value.SinCambios)
+                SetMessage("No hay actualizaciones pendientes para la base activa.", false);
+            else
+                SetMessage($"Se aplicaron {result.Value.CantidadAplicada} actualización(es). Versión final: {result.Value.VersionFinal}.", false);
+
+            await RecargarAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string BuildFeedbackText(AppUiMessage? feedback)
+    {
+        if (feedback is null)
+            return "Ocurrió un problema inesperado.";
+
+        var parts = new List<string> { feedback.Message };
+        if (feedback.HasSuggestion)
+            parts.Add(feedback.Suggestion);
+        if (feedback.HasCode)
+            parts.Add($"Código: {feedback.Code}");
+        return string.Join(" ", parts.Where(static x => !string.IsNullOrWhiteSpace(x)));
+    }
+
+    private void SetMessage(string message, bool isError)
+    {
+        _message = message;
+        _isError = isError;
+    }
+}

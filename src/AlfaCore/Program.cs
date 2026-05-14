@@ -56,6 +56,7 @@ public class Program
         builder.Services.AddScoped<IConversacionesConfigService, ConversacionesConfigService>();
         builder.Services.AddScoped<IInterfacesService, InterfacesService>();
         builder.Services.AddScoped<IInterfacesConfigService, InterfacesConfigService>();
+        builder.Services.AddScoped<IActualizacionesService, ActualizacionesService>();
         builder.Services.AddScoped<IUsuariosService, UsuariosService>();
         builder.Services.AddScoped<IUsuariosValidator, UsuariosValidator>();
         builder.Services.AddScoped<IContactosService, ContactosService>();
@@ -79,6 +80,7 @@ public class Program
         builder.Services.Configure<DatosSqlOptions>(builder.Configuration.GetSection(DatosSqlOptions.SectionName));
         builder.Services.Configure<WhatsAppOptions>(builder.Configuration.GetSection(WhatsAppOptions.SectionName));
         builder.Services.AddHostedService<ServerStartupHostedService>();
+        builder.Services.AddHostedService<DatabaseUpdatesHostedService>();
 
         var app = builder.Build();
 

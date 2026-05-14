@@ -2,6 +2,8 @@ using AlfaCore.Models;
 using Microsoft.Data.SqlClient;
 using System.Globalization;
 using System.Net;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 
 namespace AlfaCore.Services;
@@ -13,6 +15,10 @@ public sealed class InterfacesService(
     IInterfacesConfigService interfacesConfigService) : IInterfacesService
 {
     private readonly IAppEventService _appEvents = appEvents;
+    private const string ModuleName = "Interfaces";
+    private const string ConfigGroup = "INTERFACES";
+    private const string ViewConfigPrefix = "USUVIEW-INTERFACES-";
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = false };
 
     private string ConnectionString => sessionService.GetConnectionString().Length > 0
         ? sessionService.GetConnectionString()
@@ -97,12 +103,16 @@ public sealed class InterfacesService(
             return (IReadOnlyList<InterfacesTipoDocumentoOptionDto>)items;
         }, "No se pudieron cargar los tipos documentales.", ct);
 
-    public Task<IReadOnlyList<InterfacesInboxItemDto>> SearchAsync(InterfacesFilters filters, CancellationToken ct = default)
+    public Task<PagedResult<InterfacesInboxItemDto>> SearchAsync(InterfacesFilters filters, CancellationToken ct = default)
         => ExecuteLoggedAsync("Interfaces", "Search", async token =>
         {
             filters ??= new InterfacesFilters();
-            var sql = $"""
-                SELECT TOP ({Math.Max(1, Math.Min(filters.MaxRows, 300))})
+            var pageSize = Math.Max(1, Math.Min(filters.PageSize, 200));
+            var pageNumber = Math.Max(1, filters.PageNumber);
+            var skip = (pageNumber - 1) * pageSize;
+
+            const string sql = """
+                SELECT
                     c.IdComprobanteRecibido,
                     c.FechaHora_Grabacion,
                     ISNULL(c.UsuarioAlta, ''),
@@ -133,6 +143,21 @@ public sealed class InterfacesService(
                         OR ISNULL(c.UsuarioAlta, '') LIKE '%' + @Texto + '%'
                       )
                 ORDER BY c.FechaHora_Grabacion DESC, c.IdComprobanteRecibido DESC
+                OFFSET @Skip ROWS FETCH NEXT @PageSize ROWS ONLY;
+
+                SELECT COUNT(1)
+                FROM dbo.INT_COMPROBANTE_RECIBIDO c
+                WHERE (@Desde IS NULL OR c.FechaHora_Grabacion >= @Desde)
+                  AND (@Hasta IS NULL OR c.FechaHora_Grabacion < DATEADD(day, 1, @Hasta))
+                  AND (@IdEstado IS NULL OR c.IdEstado = @IdEstado)
+                  AND (@IdTipoDocumento IS NULL OR c.IdTipoDocumento = @IdTipoDocumento)
+                  AND (
+                        @Texto = ''
+                        OR ISNULL(c.Observacion, '') LIKE '%' + @Texto + '%'
+                        OR ISNULL(c.ReferenciaExterna, '') LIKE '%' + @Texto + '%'
+                        OR CONVERT(nvarchar(30), c.IdComprobanteRecibido) LIKE '%' + @Texto + '%'
+                        OR ISNULL(c.UsuarioAlta, '') LIKE '%' + @Texto + '%'
+                      );
                 """;
 
             var items = new List<InterfacesInboxItemDto>();
@@ -144,6 +169,8 @@ public sealed class InterfacesService(
             cmd.Parameters.AddWithValue("@IdEstado", (object?)filters.IdEstado ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@IdTipoDocumento", (object?)filters.IdTipoDocumento ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@Texto", filters.Texto?.Trim() ?? string.Empty);
+            cmd.Parameters.AddWithValue("@Skip", skip);
+            cmd.Parameters.AddWithValue("@PageSize", pageSize);
             await using var rd = await cmd.ExecuteReaderAsync(token);
             while (await rd.ReadAsync(token))
             {
@@ -165,8 +192,114 @@ public sealed class InterfacesService(
                 });
             }
 
-            return (IReadOnlyList<InterfacesInboxItemDto>)items;
+            var total = 0;
+            if (await rd.NextResultAsync(token) && await rd.ReadAsync(token))
+                total = Convert.ToInt32(rd.GetValue(0));
+
+            return new PagedResult<InterfacesInboxItemDto>
+            {
+                Items = items,
+                Total = total,
+                PageNumber = pageNumber,
+                PageSize = pageSize
+            };
         }, "No se pudieron cargar los comprobantes recibidos.", ct);
+
+    public Task<InterfacesViewSettingsDto> GetViewSettingsAsync(string userName, CancellationToken ct = default)
+        => ExecuteLoggedAsync(ModuleName, "GetViewSettings", async token =>
+        {
+            if (string.IsNullOrWhiteSpace(userName))
+                return CreateDefaultViewSettings();
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+            var detailColumn = await ResolveConfigDetailColumnAsync(cn, token);
+            var configKey = BuildViewConfigKey(userName);
+            var sql = $"""
+                SELECT TOP (1)
+                    ISNULL(VALOR, ''),
+                    ISNULL({detailColumn}, '')
+                FROM dbo.TA_CONFIGURACION
+                WHERE UPPER(LTRIM(RTRIM(CLAVE))) = @Clave;
+                """;
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.AddWithValue("@Clave", configKey.ToUpperInvariant());
+            await using var rd = await cmd.ExecuteReaderAsync(token);
+            if (!await rd.ReadAsync(token))
+                return CreateDefaultViewSettings();
+
+            var raw = ResolveStoredValue(GetString(rd, 0), GetString(rd, 1));
+            if (string.IsNullOrWhiteSpace(raw))
+                return CreateDefaultViewSettings();
+
+            var parsed = JsonSerializer.Deserialize<InterfacesViewSettingsDto>(raw, JsonOptions);
+            return NormalizeViewSettings(parsed);
+        }, "No se pudo cargar la configuración de vista.", ct);
+
+    public Task SaveViewSettingsAsync(string userName, InterfacesViewSettingsDto settings, CancellationToken ct = default)
+        => ExecuteLoggedAsync(ModuleName, "SaveViewSettings", async token =>
+        {
+            if (string.IsNullOrWhiteSpace(userName))
+                throw new InvalidOperationException("No hay un usuario logueado para guardar la vista.");
+
+            var normalized = NormalizeViewSettings(settings);
+            var serialized = JsonSerializer.Serialize(normalized, JsonOptions);
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+            var detailColumn = await ResolveConfigDetailColumnAsync(cn, token);
+            var stored = SplitStoredValue(serialized);
+            var configKey = BuildViewConfigKey(userName);
+            var sql = $"""
+                UPDATE dbo.TA_CONFIGURACION
+                SET
+                    VALOR = @Valor,
+                    {detailColumn} = @ValorAux,
+                    GRUPO = @Grupo,
+                    FechaHora_Modificacion = GETDATE()
+                WHERE UPPER(LTRIM(RTRIM(CLAVE))) = @ClaveNormalizada;
+
+                IF @@ROWCOUNT = 0
+                BEGIN
+                    INSERT INTO dbo.TA_CONFIGURACION
+                    (
+                        CLAVE,
+                        VALOR,
+                        {detailColumn},
+                        GRUPO,
+                        FechaHora_Grabacion,
+                        FechaHora_Modificacion
+                    )
+                    VALUES
+                    (
+                        @Clave,
+                        @Valor,
+                        @ValorAux,
+                        @Grupo,
+                        GETDATE(),
+                        GETDATE()
+                    );
+                END;
+                """;
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.AddWithValue("@ClaveNormalizada", configKey.ToUpperInvariant());
+            cmd.Parameters.AddWithValue("@Clave", configKey);
+            cmd.Parameters.AddWithValue("@Valor", DbNullable(stored.Value, 150));
+            cmd.Parameters.AddWithValue("@ValorAux", DbNullable(stored.AuxValue, 4000));
+            cmd.Parameters.AddWithValue("@Grupo", ConfigGroup);
+            await cmd.ExecuteNonQueryAsync(token);
+
+            await appEvents.LogAuditAsync(
+                ModuleName,
+                "SaveViewSettings",
+                "TA_CONFIGURACION",
+                configKey,
+                "Configuración de vista de interfaces actualizada.",
+                new { UserName = userName.Trim(), normalized.AgruparPor, Columnas = normalized.Columnas },
+                token);
+        }, "No se pudo guardar la configuración de vista.", ct);
 
     public Task<InterfacesDetalleDto?> GetByIdAsync(long idComprobanteRecibido, CancellationToken ct = default)
         => ExecuteLoggedAsync("Interfaces", "GetById", async token =>
@@ -1155,6 +1288,82 @@ public sealed class InterfacesService(
         return current;
     }
 
+    private static InterfacesViewSettingsDto CreateDefaultViewSettings()
+        => new()
+        {
+            AgruparPor = InterfacesViewGroupKeys.None,
+            Columnas =
+            [
+                new() { Key = InterfacesViewColumnKeys.Numero, Label = "Número", Visible = true, Order = 0 },
+                new() { Key = InterfacesViewColumnKeys.Fecha, Label = "Fecha", Visible = true, Order = 1 },
+                new() { Key = InterfacesViewColumnKeys.Tipo, Label = "Tipo", Visible = true, Order = 2 },
+                new() { Key = InterfacesViewColumnKeys.Estado, Label = "Estado", Visible = true, Order = 3 },
+                new() { Key = InterfacesViewColumnKeys.Usuario, Label = "Usuario", Visible = true, Order = 4 },
+                new() { Key = InterfacesViewColumnKeys.Observacion, Label = "Observación", Visible = true, Order = 5 },
+                new() { Key = InterfacesViewColumnKeys.Adjuntos, Label = "Adjuntos", Visible = true, Order = 6 }
+            ]
+        };
+
+    private static InterfacesViewSettingsDto NormalizeViewSettings(InterfacesViewSettingsDto? settings)
+    {
+        var defaults = CreateDefaultViewSettings();
+        if (settings is null)
+            return defaults;
+
+        var incoming = settings.Columnas
+            .Where(c => !string.IsNullOrWhiteSpace(c.Key))
+            .ToDictionary(c => c.Key.Trim(), StringComparer.OrdinalIgnoreCase);
+
+        var normalized = new InterfacesViewSettingsDto
+        {
+            AgruparPor = settings.AgruparPor switch
+            {
+                InterfacesViewGroupKeys.Estado => InterfacesViewGroupKeys.Estado,
+                InterfacesViewGroupKeys.Tipo => InterfacesViewGroupKeys.Tipo,
+                _ => InterfacesViewGroupKeys.None
+            },
+            Columnas = defaults.Columnas
+                .Select(defaultCol =>
+                {
+                    if (!incoming.TryGetValue(defaultCol.Key, out var source))
+                        return new InterfacesViewColumnDto { Key = defaultCol.Key, Label = defaultCol.Label, Visible = defaultCol.Visible, Order = defaultCol.Order };
+
+                    return new InterfacesViewColumnDto { Key = defaultCol.Key, Label = defaultCol.Label, Visible = source.Visible, Order = source.Order };
+                })
+                .OrderBy(c => c.Order)
+                .ThenBy(c => c.Label, StringComparer.CurrentCultureIgnoreCase)
+                .Select((col, idx) => { col.Order = idx; return col; })
+                .ToList()
+        };
+
+        if (!normalized.Columnas.Any(c => c.Visible))
+            normalized.Columnas[0].Visible = true;
+
+        return normalized;
+    }
+
+    private static string BuildViewConfigKey(string userName)
+    {
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(userName.Trim().ToUpperInvariant())));
+        return $"{ViewConfigPrefix}{hash[..24]}";
+    }
+
+    private static async Task<string> ResolveConfigDetailColumnAsync(SqlConnection cn, CancellationToken ct)
+    {
+        const string sql = """
+            SELECT TOP (1) name
+            FROM sys.columns
+            WHERE object_id = OBJECT_ID(N'dbo.TA_CONFIGURACION')
+              AND LOWER(name) IN (N'valoraux', N'valor_aux', N'descripcion')
+            ORDER BY CASE WHEN LOWER(name) IN (N'valoraux', N'valor_aux') THEN 0 ELSE 1 END, name
+            """;
+
+        await using var cmd = new SqlCommand(sql, cn);
+        var result = await cmd.ExecuteScalarAsync(ct);
+        var column = Convert.ToString(result) ?? string.Empty;
+        return string.IsNullOrWhiteSpace(column) ? "DESCRIPCION" : column;
+    }
+
     private async Task<T> ExecuteLoggedAsync<T>(
         string module,
         string action,
@@ -1248,6 +1457,15 @@ public sealed class InterfacesService(
         => Path.Combine(
             fechaHoraGrabacion.ToString("yyyy_MM", CultureInfo.InvariantCulture),
             idComprobanteRecibido.ToString(CultureInfo.InvariantCulture));
+
+    private static string ResolveStoredValue(string value, string auxValue)
+        => !string.IsNullOrWhiteSpace(value) ? value.Trim() : auxValue.Trim();
+
+    private static (string Value, string AuxValue) SplitStoredValue(string? value)
+    {
+        var normalized = string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+        return normalized.Length > 150 ? (string.Empty, normalized) : (normalized, string.Empty);
+    }
 
     private static async Task SaveAttachmentAsync(
         InterfacesUploadSettingsDto settings,
