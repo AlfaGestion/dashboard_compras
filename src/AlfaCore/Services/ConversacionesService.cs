@@ -191,6 +191,7 @@ public sealed class ConversacionesService(
 
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync(token);
+            await LinkUnassociatedWhatsAppConversationsByPhoneAsync(cn, token);
             await ConsolidateExistingDuplicateWhatsAppConversationsAsync(cn, token);
 
             await using var cmd = new SqlCommand(sql, cn);
@@ -285,6 +286,7 @@ public sealed class ConversacionesService(
 
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync(token);
+            await LinkUnassociatedWhatsAppConversationsByPhoneAsync(cn, token, conversationId);
             await using var cmd = new SqlCommand(sql, cn);
             cmd.Parameters.AddWithValue("@IdConversacion", conversationId);
             await using var rd = await cmd.ExecuteReaderAsync(token);
@@ -2780,6 +2782,54 @@ public sealed class ConversacionesService(
         cmd.Parameters.AddWithValue("@ClienteCodigo", DbNullable(contact.ClientCode));
         cmd.Parameters.AddWithValue("@NombreVisible", DbNullable(contact.Name));
         await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    private async Task LinkUnassociatedWhatsAppConversationsByPhoneAsync(SqlConnection cn, CancellationToken ct, long? idConversacion = null)
+    {
+        const string sql = """
+            SELECT TOP (200)
+                IdConversacion,
+                ISNULL(TelefonoWhatsApp, '')
+            FROM dbo.CONV_CONVERSACIONES
+            WHERE Canal = N'WHATSAPP'
+              AND IdContacto IS NULL
+              AND TelefonoWhatsApp IS NOT NULL
+              AND LTRIM(RTRIM(TelefonoWhatsApp)) <> ''
+              AND (@IdConversacion IS NULL OR IdConversacion = @IdConversacion)
+            ORDER BY FechaHoraUltimoMensaje DESC, IdConversacion DESC
+            """;
+
+        var pending = new List<(long IdConversacion, string TelefonoWhatsApp)>();
+        await using (var cmd = new SqlCommand(sql, cn))
+        {
+            cmd.Parameters.AddWithValue("@IdConversacion", idConversacion.HasValue ? idConversacion.Value : DBNull.Value);
+            await using var rd = await cmd.ExecuteReaderAsync(ct);
+            while (await rd.ReadAsync(ct))
+                pending.Add((rd.GetInt64(0), GetString(rd, 1)));
+        }
+
+        var linked = 0;
+        foreach (var item in pending)
+        {
+            var contact = await TryFindContactByPhoneAsync(cn, item.TelefonoWhatsApp, ct);
+            if (!contact.IdContact.HasValue)
+                continue;
+
+            await AssociateContactIfMissingAsync(cn, item.IdConversacion, contact, ct);
+            linked++;
+        }
+
+        if (linked > 0)
+        {
+            await _appEvents.LogAuditAsync(
+                "Conversaciones",
+                "LinkUnassociatedWhatsAppConversationsByPhone",
+                "CONV_CONVERSACIONES",
+                idConversacion?.ToString(CultureInfo.InvariantCulture) ?? "AUTO",
+                "Conversaciones vinculadas automáticamente a contactos por teléfono equivalente.",
+                new { ConversacionesVinculadas = linked, IdConversacion = idConversacion },
+                ct);
+        }
     }
 
     private async Task MergeDuplicateWhatsAppConversationsAsync(SqlConnection cn, long canonicalId, string phone, int? idContact, CancellationToken ct)
