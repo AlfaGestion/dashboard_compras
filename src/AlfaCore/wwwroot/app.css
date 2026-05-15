@@ -3179,6 +3179,97 @@ html[data-theme="light"] .conversations-context::-webkit-scrollbar-thumb {
     padding: .45rem .6rem;
 }
 
+.conversations-page--odoo .conversations-filters__fields .field:first-child {
+    position: relative;
+}
+
+.conversations-contact-suggest {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + .45rem);
+    z-index: 52;
+    display: grid;
+    gap: .35rem;
+    max-height: min(420px, 70vh);
+    overflow: auto;
+    padding: .45rem;
+    border: 1px solid rgba(56, 189, 248, .24);
+    border-radius: 8px;
+    background: #0f172a;
+    box-shadow: 0 18px 42px rgba(0, 0, 0, .38);
+    animation: tools-pop .16s ease both;
+}
+
+.conversations-contact-suggest__header,
+.conversations-contact-suggest__state,
+.conversations-contact-suggest__item,
+.conversations-contact-suggest__actions,
+.conversations-contact-suggest__preview {
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+}
+
+.conversations-contact-suggest__header {
+    justify-content: space-between;
+    padding: .15rem .2rem .35rem;
+    color: var(--color-muted);
+    font-size: .78rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.conversations-contact-suggest__state {
+    padding: .7rem;
+    color: var(--color-muted);
+    font-size: .86rem;
+}
+
+.conversations-contact-suggest__item {
+    align-items: stretch;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    padding: .58rem;
+    border: 1px solid rgba(148, 163, 184, .16);
+    border-radius: 7px;
+    background: rgba(15, 23, 42, .72);
+}
+
+.conversations-contact-suggest__main {
+    display: grid;
+    gap: .12rem;
+    min-width: 0;
+}
+
+.conversations-contact-suggest__main strong,
+.conversations-contact-suggest__main span,
+.conversations-contact-suggest__main small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.conversations-contact-suggest__main span,
+.conversations-contact-suggest__main small,
+.conversations-contact-suggest__preview {
+    color: var(--color-muted);
+    font-size: .78rem;
+}
+
+.conversations-contact-suggest__actions {
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.conversations-contact-suggest__preview {
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    padding-top: .35rem;
+    border-top: 1px solid rgba(148, 163, 184, .12);
+}
+
 .conversations-module-actions {
     display: flex;
     align-items: center;

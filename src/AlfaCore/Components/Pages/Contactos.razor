@@ -1,9 +1,11 @@
 @page "/contactos"
 @using AlfaCore.Models
 @using AlfaCore.Services
+@using Microsoft.AspNetCore.WebUtilities
 @inject IContactosService ContactosSvc
 @inject IAppUiOperationService UiOps
 @inject IAppUserSessionService AppUserSession
+@inject NavigationManager Nav
 @implements IDisposable
 
 <PageTitle>Contactos | Alfa Gestión</PageTitle>
@@ -455,13 +457,17 @@
     private string _draftAgruparPor = ContactosViewGroupKeys.None;
     private string _viewSettingsUserName = string.Empty;
     private ContactoTab _activeTab = ContactoTab.Datos;
+    private int? _startupEditId;
 
     protected override async Task OnInitializedAsync()
     {
         AppUserSession.StateChanged += OnAppUserSessionChanged;
         await EnsureViewSettingsLoadedAsync();
         await CargarProvinciasAsync();
+        ApplyStartupQuery();
         await BuscarAsync();
+        if (_startupEditId is int id)
+            await AbrirEditorAsync(id);
     }
 
     public void Dispose()
@@ -609,6 +615,39 @@
         _form.Website = string.Empty;
         _form.Cargo = string.Empty;
         _form.Observaciones = string.Empty;
+    }
+
+    private void ApplyStartupQuery()
+    {
+        var query = QueryHelpers.ParseQuery(Nav.ToAbsoluteUri(Nav.Uri).Query);
+        if (query.TryGetValue("editar", out var editRaw)
+            && int.TryParse(editRaw.ToString(), out var editId)
+            && editId > 0)
+        {
+            _startupEditId = editId;
+            return;
+        }
+
+        if (!query.TryGetValue("nuevo", out _))
+            return;
+
+        BeginNew();
+        if (query.TryGetValue("nombre", out var nombre))
+            _form.NombreApellido = nombre.ToString();
+        if (query.TryGetValue("celular", out var celular))
+            _form.Celular = celular.ToString();
+        if (query.TryGetValue("telefono", out var telefono))
+            _form.Telefono = telefono.ToString();
+        if (query.TryGetValue("email", out var email))
+            _form.Email = email.ToString();
+
+        _filters.Texto = _form.NombreApellido;
+        SetFeedback(new AppUiMessage
+        {
+            Severity = AppUiFeedbackSeverity.Info,
+            Title = "Nuevo contacto desde conversaciones",
+            Message = "Completá los datos que falten y guardá el contacto para usarlo en soporte."
+        });
     }
 
     private void CerrarEditor()
@@ -769,6 +808,7 @@
         => message.Severity switch
         {
             AppUiFeedbackSeverity.Success => "editor-msg--ok",
+            AppUiFeedbackSeverity.Info => "editor-msg--ok",
             AppUiFeedbackSeverity.Warning => "editor-msg--warning",
             _ => "editor-msg--error"
         };

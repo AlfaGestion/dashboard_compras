@@ -1,7 +1,9 @@
 @page "/conversaciones"
 @using System.Text.Json
 @inject AlfaCore.Services.IConversacionesService ConversacionesSvc
+@inject AlfaCore.Services.IContactosService ContactosSvc
 @inject IJSRuntime JS
+@inject NavigationManager Nav
 @implements IAsyncDisposable
 
 <PageTitle>Conversaciones | Alfa Gestión</PageTitle>
@@ -70,7 +72,70 @@
                            placeholder="Teléfono, cliente, contacto o resumen…"
                            value="@_filters.Search"
                            @oninput="HandleSearchInputAsync"
-                           @onkeydown="HandleSearchEnter" />
+                           @onkeydown="HandleSearchEnter"
+                           @onfocus="() => _showContactSuggestions = ShouldShowContactSuggestions" />
+                    @if (_showContactSuggestions)
+                    {
+                        <div class="conversations-contact-suggest">
+                            @if (_loadingContactSuggestions)
+                            {
+                                <div class="conversations-contact-suggest__state">
+                                    <i class="bi bi-hourglass-split"></i>
+                                    <span>Buscando contactos...</span>
+                                </div>
+                            }
+                            else if (_contactSuggestions.Count > 0)
+                            {
+                                <div class="conversations-contact-suggest__header">
+                                    <span>Contactos encontrados</span>
+                                    <button type="button" class="btn btn--ghost btn--sm" @onclick="CloseContactSuggestions" title="Cerrar">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </div>
+                                @foreach (var contact in _contactSuggestions)
+                                {
+                                    var phone = GetContactPhone(contact);
+                                    <div class="conversations-contact-suggest__item">
+                                        <div class="conversations-contact-suggest__main">
+                                            <strong>@contact.NombreApellido</strong>
+                                            <span>@DisplayOrFallback(contact.Cargo)</span>
+                                            <small>@DisplayOrFallback(phone, contact.Email)</small>
+                                        </div>
+                                        <div class="conversations-contact-suggest__actions">
+                                            <button type="button" class="btn btn--ghost btn--sm" @onclick="() => ToggleContactPreview(contact.Id)">
+                                                <i class="bi bi-eye"></i> Ver
+                                            </button>
+                                            <button type="button" class="btn btn--primary btn--sm" disabled="@string.IsNullOrWhiteSpace(phone)" @onclick="() => OpenWhatsAppForContactAsync(contact)">
+                                                <i class="bi bi-whatsapp"></i> Conversar
+                                            </button>
+                                            <button type="button" class="btn btn--ghost btn--sm" @onclick="() => OpenContactEditor(contact)">
+                                                <i class="bi bi-pencil-square"></i>
+                                            </button>
+                                        </div>
+                                        @if (_previewContactId == contact.Id)
+                                        {
+                                            <div class="conversations-contact-suggest__preview">
+                                                <span><i class="bi bi-telephone"></i> @DisplayOrFallback(contact.Telefono)</span>
+                                                <span><i class="bi bi-phone"></i> @DisplayOrFallback(contact.Celular)</span>
+                                                <span><i class="bi bi-envelope"></i> @DisplayOrFallback(contact.Email)</span>
+                                                <span><i class="bi bi-geo-alt"></i> @DisplayOrFallback(contact.Localidad, contact.ProvinciaDescripcion)</span>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="conversations-contact-suggest__state">
+                                    <i class="bi bi-person-plus"></i>
+                                    <span>No encontramos contactos con ese texto.</span>
+                                </div>
+                                <button type="button" class="btn btn--primary btn--sm" @onclick="OpenNewContactFromSearch">
+                                    <i class="bi bi-plus-circle-fill"></i> Crear contacto nuevo
+                                </button>
+                            }
+                        </div>
+                    }
                     @if (CanCreateWhatsAppFromSearch)
                     {
                         <button type="button"
@@ -869,6 +934,7 @@
     private List<ConversacionEstadoOptionDto> _states = [];
     private List<ConversacionInboxItemDto> _inbox = [];
     private List<ConversacionMensajeDto> _messages = [];
+    private List<ContactoGridItemDto> _contactSuggestions = [];
     private readonly Dictionary<long, ConversationViewCache> _conversationCache = [];
     private readonly Dictionary<string, ConversationChannelCache> _channelCache = [];
     private ConversacionDetalleDto? _selectedConversation;
@@ -889,6 +955,7 @@
     private CancellationTokenSource? _pollingCts;
     private Task? _pollingTask;
     private CancellationTokenSource? _searchDebounceCts;
+    private CancellationTokenSource? _contactSearchCts;
     private long? _scrollHandlerConversationId;
     private long? _firstNewMessageId;
     private int _newMessagesCount;
@@ -907,6 +974,9 @@
     private bool _showComposerTools;
     private string _composerToolTab = ComposerToolTabs.Emojis;
     private string _emojiSearch = string.Empty;
+    private bool _showContactSuggestions;
+    private bool _loadingContactSuggestions;
+    private int? _previewContactId;
 
     private static readonly TimeSpan PollingInterval = TimeSpan.FromSeconds(5);
     private static readonly string[] QuickReactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
@@ -933,6 +1003,7 @@
     private bool HasPendingAttachmentError => _pendingAttachments.Any(x => x.HasError);
     private bool _canAddNote => !_busyAction && _selectedConversation is not null && !string.IsNullOrWhiteSpace(_internalNoteText);
     private bool CanCreateWhatsAppFromSearch => _canalActivo == "WHATSAPP" && !_busyAction && IsPotentialPhone(_filters.Search);
+    private bool ShouldShowContactSuggestions => _canalActivo == "WHATSAPP" && _filters.Search.Trim().Length >= 2;
     private bool ShouldShowLatestButton => _showReturnToLatest || _newMessagesCount > 0;
     private bool IsWhatsAppConversation
         => _selectedConversation is not null
@@ -1037,6 +1108,8 @@
             return;
 
         CancelSearchDebounce();
+        CancelContactSearch();
+        _showContactSuggestions = false;
         if (CanCreateWhatsAppFromSearch)
             await CreateWhatsAppFromSearchAsync();
         else
@@ -1047,7 +1120,7 @@
     {
         _filters.Search = Convert.ToString(args.Value, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
         _actionError = null;
-        await DebounceSearchAsync();
+        await DebounceContactSuggestionsAsync();
     }
 
     private async Task DebounceSearchAsync()
@@ -1087,6 +1160,16 @@
         _searchDebounceCts.Cancel();
         _searchDebounceCts.Dispose();
         _searchDebounceCts = null;
+    }
+
+    private void CancelContactSearch()
+    {
+        if (_contactSearchCts is null)
+            return;
+
+        _contactSearchCts.Cancel();
+        _contactSearchCts.Dispose();
+        _contactSearchCts = null;
     }
 
     private async Task LoadInboxAsync()
@@ -1227,6 +1310,55 @@
         {
             if (showLoading)
                 _loadingConversation = false;
+        }
+    }
+
+    private async Task DebounceContactSuggestionsAsync()
+    {
+        CancelContactSearch();
+        _previewContactId = null;
+
+        if (!ShouldShowContactSuggestions)
+        {
+            _showContactSuggestions = false;
+            _contactSuggestions = [];
+            return;
+        }
+
+        _showContactSuggestions = true;
+        _loadingContactSuggestions = true;
+        var cts = new CancellationTokenSource();
+        _contactSearchCts = cts;
+
+        try
+        {
+            await Task.Delay(220, cts.Token);
+            var result = await ContactosSvc.SearchAsync(new ContactosFilters
+            {
+                Texto = _filters.Search.Trim(),
+                Activo = true,
+                PageNumber = 1,
+                PageSize = 6
+            }, cts.Token);
+
+            if (!cts.IsCancellationRequested)
+                _contactSuggestions = result.Items.ToList();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _contactSuggestions = [];
+            _actionError = ex.Message;
+        }
+        finally
+        {
+            if (_contactSearchCts == cts)
+            {
+                _loadingContactSuggestions = false;
+                _contactSearchCts = null;
+            }
         }
     }
 
@@ -1903,6 +2035,45 @@
             _busyAction = false;
         }
     }
+
+    private async Task OpenWhatsAppForContactAsync(ContactoGridItemDto contact)
+    {
+        var phone = GetContactPhone(contact);
+        if (string.IsNullOrWhiteSpace(phone))
+        {
+            _actionError = "El contacto no tiene telÃ©fono ni celular para iniciar WhatsApp.";
+            return;
+        }
+
+        _filters.Search = phone;
+        CancelContactSearch();
+        _showContactSuggestions = false;
+        await CreateWhatsAppFromSearchAsync();
+    }
+
+    private void ToggleContactPreview(int id)
+        => _previewContactId = _previewContactId == id ? null : id;
+
+    private void CloseContactSuggestions()
+    {
+        _showContactSuggestions = false;
+        _previewContactId = null;
+    }
+
+    private void OpenContactEditor(ContactoGridItemDto contact)
+        => Nav.NavigateTo($"/contactos?editar={contact.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+
+    private void OpenNewContactFromSearch()
+    {
+        var value = _filters.Search.Trim();
+        var query = IsPotentialPhone(value)
+            ? $"nuevo=1&celular={Uri.EscapeDataString(value)}"
+            : $"nuevo=1&nombre={Uri.EscapeDataString(value)}";
+        Nav.NavigateTo($"/contactos?{query}");
+    }
+
+    private static string GetContactPhone(ContactoGridItemDto contact)
+        => FirstNonEmpty(contact.Celular, contact.Telefono);
 
     private async Task HandleFileSelectedAsync(InputFileChangeEventArgs e)
     {
@@ -2688,6 +2859,7 @@
     public async ValueTask DisposeAsync()
     {
         CancelSearchDebounce();
+        CancelContactSearch();
 
         if (_pollingCts is null)
             return;
