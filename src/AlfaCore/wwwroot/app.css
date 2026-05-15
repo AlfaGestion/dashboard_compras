@@ -9243,6 +9243,133 @@ html[data-theme="light"] .interfaces-bulkbar {
     background: rgba(239, 68, 68, 0.08);
 }
 
+.contactos-page {
+    gap: .95rem;
+}
+
+.contactos-page .page-intro {
+    align-items: center;
+    margin-bottom: .35rem;
+    padding: .35rem 0 .2rem;
+}
+
+.contactos-page .page-intro__title {
+    font-size: clamp(1.35rem, 1.8vw, 1.8rem);
+}
+
+.contactos-page .panel-card {
+    border-radius: 16px;
+    padding: 1rem 1.05rem;
+}
+
+.contactos-page .filters-grid {
+    grid-template-columns: minmax(260px, 1fr) minmax(180px, .45fr) auto;
+    align-items: end;
+    gap: .75rem;
+}
+
+.contactos-page .filters-grid .field--wide {
+    grid-column: auto;
+}
+
+.contactos-page .field input,
+.contactos-page .field select,
+.contactos-page .field textarea {
+    min-height: 38px;
+    border-radius: 8px;
+}
+
+.contactos-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .45rem;
+    margin-bottom: .75rem;
+}
+
+.contactos-tabs .btn {
+    min-height: 34px;
+}
+
+.contactos-form {
+    display: grid;
+    gap: .85rem;
+}
+
+.contactos-form__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .72rem .85rem;
+}
+
+.contactos-form__grid .field {
+    min-width: 0;
+}
+
+.contactos-flags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .55rem;
+    padding: .65rem;
+    border: 1px solid rgba(148, 163, 184, .16);
+    border-radius: 10px;
+    background: rgba(15, 23, 42, .28);
+}
+
+.contactos-flags .checkbox {
+    min-height: 30px;
+    padding: .25rem .35rem;
+}
+
+.contactos-observaciones {
+    min-height: 140px;
+    resize: vertical;
+}
+
+.contactos-table__actions-head,
+.contactos-table__actions {
+    width: 1%;
+    white-space: nowrap;
+    text-align: right;
+}
+
+.contactos-conversation-btn {
+    min-height: 32px;
+    gap: .38rem;
+}
+
+.contactos-page .usuarios-table-wrap {
+    max-height: 58vh;
+    overflow: auto;
+    border: 1px solid rgba(148, 163, 184, .12);
+    border-radius: 12px;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(14, 165, 233, .55) rgba(15, 23, 42, .35);
+}
+
+.contactos-page .usuarios-table-wrap::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+.contactos-page .usuarios-table-wrap::-webkit-scrollbar-track {
+    border-radius: 999px;
+    background: rgba(15, 23, 42, .35);
+}
+
+.contactos-page .usuarios-table-wrap::-webkit-scrollbar-thumb {
+    border: 2px solid rgba(15, 23, 42, .35);
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(34, 211, 238, .88), rgba(14, 165, 233, .72));
+}
+
+.contactos-page .usuarios-editor__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .55rem;
+    margin-top: .8rem;
+}
+
 .app-login-overlay {
     backdrop-filter: blur(4px);
 }
@@ -9294,6 +9421,29 @@ html[data-theme="light"] .interfaces-bulkbar {
 }
 
 @media (max-width: 768px) {
+    .contactos-page .filters-grid,
+    .contactos-form__grid {
+        grid-template-columns: 1fr;
+    }
+
+    .contactos-page .panel-card__header,
+    .contactos-page .page-intro,
+    .contactos-page .panel-card__header .actions {
+        display: grid;
+        align-items: stretch;
+    }
+
+    .contactos-page .btn,
+    .contactos-page .actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .contactos-table__actions-head,
+    .contactos-table__actions {
+        text-align: left;
+    }
+
     .usuarios-editor__grid {
         grid-template-columns: 1fr;
     }

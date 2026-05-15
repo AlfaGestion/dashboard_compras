@@ -20,6 +20,7 @@ public sealed class ContactoGridItemDto
     public string Email { get; set; } = string.Empty;
     public string Cargo { get; set; } = string.Empty;
     public bool Activo { get; set; } = true;
+    public long? IdConversacionWhatsApp { get; set; }
 }
 
 public sealed class ContactoDetailDto
@@ -42,6 +43,7 @@ public sealed class ContactoDetailDto
     public string Cargo { get; set; } = string.Empty;
     public string Observaciones { get; set; } = string.Empty;
     public bool Activo { get; set; } = true;
+    public long? IdConversacionWhatsApp { get; set; }
 }
 
 public sealed class ContactoSaveRequest

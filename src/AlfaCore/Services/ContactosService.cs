@@ -45,6 +45,7 @@ public sealed class ContactosService(
                 ? $"{activoExpr} DESC, ISNULL(c.Nombre_y_Apellido, '') ASC"
                 : "ISNULL(c.Nombre_y_Apellido, '') ASC";
 
+            var conversationMatchSql = BuildConversationMatchSql("c");
             var sql = $"""
                 SELECT
                     c.id,
@@ -56,10 +57,21 @@ public sealed class ContactosService(
                     ISNULL(c.Celular, ''),
                     ISNULL(c.email, ''),
                     ISNULL(c.Cargo, ''),
-                    {activoExpr}
+                    {activoExpr},
+                    conv.IdConversacion
                 FROM dbo.MA_CONTACTOS c
                 LEFT JOIN dbo.TA_ESTADOS e
                     ON UPPER(LTRIM(RTRIM(e.CODIGO))) = UPPER(LTRIM(RTRIM(ISNULL(c.Provincia, ''))))
+                OUTER APPLY (
+                    SELECT TOP (1) cc.IdConversacion
+                    FROM dbo.CONV_CONVERSACIONES cc
+                    WHERE cc.Canal = N'WHATSAPP'
+                      AND (
+                            cc.IdContacto = c.id
+                            OR {conversationMatchSql}
+                          )
+                    ORDER BY cc.IdConversacion ASC
+                ) conv
                 WHERE (
                         @Texto = ''
                         OR ISNULL(c.Nombre_y_Apellido, '') LIKE '%' + @Texto + '%'
@@ -106,7 +118,8 @@ public sealed class ContactosService(
                     Celular = GetString(rd, 6),
                     Email = GetString(rd, 7),
                     Cargo = GetString(rd, 8),
-                    Activo = GetBool(rd, 9)
+                    Activo = GetBool(rd, 9),
+                    IdConversacionWhatsApp = rd.IsDBNull(10) ? null : rd.GetInt64(10)
                 });
             }
 
@@ -132,6 +145,7 @@ public sealed class ContactosService(
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync(token);
             var hasActivo = await HasActivoColumnAsync(cn, token);
+            var conversationMatchSql = BuildConversationMatchSql("c");
             var sql = $"""
                 SELECT
                     c.id,
@@ -151,8 +165,19 @@ public sealed class ContactosService(
                     ISNULL(c.WebSite, ''),
                     ISNULL(c.Cargo, ''),
                     ISNULL(CAST(c.Observaciones AS nvarchar(max)), ''),
-                    {(hasActivo ? "ISNULL(c.Activo, 1)" : "CAST(1 AS bit)")}
+                    {(hasActivo ? "ISNULL(c.Activo, 1)" : "CAST(1 AS bit)")},
+                    conv.IdConversacion
                 FROM dbo.MA_CONTACTOS c
+                OUTER APPLY (
+                    SELECT TOP (1) cc.IdConversacion
+                    FROM dbo.CONV_CONVERSACIONES cc
+                    WHERE cc.Canal = N'WHATSAPP'
+                      AND (
+                            cc.IdContacto = c.id
+                            OR {conversationMatchSql}
+                          )
+                    ORDER BY cc.IdConversacion ASC
+                ) conv
                 WHERE c.id = @Id;
                 """;
 
@@ -181,7 +206,8 @@ public sealed class ContactosService(
                 Website = GetString(rd, 14),
                 Cargo = GetString(rd, 15),
                 Observaciones = GetString(rd, 16),
-                Activo = GetBool(rd, 17)
+                Activo = GetBool(rd, 17),
+                IdConversacionWhatsApp = rd.IsDBNull(18) ? null : rd.GetInt64(18)
             };
         }, "No se pudo cargar el contacto seleccionado.", ct);
 
@@ -653,6 +679,36 @@ public sealed class ContactosService(
 
     private static object DbNullable(string? value)
         => string.IsNullOrWhiteSpace(value) ? DBNull.Value : value.Trim();
+
+    private static string BuildConversationMatchSql(string contactAlias)
+        => string.Join(
+            $"{Environment.NewLine}                            OR ",
+            SqlPhoneEquivalentColumnsPredicate("cc.TelefonoWhatsApp", $"{contactAlias}.Telefono"),
+            SqlPhoneEquivalentColumnsPredicate("cc.TelefonoWhatsApp", $"{contactAlias}.Celular"),
+            SqlPhoneEquivalentColumnsPredicate("cc.TelefonoWhatsApp", $"{contactAlias}.Fax"));
+
+    private static string SqlNormalizePhone(string columnName)
+        => $"REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ISNULL({columnName}, ''), ' ', ''), '-', ''), '+', ''), '(', ''), ')', ''), '.', '')";
+
+    private static string SqlPhoneEquivalentColumnsPredicate(string leftColumnName, string rightColumnName)
+    {
+        var left = SqlNormalizePhone(leftColumnName);
+        var right = SqlNormalizePhone(rightColumnName);
+        return $"""
+            (
+                {left} <> ''
+                AND {right} <> ''
+                AND (
+                    {left} = {right}
+                    OR (
+                        LEN({left}) >= 10
+                        AND LEN({right}) >= 10
+                        AND RIGHT({left}, 10) = RIGHT({right}, 10)
+                    )
+                )
+            )
+            """;
+    }
 
     private async Task<T> ExecuteLoggedAsync<T>(
         string module,

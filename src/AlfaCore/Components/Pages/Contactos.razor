@@ -3,6 +3,7 @@
 @using AlfaCore.Services
 @using Microsoft.AspNetCore.WebUtilities
 @inject IContactosService ContactosSvc
+@inject IConversacionesService ConversacionesSvc
 @inject IAppUiOperationService UiOps
 @inject IAppUserSessionService AppUserSession
 @inject NavigationManager Nav
@@ -10,7 +11,7 @@
 
 <PageTitle>Contactos | Alfa Gestión</PageTitle>
 
-<div class="page-grid">
+<div class="page-grid contactos-page">
     <section class="page-intro">
         <div>
             <h2 class="page-intro__title">Contactos</h2>
@@ -141,6 +142,13 @@
                     <p class="panel-card__subtitle">@(_isNewMode ? "Completá los datos principales del contacto." : $"Código interno: {_selectedId} · Estado: {(_selectedActivo ? "Activo" : "Inactivo")}")</p>
                 </div>
                 <div class="actions">
+                    @if (!_isNewMode)
+                    {
+                        <button type="button" class="btn btn--primary" @onclick="OpenConversationForSelectedAsync" disabled="@(_saving || _openingConversation)">
+                            <i class="bi bi-whatsapp"></i>
+                            <span>@GetConversationActionLabel(_selectedConversationId)</span>
+                        </button>
+                    }
                     <button type="button" class="btn btn--ghost" @onclick="CerrarEditor" disabled="@_saving">
                         <i class="bi bi-arrow-left"></i>
                         <span>Volver al listado</span>
@@ -349,6 +357,7 @@
                                 {
                                     <th>@col.Label</th>
                                 }
+                                <th class="contactos-table__actions-head">Conversación</th>
                             </tr>
                         </thead>
                         @foreach (var group in groups)
@@ -394,6 +403,15 @@
                                                 }
                                             </td>
                                         }
+                                        <td class="contactos-table__actions" @onclick:stopPropagation="true" @ondblclick:stopPropagation="true">
+                                            <button type="button"
+                                                    class="btn btn--ghost btn--sm contactos-conversation-btn"
+                                                    @onclick="() => OpenConversationForContactAsync(item)"
+                                                    disabled="@(_openingConversation || !HasContactPhone(item))">
+                                                <i class="bi @(item.IdConversacionWhatsApp.HasValue ? "bi-chat-left-text" : "bi-plus-circle")"></i>
+                                                <span>@GetConversationActionLabel(item.IdConversacionWhatsApp)</span>
+                                            </button>
+                                        </td>
                                     </tr>
                                 }
                             </tbody>
@@ -442,6 +460,7 @@
     private bool _loadingList;
     private bool _loadingProvincias;
     private bool _saving;
+    private bool _openingConversation;
     private bool _isNewMode = true;
     private bool _showEditor;
     private bool _showViewSettings;
@@ -458,6 +477,7 @@
     private string _viewSettingsUserName = string.Empty;
     private ContactoTab _activeTab = ContactoTab.Datos;
     private int? _startupEditId;
+    private long? _selectedConversationId;
 
     protected override async Task OnInitializedAsync()
     {
@@ -597,6 +617,7 @@
         _activeTab = ContactoTab.Datos;
         _selectedId = 0;
         _selectedActivo = true;
+        _selectedConversationId = null;
 
         _form.Id = null;
         _form.NombreApellido = string.Empty;
@@ -759,6 +780,7 @@
         _activeTab = ContactoTab.Datos;
         _selectedId = detail.Id;
         _selectedActivo = detail.Activo;
+        _selectedConversationId = detail.IdConversacionWhatsApp;
 
         _form.Id = detail.Id;
         _form.NombreApellido = detail.NombreApellido;
@@ -777,6 +799,81 @@
         _form.Website = detail.Website;
         _form.Cargo = detail.Cargo;
         _form.Observaciones = detail.Observaciones;
+    }
+
+    private Task OpenConversationForSelectedAsync()
+    {
+        if (_selectedId <= 0)
+            return Task.CompletedTask;
+
+        var item = new ContactoGridItemDto
+        {
+            Id = _selectedId,
+            NombreApellido = _form.NombreApellido,
+            Telefono = _form.Telefono,
+            Celular = _form.Celular,
+            IdConversacionWhatsApp = _selectedConversationId
+        };
+
+        return OpenConversationForContactAsync(item);
+    }
+
+    private async Task OpenConversationForContactAsync(ContactoGridItemDto contact)
+    {
+        if (contact.IdConversacionWhatsApp.HasValue)
+        {
+            Nav.NavigateTo($"/conversaciones?id={contact.IdConversacionWhatsApp.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+            return;
+        }
+
+        var phone = FirstNonEmpty(contact.Celular, contact.Telefono);
+        if (string.IsNullOrWhiteSpace(phone))
+        {
+            SetFeedback(new AppUiMessage
+            {
+                Severity = AppUiFeedbackSeverity.Warning,
+                Title = "Teléfono requerido",
+                Message = "Cargá un teléfono o celular para crear una conversación de WhatsApp."
+            });
+            return;
+        }
+
+        _openingConversation = true;
+        try
+        {
+            var result = await UiOps.RunAsync(
+                () => ConversacionesSvc.CreateOrGetWhatsAppConversationAsync(new ConversacionCrearWhatsAppRequest { TelefonoWhatsApp = phone }),
+                "No se pudo crear la conversación.");
+
+            if (!result.Success || result.Value is null)
+            {
+                SetFeedback(result.Feedback);
+                return;
+            }
+
+            Nav.NavigateTo($"/conversaciones?id={result.Value.IdConversacion.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+        }
+        finally
+        {
+            _openingConversation = false;
+        }
+    }
+
+    private static bool HasContactPhone(ContactoGridItemDto contact)
+        => !string.IsNullOrWhiteSpace(FirstNonEmpty(contact.Celular, contact.Telefono));
+
+    private static string GetConversationActionLabel(long? idConversacion)
+        => idConversacion.HasValue ? "Ver conversación" : "Crear conversación";
+
+    private static string FirstNonEmpty(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                return value.Trim();
+        }
+
+        return string.Empty;
     }
 
     private void ClearFieldErrors()

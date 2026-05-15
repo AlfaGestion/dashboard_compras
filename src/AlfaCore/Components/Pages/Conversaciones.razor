@@ -1,5 +1,6 @@
 @page "/conversaciones"
 @using System.Text.Json
+@using Microsoft.AspNetCore.WebUtilities
 @inject AlfaCore.Services.IConversacionesService ConversacionesSvc
 @inject AlfaCore.Services.IContactosService ContactosSvc
 @inject IJSRuntime JS
@@ -1022,6 +1023,7 @@
     private string _emojiSearch = string.Empty;
     private bool _showContactSuggestions;
     private bool _loadingContactSuggestions;
+    private long? _startupConversationId;
 
     private static readonly TimeSpan PollingInterval = TimeSpan.FromSeconds(5);
     private static readonly string[] QuickReactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
@@ -1072,11 +1074,27 @@
 
     protected override async Task OnInitializedAsync()
     {
+        ApplyStartupQuery();
         await Task.WhenAll(LoadLookupsAsync(), LoadFavoriteStickersAsync());
         if (_loadError is null)
+        {
             await LoadInboxAsync();
+            if (_startupConversationId.HasValue)
+                await SelectConversationAsync(_startupConversationId.Value);
+        }
 
         StartPolling();
+    }
+
+    private void ApplyStartupQuery()
+    {
+        var query = QueryHelpers.ParseQuery(Nav.ToAbsoluteUri(Nav.Uri).Query);
+        if (query.TryGetValue("id", out var idRaw)
+            && long.TryParse(idRaw.ToString(), out var id)
+            && id > 0)
+        {
+            _startupConversationId = id;
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
