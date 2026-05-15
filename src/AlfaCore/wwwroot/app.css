@@ -2558,12 +2558,14 @@ tr.row--critical td {
     display: inline-flex;
     align-items: center;
     gap: .35rem;
+    max-width: 100%;
     border-radius: 999px;
     padding: .28rem .7rem;
     font-size: .8rem;
     font-weight: 700;
     background: rgba(148, 163, 184, 0.12);
     color: var(--color-text);
+    white-space: nowrap;
 }
 
 .conversation-badge--state {
@@ -3368,6 +3370,10 @@ html[data-theme="light"] .conversations-context::-webkit-scrollbar-thumb {
 
 .conversations-page--odoo .conversations-chat__header,
 .templates-page--odoo .conversations-chat__header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: .35rem;
     min-height: 48px;
     margin: 0;
     padding: .45rem 1rem;
@@ -3376,10 +3382,23 @@ html[data-theme="light"] .conversations-context::-webkit-scrollbar-thumb {
 }
 
 .conversations-page--odoo .conversations-chat__chips {
-    justify-content: flex-end;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: .35rem;
+}
+
+.conversations-page--odoo .conversations-chat__header .panel-card__title,
+.conversations-page--odoo .conversations-chat__header .panel-card__subtitle {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .conversations-window-banner {
+    position: relative;
+    z-index: 2;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
@@ -3404,7 +3423,7 @@ html[data-theme="light"] .conversations-context::-webkit-scrollbar-thumb {
     justify-self: end;
     white-space: nowrap;
     min-width: max-content;
-    z-index: 1;
+    z-index: 3;
 }
 
 .conversations-page--odoo .conversations-thread-shell {
