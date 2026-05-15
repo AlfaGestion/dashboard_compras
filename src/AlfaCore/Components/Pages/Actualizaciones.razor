@@ -10,7 +10,7 @@
     <section class="page-intro">
         <div>
             <h2 class="page-intro__title">Actualizaciones de base de datos</h2>
-            <p class="page-intro__text">Controlá la versión `FECHAUPDATE`, elegí la carpeta de red para scripts SQL y revisá el historial de aplicaciones por base activa.</p>
+            <p class="page-intro__text">Controlá la versión `FECHAUPDATE_CORE`, elegí la carpeta de red para scripts SQL y revisá el historial de aplicaciones por base activa.</p>
         </div>
         <div class="actions">
             <button type="button" class="btn btn--primary" @onclick="EjecutarPendientesAsync" disabled="@(_busy || !_loaded)">
@@ -43,7 +43,7 @@
             <article class="panel-card updates-stat">
                 <span class="panel-card__tag">VERSIÓN</span>
                 <h3 class="panel-card__title">@_dashboard.FechaUpdateActual</h3>
-                <p class="panel-card__subtitle">Valor actual de `TA_CONFIGURACION.CLAVE = FECHAUPDATE`.</p>
+                <p class="panel-card__subtitle">Valor actual de `TA_CONFIGURACION.CLAVE = FECHAUPDATE_CORE`.</p>
             </article>
 
             <article class="panel-card updates-stat">

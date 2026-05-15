@@ -291,7 +291,7 @@ public sealed class InterfacesService(
             cmd.Parameters.AddWithValue("@Grupo", ConfigGroup);
             await cmd.ExecuteNonQueryAsync(token);
 
-            await appEvents.LogAuditAsync(
+            await _appEvents.LogAuditAsync(
                 ModuleName,
                 "SaveViewSettings",
                 "TA_CONFIGURACION",
@@ -879,6 +879,74 @@ public sealed class InterfacesService(
                 token);
         }, "No se pudo actualizar el estado del comprobante.", ct);
 
+    public Task<int> DeleteAsync(InterfacesEliminarComprobantesRequest request, CancellationToken ct = default)
+        => ExecuteLoggedAsync("Interfaces", "Delete", async token =>
+        {
+            ArgumentNullException.ThrowIfNull(request);
+
+            var ids = request.IdsComprobanteRecibido
+                .Where(id => id > 0)
+                .Distinct()
+                .ToList();
+
+            if (ids.Count == 0)
+                throw new InvalidOperationException("Debés seleccionar al menos un documento para eliminar.");
+
+            var user = NormalizeActor(request.UsuarioAccion, Environment.UserName, 50);
+            var pc = NormalizeActor(request.PcAccion, ResolvePc(), 100);
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+
+            var snapshot = await GetDeleteSnapshotAsync(cn, ids, token);
+            if (snapshot.Count == 0)
+                return 0;
+
+            var existingIds = snapshot
+                .Select(item => item.IdComprobanteRecibido)
+                .Distinct()
+                .OrderBy(id => id)
+                .ToList();
+
+            await using var tx = await cn.BeginTransactionAsync(token);
+            try
+            {
+                await DeleteByIdsAsync(cn, (SqlTransaction)tx, "dbo.INT_COMPROBANTE_RECIBIDO_HIST", "IdComprobanteRecibido", existingIds, token);
+                await DeleteByIdsAsync(cn, (SqlTransaction)tx, "dbo.INT_COMPROBANTE_RECIBIDO_ADJUNTO", "IdComprobanteRecibido", existingIds, token);
+                await DeleteByIdsAsync(cn, (SqlTransaction)tx, "dbo.INT_COMPROBANTE_RECIBIDO", "IdComprobanteRecibido", existingIds, token);
+                await tx.CommitAsync(token);
+            }
+            catch
+            {
+                try
+                {
+                    await tx.RollbackAsync(token);
+                }
+                catch
+                {
+                }
+
+                throw;
+            }
+
+            await CleanupDeletedFilesAsync(snapshot, token);
+
+            await _appEvents.LogAuditAsync(
+                "Interfaces",
+                "Delete",
+                "INT_COMPROBANTE_RECIBIDO",
+                string.Join(",", existingIds),
+                "Comprobantes eliminados físicamente junto con sus registros dependientes.",
+                new
+                {
+                    Cantidad = existingIds.Count,
+                    Ids = existingIds
+                },
+                token);
+
+            return existingIds.Count;
+        }, "No se pudieron eliminar los documentos seleccionados.", ct);
+
     public Task<InterfacesAdjuntoServeDto?> GetAttachmentForServeAsync(long idAdjunto, CancellationToken ct = default)
         => ExecuteLoggedAsync("Interfaces", "GetAttachmentForServe", async token =>
         {
@@ -971,6 +1039,37 @@ public sealed class InterfacesService(
             throw new InvalidOperationException("El tipo documental seleccionado no existe o está inactivo.");
     }
 
+    private static async Task<IReadOnlyList<InterfacesDeleteSnapshotItem>> GetDeleteSnapshotAsync(SqlConnection cn, IReadOnlyList<long> ids, CancellationToken ct)
+    {
+        using var cmd = new SqlCommand(string.Empty, cn);
+        var inClause = AddIdParameters(cmd, "@Id", ids);
+        cmd.CommandText = $"""
+            SELECT
+                c.IdComprobanteRecibido,
+                ISNULL(c.RutaBase, ''),
+                ISNULL(a.RutaRelativa, '')
+            FROM dbo.INT_COMPROBANTE_RECIBIDO c
+            LEFT JOIN dbo.INT_COMPROBANTE_RECIBIDO_ADJUNTO a
+                ON a.IdComprobanteRecibido = c.IdComprobanteRecibido
+            WHERE c.IdComprobanteRecibido IN ({inClause})
+            ORDER BY c.IdComprobanteRecibido, a.IdAdjunto
+            """;
+
+        var items = new List<InterfacesDeleteSnapshotItem>();
+        await using var rd = await cmd.ExecuteReaderAsync(ct);
+        while (await rd.ReadAsync(ct))
+        {
+            items.Add(new InterfacesDeleteSnapshotItem
+            {
+                IdComprobanteRecibido = rd.GetInt64(0),
+                RutaBase = GetString(rd, 1),
+                RutaRelativa = GetString(rd, 2)
+            });
+        }
+
+        return items;
+    }
+
     private static async Task<IReadOnlyList<InterfacesAdjuntoDto>> GetAttachmentsInternalAsync(SqlConnection cn, long idComprobanteRecibido, CancellationToken ct)
     {
         const string sql = """
@@ -1017,6 +1116,47 @@ public sealed class InterfacesService(
         }
 
         return items;
+    }
+
+    private async Task CleanupDeletedFilesAsync(IReadOnlyList<InterfacesDeleteSnapshotItem> snapshot, CancellationToken ct)
+    {
+        if (snapshot.Count == 0)
+            return;
+
+        InterfacesUploadSettingsDto? settings = null;
+        var fullPaths = snapshot
+            .Where(item => !string.IsNullOrWhiteSpace(item.RutaBase) && !string.IsNullOrWhiteSpace(item.RutaRelativa))
+            .Select(item => BuildStoredFileReference(item.RutaBase, item.RutaRelativa))
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var fullPath in fullPaths)
+        {
+            try
+            {
+                if (fullPath.StartsWith("ftp://", StringComparison.OrdinalIgnoreCase))
+                {
+                    settings ??= await interfacesConfigService.GetUploadSettingsAsync(ct);
+                    await DeleteFtpFileIfExistsAsync(settings, fullPath, ct);
+                }
+                else if (File.Exists(fullPath))
+                {
+                    File.Delete(fullPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                await _appEvents.LogErrorAsync(
+                    "Interfaces",
+                    "DeleteCleanup",
+                    ex,
+                    "No se pudo eliminar un archivo físico asociado al comprobante borrado.",
+                    new { Ruta = fullPath },
+                    AppEventSeverity.Warning,
+                    ct);
+            }
+        }
     }
 
     private static async Task<InterfacesAdjuntoDto?> GetAttachmentByIdAsync(SqlConnection cn, long idAdjunto, CancellationToken ct)
@@ -1579,6 +1719,36 @@ public sealed class InterfacesService(
     private static object DbNullable(string? value, int maxLength)
         => string.IsNullOrWhiteSpace(value) ? DBNull.Value : Truncate(value.Trim(), maxLength);
 
+    private static string AddIdParameters(SqlCommand cmd, string prefix, IReadOnlyList<long> ids)
+    {
+        var parameterNames = new List<string>(ids.Count);
+        for (var i = 0; i < ids.Count; i++)
+        {
+            var parameterName = $"{prefix}{i}";
+            cmd.Parameters.AddWithValue(parameterName, ids[i]);
+            parameterNames.Add(parameterName);
+        }
+
+        return string.Join(", ", parameterNames);
+    }
+
+    private static async Task DeleteByIdsAsync(
+        SqlConnection cn,
+        SqlTransaction tx,
+        string tableName,
+        string columnName,
+        IReadOnlyList<long> ids,
+        CancellationToken ct)
+    {
+        if (ids.Count == 0)
+            return;
+
+        using var cmd = new SqlCommand(string.Empty, cn, tx);
+        var inClause = AddIdParameters(cmd, "@Id", ids);
+        cmd.CommandText = $"DELETE FROM {tableName} WHERE {columnName} IN ({inClause})";
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
     private static string SerializeData(object? data)
     {
         if (data is null)
@@ -1606,4 +1776,11 @@ public sealed class InterfacesService(
 
     private static bool GetBool(SqlDataReader rd, int index)
         => !rd.IsDBNull(index) && Convert.ToBoolean(rd.GetValue(index), CultureInfo.InvariantCulture);
+
+    private sealed class InterfacesDeleteSnapshotItem
+    {
+        public long IdComprobanteRecibido { get; init; }
+        public string RutaBase { get; init; } = string.Empty;
+        public string RutaRelativa { get; init; } = string.Empty;
+    }
 }

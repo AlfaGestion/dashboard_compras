@@ -246,3 +246,10 @@ public sealed class InterfacesAdjuntoServeDto
     public string MimeType { get; set; } = string.Empty;
     public string NombreArchivo { get; set; } = string.Empty;
 }
+
+public sealed class InterfacesEliminarComprobantesRequest
+{
+    public IReadOnlyList<long> IdsComprobanteRecibido { get; set; } = [];
+    public string UsuarioAccion { get; set; } = string.Empty;
+    public string PcAccion { get; set; } = string.Empty;
+}

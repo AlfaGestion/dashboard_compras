@@ -52,6 +52,7 @@ installer/prereqs/
 # =========================
 *.tmp
 *.temp
+*.lscache
 
 # =========================
 # Sistema operativo

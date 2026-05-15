@@ -3,11 +3,12 @@
 @inject AlfaCore.Services.IInterfacesService InterfacesSvc
 @inject AlfaCore.Services.IAppUiOperationService UiOps
 @inject AlfaCore.Services.IAppUserSessionService AppUserSession
+@inject IJSRuntime Js
 @implements IDisposable
 
 <PageTitle>Interfaces | Alfa Gestión</PageTitle>
 
-<div class="page-grid">
+<div class="page-grid interfaces-page interfaces-list-page">
     <section class="page-intro">
         <div>
             <h2 class="page-intro__title">Recepción documental</h2>
@@ -46,7 +47,16 @@
         </section>
     }
 
-    <section class="panel-card">
+    <div class="interfaces-mobile-toolbar">
+        <button type="button" class="btn btn--ghost" @onclick="ToggleMobileFilters">
+            <i class="bi bi-funnel"></i> Filtros
+        </button>
+        <button type="button" class="btn btn--ghost" @onclick="ToggleMobileBulkActions">
+            <i class="bi bi-lightning-charge"></i> Acciones
+        </button>
+    </div>
+
+    <section class="panel-card @GetMobileFiltersSectionClass()">
         <div class="panel-card__header">
             <div>
                 <h3 class="panel-card__title">Filtros</h3>
@@ -162,7 +172,7 @@
         <div class="panel-card__header">
             <div>
                 <h3 class="panel-card__title">Documentos recibidos</h3>
-                <p class="panel-card__subtitle">@_pagedTotal registro(s) · Página @_pageNumber de @_totalPages · doble clic para abrir la ficha.</p>
+                <p class="panel-card__subtitle">@_pagedTotal registro(s) · Página @_pageNumber de @_totalPages · podés abrir la ficha con el botón editar o con doble clic.</p>
             </div>
             <div class="actions">
                 <button type="button" class="btn btn--ghost" @onclick="AbrirConfiguracionVista">
@@ -170,6 +180,22 @@
                 </button>
                 <span class="panel-card__subtitle">Agrupación: @GetGroupingLabel(_viewSettings.AgruparPor)</span>
             </div>
+        </div>
+
+        <div class="interfaces-bulkbar @GetMobileBulkbarClass()">
+            <div class="field interfaces-bulkbar__field">
+                <label>Acciones masivas</label>
+                <select @bind="_bulkAction" disabled="@(_loadingList || _selectedIds.Count == 0)">
+                    <option value="@BulkActionDelete">Eliminar seleccionados</option>
+                </select>
+            </div>
+            <button type="button"
+                    class="btn btn--ghost interfaces-bulkbar__apply"
+                    @onclick="EjecutarAccionSeleccionadaAsync"
+                    disabled="@(_loadingList || _selectedIds.Count == 0)">
+                <i class="bi bi-lightning-charge"></i> Aplicar
+            </button>
+            <span class="panel-card__subtitle">@GetSelectionSummary()</span>
         </div>
 
         @if (_loadingList)
@@ -182,14 +208,69 @@
         }
         else
         {
+            <div class="interfaces-mobile-list">
+                @foreach (var group in groups)
+                {
+                    @if (group.ShowHeader)
+                    {
+                        <div class="interfaces-mobile-group">@group.Label</div>
+                    }
+
+                    @foreach (var item in group.Items)
+                    {
+                        <article class="@GetMobileCardClass(item)"
+                                 @onclick="() => _selectedId = item.IdComprobanteRecibido">
+                            <div class="interfaces-mobile-card__head">
+                                <label class="interfaces-mobile-card__check" @onclick:stopPropagation="true">
+                                    <input type="checkbox"
+                                           class="interfaces-table__checkbox"
+                                           checked="@_selectedIds.Contains(item.IdComprobanteRecibido)"
+                                           @onchange="args => ToggleRowSelection(item.IdComprobanteRecibido, args)" />
+                                    <span></span>
+                                </label>
+                                <div class="interfaces-mobile-card__identity">
+                                    <strong>#@item.IdComprobanteRecibido</strong>
+                                    <span>@item.TipoDocumentoDescripcion</span>
+                                </div>
+                                <span class="interfaces-status-pill @GetStateCssClass(item.EstadoCodigo, item.EstadoDescripcion)">@item.EstadoDescripcion</span>
+                            </div>
+
+                            <p class="interfaces-mobile-card__summary">@GetSummary(item.Observacion)</p>
+
+                            <div class="interfaces-mobile-card__meta">
+                                <span><i class="bi bi-clock"></i> @item.FechaHoraGrabacion.ToString("dd/MM/yyyy HH:mm")</span>
+                                <span><i class="bi bi-person"></i> @(string.IsNullOrWhiteSpace(item.UsuarioAlta) ? "—" : item.UsuarioAlta)</span>
+                                <span><i class="bi bi-paperclip"></i> @item.CantidadAdjuntos adj.</span>
+                            </div>
+
+                            <div class="interfaces-mobile-card__actions" @onclick:stopPropagation="true">
+                                <button type="button"
+                                        class="btn btn--ghost btn--sm"
+                                        @onclick="() => AbrirFicha(item.IdComprobanteRecibido)">
+                                    <i class="bi bi-pencil-square"></i> Editar
+                                </button>
+                            </div>
+                        </article>
+                    }
+                }
+            </div>
+
             <div class="usuarios-table-wrap">
                 <table class="data-table usuarios-table">
                     <thead>
                         <tr>
+                            <th class="interfaces-table__selector">
+                                <input type="checkbox"
+                                       class="interfaces-table__checkbox"
+                                       checked="@AreAllCurrentPageSelected"
+                                       @onchange="ToggleSelectAll"
+                                       title="Seleccionar todos los documentos visibles" />
+                            </th>
                             @foreach (var col in visibleColumns)
                             {
                                 <th>@col.Label</th>
                             }
+                            <th class="interfaces-table__actions">Acciones</th>
                         </tr>
                     </thead>
                     @foreach (var group in groups)
@@ -198,7 +279,7 @@
                             @if (group.ShowHeader)
                             {
                                 <tr class="usuarios-group-row">
-                                    <td colspan="@visibleColumns.Count">@group.Label</td>
+                                    <td colspan="@GetGridColumnSpan(visibleColumns.Count)">@group.Label</td>
                                 </tr>
                             }
 
@@ -207,6 +288,13 @@
                                 <tr class="@(_selectedId == item.IdComprobanteRecibido ? "usuarios-table__row is-selected" : "usuarios-table__row")"
                                     @onclick="() => _selectedId = item.IdComprobanteRecibido"
                                     @ondblclick="() => AbrirFicha(item.IdComprobanteRecibido)">
+                                    <td class="interfaces-table__selector" @onclick:stopPropagation="true">
+                                        <input type="checkbox"
+                                               class="interfaces-table__checkbox"
+                                               checked="@_selectedIds.Contains(item.IdComprobanteRecibido)"
+                                               @onchange="args => ToggleRowSelection(item.IdComprobanteRecibido, args)"
+                                               title="Seleccionar documento" />
+                                    </td>
                                     @foreach (var col in visibleColumns)
                                     {
                                         <td>
@@ -236,6 +324,15 @@
                                             }
                                         </td>
                                     }
+                                    <td class="interfaces-table__actions" @onclick:stopPropagation="true">
+                                        <button type="button"
+                                                class="btn btn--ghost btn--sm interfaces-table__edit"
+                                                title="Editar documento"
+                                                @onclick="() => AbrirFicha(item.IdComprobanteRecibido)">
+                                            <i class="bi bi-pencil-square"></i>
+                                            <span>Editar</span>
+                                        </button>
+                                    </td>
                                 </tr>
                             }
                         </tbody>
@@ -277,6 +374,7 @@
     private readonly List<InterfacesEstadoOptionDto> _states = [];
     private readonly List<InterfacesTipoDocumentoOptionDto> _documentTypes = [];
     private readonly List<InterfacesViewColumnDto> _viewSettingsDraft = [];
+    private readonly HashSet<long> _selectedIds = [];
     private AppUiMessage? _feedback;
     private InterfacesViewSettingsDto _viewSettings = BuildDefaultViewSettings();
     private bool _loadingList;
@@ -288,10 +386,14 @@
     private int _totalPages = 1;
     private bool _hasPrev;
     private bool _hasNext;
+    private bool _showMobileFilters;
+    private bool _showMobileBulkActions;
     private string _draftAgruparPor = InterfacesViewGroupKeys.None;
     private string _viewSettingsUserName = string.Empty;
+    private string _bulkAction = BulkActionDelete;
     private DateTime? _filtersDesde = DateTime.Today.AddDays(-30);
     private DateTime? _filtersHasta = DateTime.Today;
+    private bool AreAllCurrentPageSelected => _items.Count > 0 && _items.All(item => _selectedIds.Contains(item.IdComprobanteRecibido));
 
     protected override async Task OnInitializedAsync()
     {
@@ -350,6 +452,9 @@
 
             _items.Clear();
             _items.AddRange(result.Value.Items);
+            _selectedIds.IntersectWith(_items.Select(item => item.IdComprobanteRecibido));
+            if (_selectedId > 0 && !_items.Any(item => item.IdComprobanteRecibido == _selectedId))
+                _selectedId = 0;
             _pagedTotal = result.Value.Total;
             _pageNumber = result.Value.PageNumber;
             _totalPages = result.Value.TotalPages;
@@ -391,6 +496,72 @@
         _filters.IdTipoDocumento = null;
         _filtersDesde = DateTime.Today.AddDays(-30);
         _filtersHasta = DateTime.Today;
+    }
+
+    private void ToggleMobileFilters() => _showMobileFilters = !_showMobileFilters;
+
+    private void ToggleMobileBulkActions() => _showMobileBulkActions = !_showMobileBulkActions;
+
+    private void ToggleRowSelection(long idComprobanteRecibido, ChangeEventArgs args)
+    {
+        if (args.Value is bool flag && flag)
+            _selectedIds.Add(idComprobanteRecibido);
+        else
+            _selectedIds.Remove(idComprobanteRecibido);
+    }
+
+    private void ToggleSelectAll(ChangeEventArgs args)
+    {
+        var shouldSelect = args.Value is bool flag && flag;
+        foreach (var id in _items.Select(item => item.IdComprobanteRecibido))
+        {
+            if (shouldSelect)
+                _selectedIds.Add(id);
+            else
+                _selectedIds.Remove(id);
+        }
+    }
+
+    private async Task EjecutarAccionSeleccionadaAsync()
+    {
+        if (_selectedIds.Count == 0 || _loadingList)
+            return;
+
+        if (!string.Equals(_bulkAction, BulkActionDelete, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var confirm = await Js.InvokeAsync<bool>(
+            "confirm",
+            $"Se van a eliminar {_selectedIds.Count} documento(s) seleccionados junto con adjuntos e historial relacionados. ¿Querés continuar?");
+
+        if (!confirm)
+            return;
+
+        var user = AppUserSession.GetCurrentUserName(Environment.UserName);
+        var pc = Environment.MachineName;
+        var selectedIds = _selectedIds.OrderBy(id => id).ToArray();
+
+        var result = await UiOps.RunAsync(
+            () => InterfacesSvc.DeleteAsync(new InterfacesEliminarComprobantesRequest
+            {
+                IdsComprobanteRecibido = selectedIds,
+                UsuarioAccion = user,
+                PcAccion = pc
+            }),
+            "No se pudieron eliminar los documentos seleccionados.");
+
+        if (!result.Success)
+        {
+            SetFeedback(result.Feedback);
+            return;
+        }
+
+        _selectedIds.Clear();
+        if (selectedIds.Contains(_selectedId))
+            _selectedId = 0;
+
+        SetFeedback(AppUiMessage.Success("Documentos eliminados", $"Se eliminaron {result.Value} documento(s) seleccionados."));
+        await BuscarAsync();
     }
 
     private void OnAppUserSessionChanged()
@@ -490,6 +661,8 @@
     private IReadOnlyList<InterfacesViewColumnDto> GetVisibleColumns()
         => _viewSettings.Columnas.Where(c => c.Visible).OrderBy(c => c.Order).ToList();
 
+    private static int GetGridColumnSpan(int visibleColumnsCount) => visibleColumnsCount + 2;
+
     private IReadOnlyList<InterfacesGridGroup> BuildGridGroups()
     {
         if (_viewSettings.AgruparPor == InterfacesViewGroupKeys.None)
@@ -567,6 +740,24 @@
 
     private void SetFeedback(AppUiMessage? message)
         => _feedback = message;
+
+    private string GetMobileFiltersSectionClass()
+        => _showMobileFilters ? "interfaces-mobile-section is-open" : "interfaces-mobile-section";
+
+    private string GetMobileBulkbarClass()
+        => _showMobileBulkActions ? "is-mobile-open" : string.Empty;
+
+    private string GetMobileCardClass(InterfacesInboxItemDto item)
+        => _selectedId == item.IdComprobanteRecibido
+            ? "interfaces-mobile-card is-selected"
+            : "interfaces-mobile-card";
+
+    private string GetSelectionSummary()
+        => _selectedIds.Count == 0
+            ? "Seleccioná uno o más documentos para ejecutar acciones."
+            : $"{_selectedIds.Count} documento(s) seleccionado(s).";
+
+    private const string BulkActionDelete = "eliminar";
 
     private sealed class InterfacesGridGroup
     {
