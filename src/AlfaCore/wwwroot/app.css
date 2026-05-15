@@ -3380,9 +3380,9 @@ html[data-theme="light"] .conversations-context::-webkit-scrollbar-thumb {
 }
 
 .conversations-window-banner {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    justify-content: space-between;
     gap: .75rem;
     min-height: 30px;
     padding: .32rem 1rem;
@@ -3391,6 +3391,20 @@ html[data-theme="light"] .conversations-context::-webkit-scrollbar-thumb {
     color: #fde68a;
     font-size: .84rem;
     font-weight: 800;
+}
+
+.conversations-window-banner span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    line-height: 1.25;
+}
+
+.conversations-window-banner .btn {
+    position: static;
+    justify-self: end;
+    white-space: nowrap;
+    min-width: max-content;
+    z-index: 1;
 }
 
 .conversations-page--odoo .conversations-thread-shell {
@@ -7385,6 +7399,15 @@ html[data-theme="light"] .balance-row--detalle td {
     .conversations-context__actions,
     .conversations-composer__actions {
         flex-wrap: wrap;
+    }
+
+    .conversations-window-banner {
+        grid-template-columns: 1fr;
+        align-items: start;
+    }
+
+    .conversations-window-banner .btn {
+        justify-self: start;
     }
 
     .message-card {
