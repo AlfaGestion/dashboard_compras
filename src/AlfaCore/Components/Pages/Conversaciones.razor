@@ -246,8 +246,8 @@
                                     </div>
                                 }
 
-                                <div style="display:flex; align-items:center; gap:.35rem; width:fit-content; max-width:100%; position:relative; padding-bottom:.8rem; margin-left:@(IsOutgoingMessage(message) ? "auto" : "0");">
-                                    <div style="position:relative;">
+                                <div class="message-row @(IsOutgoingMessage(message) ? "message-row--outgoing" : "message-row--incoming")">
+                                    <div class="message-bubble-shell">
                                 <article class="message-card @GetMessageClass(message)">
                                     <div class="message-card__meta">
                                         <span>@GetMessageAuthor(message)</span>
@@ -348,7 +348,7 @@
                                 </article>
                                         @if (GetInlineReactions(message).Count > 0)
                                         {
-                                            <div style="position:absolute; left:.55rem; bottom:-.62rem; z-index:5; display:flex; align-items:center; gap:.15rem; padding:.1rem .35rem; min-height:1.35rem; border-radius:999px; background:#0f172a; border:1px solid rgba(148,163,184,.25); box-shadow:0 8px 18px rgba(0,0,0,.25); font-size:1rem; line-height:1;">
+                                            <div class="message-reactions">
                                                 @foreach (var reaction in GetInlineReactions(message))
                                                 {
                                                     <span title="@reaction">@reaction</span>
@@ -358,12 +358,11 @@
                                     </div>
                                     @if (CanReactToMessage(message) || CanQuoteMessage(message))
                                     {
-                                        <div style="position:relative; display:flex; flex-direction:column; align-items:center; gap:.25rem;">
+                                        <div class="message-actions">
                                             @if (CanReactToMessage(message))
                                             {
                                                 <button type="button"
-                                                        class="btn btn--ghost btn--sm"
-                                                        style="min-width:1.7rem; width:1.7rem; height:1.7rem; padding:0; border-radius:50%;"
+                                                        class="btn btn--ghost btn--sm message-action-button"
                                                         title="Reaccionar"
                                                         @onclick="() => ToggleReactionPicker(message.IdMensaje)">
                                                     <i class="bi bi-emoji-smile"></i>
@@ -372,8 +371,7 @@
                                             @if (CanQuoteMessage(message))
                                             {
                                                 <button type="button"
-                                                        class="btn btn--ghost btn--sm"
-                                                        style="min-width:1.7rem; width:1.7rem; height:1.7rem; padding:0; border-radius:50%;"
+                                                        class="btn btn--ghost btn--sm message-action-button"
                                                         title="Responder citando"
                                                         @onclick="() => QuoteMessage(message)">
                                                     <i class="bi bi-reply-fill"></i>
@@ -381,12 +379,11 @@
                                             }
                                             @if (_openReactionMessageId == message.IdMensaje)
                                             {
-                                                <div style="position:absolute; right:0; bottom:calc(100% + .35rem); z-index:30; display:flex; align-items:center; gap:.25rem; padding:.35rem .45rem; border-radius:999px; background:#111827; border:1px solid rgba(148,163,184,.35); box-shadow:0 12px 26px rgba(0,0,0,.35);">
+                                                <div class="message-reaction-picker">
                                                     @foreach (var emoji in QuickReactionEmojis)
                                                     {
                                                         <button type="button"
-                                                                class="btn btn--ghost btn--sm"
-                                                                style="min-width:2.15rem; padding-inline:.35rem; font-size:1.1rem;"
+                                                                class="btn btn--ghost btn--sm message-reaction-picker__emoji"
                                                                 title="Reaccionar @emoji"
                                                                 @onclick="() => SendReactionAsync(message, emoji)"
                                                                 disabled="@_busyAction">
@@ -394,8 +391,7 @@
                                                         </button>
                                                     }
                                                     <button type="button"
-                                                            class="btn btn--ghost btn--sm"
-                                                            style="min-width:2.15rem; padding-inline:.35rem;"
+                                                            class="btn btn--ghost btn--sm message-reaction-picker__emoji"
                                                             title="Mas emojis"
                                                             @onclick="OpenComposerEmojiPanel">
                                                         <i class="bi bi-plus-lg"></i>
@@ -435,12 +431,11 @@
                                 </label>
                                 @if (_quotedMessage is not null)
                                 {
-                                    <div style="display:flex; align-items:center; gap:.35rem; margin-bottom:.35rem; padding-left:.15rem; font-size:.78rem; color:#dbeafe;">
-                                        <span style="white-space:nowrap;">Respondiendo a <strong>@GetMessageAuthor(_quotedMessage)</strong>:</span>
-                                        <span style="min-width:0; max-width:34rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#93c5fd;">@GetQuotePreview(_quotedMessage)</span>
+                                    <div class="quoted-reply">
+                                        <span>Respondiendo a <strong>@GetMessageAuthor(_quotedMessage)</strong>:</span>
+                                        <span class="quoted-reply__preview">@GetQuotePreview(_quotedMessage)</span>
                                         <button type="button"
-                                                class="btn btn--ghost btn--sm"
-                                                style="min-width:1.25rem; width:1.25rem; height:1.25rem; padding:0; border-radius:50%;"
+                                                class="btn btn--ghost btn--sm quoted-reply__clear"
                                                 title="Quitar cita"
                                                 @onclick="ClearQuotedMessage">
                                             <i class="bi bi-x-lg"></i>
@@ -486,8 +481,8 @@
                             </div>
                             @if (_showComposerTools)
                             {
-                                <div class="panel-card" style="position:absolute; right:1rem; bottom:7.5rem; z-index:45; width:min(560px, calc(100vw - 2rem)); max-height:420px; overflow:auto; padding:1rem; background:#111827; border:1px solid rgba(148,163,184,.28); box-shadow:0 18px 42px rgba(0,0,0,.35);">
-                                    <div class="conversations-composer__actions" style="justify-content:flex-start; gap:.45rem; margin-bottom:.85rem;">
+                                <div class="panel-card conversations-tools-panel">
+                                    <div class="conversations-composer__actions conversations-tools-panel__tabs">
                                         <button type="button" class="conversations-filter-pill @(_composerToolTab == ComposerToolTabs.Emojis ? "is-active" : string.Empty)" @onclick='() => _composerToolTab = ComposerToolTabs.Emojis'><i class="bi bi-emoji-smile"></i> Emojis</button>
                                         <button type="button" class="conversations-filter-pill @(_composerToolTab == ComposerToolTabs.Stickers ? "is-active" : string.Empty)" @onclick='() => _composerToolTab = ComposerToolTabs.Stickers'><i class="bi bi-star-fill"></i> Stickers</button>
                                         <button type="button" class="conversations-filter-pill @(_composerToolTab == ComposerToolTabs.Adjuntos ? "is-active" : string.Empty)" @onclick='() => _composerToolTab = ComposerToolTabs.Adjuntos'><i class="bi bi-paperclip"></i> Adjuntos</button>
@@ -1177,9 +1172,15 @@
 
         try
         {
-            _selectedConversation = await ConversacionesSvc.GetConversationAsync(idConversacion);
-            _messages = (await ConversacionesSvc.GetMessagesAsync(idConversacion)).ToList();
-            var adjuntos = await ConversacionesSvc.GetConversationAttachmentsAsync(idConversacion);
+            var conversationTask = ConversacionesSvc.GetConversationAsync(idConversacion);
+            var messagesTask = ConversacionesSvc.GetMessagesAsync(idConversacion);
+            var attachmentsTask = ConversacionesSvc.GetConversationAttachmentsAsync(idConversacion);
+
+            await Task.WhenAll(conversationTask, messagesTask, attachmentsTask);
+
+            _selectedConversation = await conversationTask;
+            _messages = (await messagesTask).ToList();
+            var adjuntos = await attachmentsTask;
             _adjuntosPorMensaje = adjuntos
                 .GroupBy(a => a.IdMensaje)
                 .ToDictionary(g => g.Key, g => g.ToList());
@@ -1199,8 +1200,6 @@
             {
                 if (conversationChanged)
                     _templateValuesText = string.Empty;
-
-                await LoadTemplatesForConversationAsync();
             }
             else
             {
