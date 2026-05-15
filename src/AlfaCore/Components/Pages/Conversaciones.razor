@@ -136,12 +136,12 @@
                                     <div class="conversations-contact-suggest__item">
                                         <div class="conversations-contact-suggest__main">
                                             <strong>@GetDisplayName(conversationMatch)</strong>
-                                            <span>Ya existe conversaciÃ³n sin contacto asociado</span>
+                                            <span>Ya existe conversaci&oacute;n sin contacto asociado</span>
                                             <small>@DisplayOrFallback(conversationMatch.TelefonoWhatsApp)</small>
                                         </div>
                                         <div class="conversations-contact-suggest__actions">
                                             <button type="button" class="btn btn--ghost btn--sm" @onclick="() => SelectConversationFromSuggestionAsync(conversationMatch.IdConversacion)">
-                                                <i class="bi bi-chat-left-text"></i> Ver conversaciÃ³n
+                                                <i class="bi bi-chat-left-text"></i> Ver conversaci&oacute;n
                                             </button>
                                             <button type="button" class="btn btn--primary btn--sm" @onclick="() => OpenNewContactFromConversation(conversationMatch)">
                                                 <i class="bi bi-person-plus-fill"></i> Crear contacto vinculado
@@ -1142,6 +1142,16 @@
     {
         _filters.Search = Convert.ToString(args.Value, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
         _actionError = null;
+        if (string.IsNullOrWhiteSpace(_filters.Search))
+        {
+            CancelSearchDebounce();
+            CancelContactSearch();
+            _showContactSuggestions = false;
+            _contactSuggestions = [];
+            await LoadInboxAsync();
+            return;
+        }
+
         await DebounceContactSuggestionsAsync();
     }
 
@@ -2063,7 +2073,7 @@
         var phone = GetContactPhone(contact);
         if (string.IsNullOrWhiteSpace(phone))
         {
-            _actionError = "El contacto no tiene telÃ©fono ni celular para iniciar WhatsApp.";
+            _actionError = "El contacto no tiene tel\u00e9fono ni celular para iniciar WhatsApp.";
             return;
         }
 
@@ -2121,8 +2131,7 @@
             return null;
 
         return _inbox.FirstOrDefault(x =>
-            !x.IdContacto.HasValue
-            && MatchesConversationSearch(x, search));
+            MatchesConversationSearch(x, search));
     }
 
     private static bool MatchesConversationSearch(ConversacionInboxItemDto item, string search)
@@ -2131,12 +2140,25 @@
                || ContainsSearch(item.ContactoNombre, search)
                || ContainsSearch(item.ClienteNombre, search)
                || ContainsSearch(item.TelefonoWhatsApp, search)
+               || ContainsPhoneSearch(item.TelefonoWhatsApp, search)
                || ContainsSearch(item.ResumenUltimoMensaje, search);
     }
 
     private static bool ContainsSearch(string? value, string search)
         => !string.IsNullOrWhiteSpace(value)
            && value.Contains(search, StringComparison.OrdinalIgnoreCase);
+
+    private static bool ContainsPhoneSearch(string? value, string search)
+    {
+        var phone = DigitsOnly(value);
+        var query = DigitsOnly(search);
+        return query.Length >= 4 && phone.Contains(query, StringComparison.Ordinal);
+    }
+
+    private static string DigitsOnly(string? value)
+        => string.IsNullOrWhiteSpace(value)
+            ? string.Empty
+            : new string(value.Where(char.IsDigit).ToArray());
 
     private static string GetContactPhone(ContactoGridItemDto contact)
         => FirstNonEmpty(contact.Celular, contact.Telefono);
