@@ -1,7 +1,9 @@
 @page "/conversaciones"
 @using System.Text.Json
 @inject AlfaCore.Services.IConversacionesService ConversacionesSvc
+@inject AlfaCore.Services.IContactosService ContactosSvc
 @inject IJSRuntime JS
+@inject NavigationManager Nav
 @implements IAsyncDisposable
 
 <PageTitle>Conversaciones | Alfa Gestión</PageTitle>
@@ -68,9 +70,127 @@
                     <input id="conv-search"
                            type="search"
                            placeholder="Teléfono, cliente, contacto o resumen…"
-                           @bind="_filters.Search"
-                           @bind:event="oninput"
-                           @onkeydown="HandleSearchEnter" />
+                           value="@_filters.Search"
+                           @oninput="HandleSearchInputAsync"
+                           @onkeydown="HandleSearchEnter"
+                           @onfocus="() => _showContactSuggestions = ShouldShowContactSuggestions" />
+                    @if (_showContactSuggestions)
+                    {
+                        <div class="conversations-contact-suggest">
+                            @if (_loadingContactSuggestions)
+                            {
+                                <div class="conversations-contact-suggest__state">
+                                    <i class="bi bi-hourglass-split"></i>
+                                    <span>Buscando contactos...</span>
+                                </div>
+                            }
+                            else if (_conversationSuggestions.Count > 0 || _contactSuggestions.Count > 0)
+                            {
+                                @if (_conversationSuggestions.Count > 0)
+                                {
+                                    <div class="conversations-contact-suggest__header">
+                                        <span>Coincidencias encontradas</span>
+                                        <button type="button" class="btn btn--ghost btn--sm" @onclick="CloseContactSuggestions" title="Cerrar">
+                                            <i class="bi bi-x-lg"></i>
+                                        </button>
+                                    </div>
+                                    @foreach (var conversation in _conversationSuggestions)
+                                    {
+                                        <div class="conversations-contact-suggest__item">
+                                            <div class="conversations-contact-suggest__main">
+                                                <strong>@GetDisplayName(conversation)</strong>
+                                                <small>@DisplayOrFallback(conversation.TelefonoWhatsApp)</small>
+                                            </div>
+                                            <div class="conversations-contact-suggest__actions">
+                                                <button type="button" class="btn btn--primary btn--sm" @onclick="() => SelectConversationFromSuggestionAsync(conversation.IdConversacion)">
+                                                    <i class="bi bi-whatsapp"></i> Conversar
+                                                </button>
+                                                @if (!HasUsableLinkedContact(conversation))
+                                                {
+                                                    <button type="button" class="btn btn--ghost btn--sm" @onclick="() => OpenNewContactFromConversation(conversation)">
+                                                        <i class="bi bi-person-plus-fill"></i> Crear contacto
+                                                    </button>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                                @if (_contactSuggestions.Count > 0)
+                                {
+                                    <div class="conversations-contact-suggest__header">
+                                        <span>Contactos encontrados</span>
+                                        @if (_conversationSuggestions.Count == 0)
+                                        {
+                                            <button type="button" class="btn btn--ghost btn--sm" @onclick="CloseContactSuggestions" title="Cerrar">
+                                                <i class="bi bi-x-lg"></i>
+                                            </button>
+                                        }
+                                    </div>
+                                    @foreach (var contact in _contactSuggestions)
+                                    {
+                                        var phone = GetContactPhone(contact);
+                                        <div class="conversations-contact-suggest__item">
+                                            <div class="conversations-contact-suggest__main">
+                                                <strong>@contact.NombreApellido</strong>
+                                                <span>@DisplayOrFallback(contact.Cargo)</span>
+                                                <small>@DisplayOrFallback(phone, contact.Email)</small>
+                                            </div>
+                                            <div class="conversations-contact-suggest__actions">
+                                                <button type="button" class="btn btn--primary btn--sm" disabled="@string.IsNullOrWhiteSpace(phone)" @onclick="() => OpenWhatsAppForContactAsync(contact)">
+                                                    <i class="bi bi-whatsapp"></i> Conversar
+                                                </button>
+                                                <button type="button" class="btn btn--ghost btn--sm" @onclick="() => OpenContactEditor(contact)">
+                                                    <i class="bi bi-pencil-square"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                var conversationMatch = GetBestConversationMatchForSearch();
+                                <div class="conversations-contact-suggest__state">
+                                    <i class="bi bi-person-plus"></i>
+                                    <span>No encontramos contactos con ese texto.</span>
+                                </div>
+                                @if (conversationMatch is not null)
+                                {
+                                    <div class="conversations-contact-suggest__item">
+                                        <div class="conversations-contact-suggest__main">
+                                            <strong>@GetDisplayName(conversationMatch)</strong>
+                                            <span>@("Ya existe conversaci\u00f3n sin contacto asociado")</span>
+                                            <small>@DisplayOrFallback(conversationMatch.TelefonoWhatsApp)</small>
+                                        </div>
+                                        <div class="conversations-contact-suggest__actions">
+                                            <button type="button" class="btn btn--primary btn--sm" @onclick="() => SelectConversationFromSuggestionAsync(conversationMatch.IdConversacion)">
+                                                <i class="bi bi-whatsapp"></i> Conversar
+                                            </button>
+                                            <button type="button" class="btn btn--primary btn--sm" @onclick="() => OpenNewContactFromConversation(conversationMatch)">
+                                                <i class="bi bi-person-plus-fill"></i> Crear contacto vinculado
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn--primary btn--sm" @onclick="OpenNewContactFromSearch">
+                                        <i class="bi bi-plus-circle-fill"></i> Crear contacto nuevo
+                                    </button>
+                                }
+                            }
+                        </div>
+                    }
+                    @if (CanCreateWhatsAppFromSearch)
+                    {
+                        <button type="button"
+                                class="btn btn--primary btn--sm"
+                                style="margin-top: .45rem; width: fit-content;"
+                                @onclick="CreateWhatsAppFromSearchAsync"
+                                disabled="@_busyAction">
+                            <i class="bi bi-plus-circle-fill"></i> Crear conversación con este celular
+                        </button>
+                    }
                 </div>
 
                 <div class="field">
@@ -227,7 +347,7 @@
                         }
                         else
                         {
-                            @foreach (var message in _messages)
+                            @foreach (var message in VisibleMessages)
                             {
                                 @if (_firstNewMessageId == message.IdMensaje)
                                 {
@@ -236,6 +356,8 @@
                                     </div>
                                 }
 
+                                <div class="message-row @(IsOutgoingMessage(message) ? "message-row--outgoing" : "message-row--incoming")">
+                                    <div class="message-bubble-shell">
                                 <article class="message-card @GetMessageClass(message)">
                                     <div class="message-card__meta">
                                         <span>@GetMessageAuthor(message)</span>
@@ -265,7 +387,16 @@
                                                                 @onclick="() => OpenAttachmentPreview(adj)">
                                                             <img src="@GetAttachmentUrl(adj)" alt="@GetAttachmentLabel(adj)" loading="lazy" />
                                                         </button>
-                                                        @if (!IsStickerAttachment(adj))
+                                                        @if (IsStickerAttachment(adj))
+                                                        {
+                                                            <button type="button"
+                                                                    class="btn btn--ghost btn--sm"
+                                                                    title="Guardar sticker en favoritos"
+                                                                    @onclick="() => SaveStickerFavoriteAsync(adj.IdAdjunto)">
+                                                                <i class="bi bi-star"></i>
+                                                            </button>
+                                                        }
+                                                        else
                                                         {
                                                             <span class="attachment-name">@adj.NombreArchivo</span>
                                                         }
@@ -325,6 +456,61 @@
                                         </div>
                                     }
                                 </article>
+                                        @if (GetInlineReactions(message).Count > 0)
+                                        {
+                                            <div class="message-reactions">
+                                                @foreach (var reaction in GetInlineReactions(message))
+                                                {
+                                                    <span title="@reaction">@reaction</span>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                    @if (CanReactToMessage(message) || CanQuoteMessage(message))
+                                    {
+                                        <div class="message-actions">
+                                            @if (CanReactToMessage(message))
+                                            {
+                                                <button type="button"
+                                                        class="btn btn--ghost btn--sm message-action-button"
+                                                        title="Reaccionar"
+                                                        @onclick="() => ToggleReactionPicker(message.IdMensaje)">
+                                                    <i class="bi bi-emoji-smile"></i>
+                                                </button>
+                                            }
+                                            @if (CanQuoteMessage(message))
+                                            {
+                                                <button type="button"
+                                                        class="btn btn--ghost btn--sm message-action-button"
+                                                        title="Responder citando"
+                                                        @onclick="() => QuoteMessage(message)">
+                                                    <i class="bi bi-reply-fill"></i>
+                                                </button>
+                                            }
+                                            @if (_openReactionMessageId == message.IdMensaje)
+                                            {
+                                                <div class="message-reaction-picker">
+                                                    @foreach (var emoji in QuickReactionEmojis)
+                                                    {
+                                                        <button type="button"
+                                                                class="btn btn--ghost btn--sm message-reaction-picker__emoji"
+                                                                title="Reaccionar @emoji"
+                                                                @onclick="() => SendReactionAsync(message, emoji)"
+                                                                disabled="@_busyAction">
+                                                            @emoji
+                                                        </button>
+                                                    }
+                                                    <button type="button"
+                                                            class="btn btn--ghost btn--sm message-reaction-picker__emoji"
+                                                            title="Mas emojis"
+                                                            @onclick="OpenComposerEmojiPanel">
+                                                        <i class="bi bi-plus-lg"></i>
+                                                    </button>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
                             }
                         }
                     </div>
@@ -353,6 +539,19 @@
                                 <label for="conv-message">
                                     @(_selectedConversation.Canal == "INTERNO" ? "Mensaje al equipo" : "Responder")
                                 </label>
+                                @if (_quotedMessage is not null)
+                                {
+                                    <div class="quoted-reply">
+                                        <span>Respondiendo a <strong>@GetMessageAuthor(_quotedMessage)</strong>:</span>
+                                        <span class="quoted-reply__preview">@GetQuotePreview(_quotedMessage)</span>
+                                        <button type="button"
+                                                class="btn btn--ghost btn--sm quoted-reply__clear"
+                                                title="Quitar cita"
+                                                @onclick="ClearQuotedMessage">
+                                            <i class="bi bi-x-lg"></i>
+                                        </button>
+                                    </div>
+                                }
                                 <textarea id="conv-message"
                                           @ref="_replyTextArea"
                                           rows="2"
@@ -383,19 +582,74 @@
                                 <button type="button" class="btn btn--primary" @onclick="SendReplyAsync" disabled="@(!_canSendReply)" title="@(HasPendingAttachmentError ? "Reintentar envio" : (_selectedConversation.Canal == "INTERNO" ? "Enviar" : "Enviar mensaje"))">
                                     <i class="bi @(HasPendingAttachmentError ? "bi-arrow-clockwise" : "bi-send-fill")"></i>
                                 </button>
-                                <label class="btn btn--ghost" title="Adjuntar archivo" style="cursor:pointer">
-                                    <i class="bi @(_uploadingFile ? "bi-hourglass-split" : "bi-paperclip")"></i>
-                                    <InputFile OnChange="HandleFileSelectedAsync" style="display:none" multiple
-                                               accept="image/*,audio/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip,.rar" />
-                                </label>
                                 <button type="button"
-                                        class="btn btn--ghost @(_recording ? "is-recording" : string.Empty)"
-                                        @onclick="ToggleRecordingAsync"
-                                        title="@(_recording ? "Detener grabacion" : "Grabar mensaje de voz")"
-                                        disabled="@_uploadingAudio">
-                                    <i class="bi @(_recording ? "bi-stop-circle-fill" : "bi-mic-fill")"></i>
+                                        class="btn btn--ghost"
+                                        title="Más opciones"
+                                        @onclick="ToggleComposerTools">
+                                    <i class="bi bi-plus-lg"></i>
                                 </button>
                             </div>
+                            @if (_showComposerTools)
+                            {
+                                <div class="panel-card conversations-tools-panel">
+                                    <div class="conversations-composer__actions conversations-tools-panel__tabs">
+                                        <button type="button" class="conversations-filter-pill @(_composerToolTab == ComposerToolTabs.Emojis ? "is-active" : string.Empty)" @onclick='() => _composerToolTab = ComposerToolTabs.Emojis'><i class="bi bi-emoji-smile"></i> Emojis</button>
+                                        <button type="button" class="conversations-filter-pill @(_composerToolTab == ComposerToolTabs.Stickers ? "is-active" : string.Empty)" @onclick='() => _composerToolTab = ComposerToolTabs.Stickers'><i class="bi bi-star-fill"></i> Stickers</button>
+                                        <button type="button" class="conversations-filter-pill @(_composerToolTab == ComposerToolTabs.Adjuntos ? "is-active" : string.Empty)" @onclick='() => _composerToolTab = ComposerToolTabs.Adjuntos'><i class="bi bi-paperclip"></i> Adjuntos</button>
+                                    </div>
+                                    @if (_composerToolTab == ComposerToolTabs.Emojis)
+                                    {
+                                        <input type="search" placeholder="Buscar emoji" value="@_emojiSearch" @oninput="HandleEmojiSearchInput" style="margin-bottom:.8rem;" />
+                                        @foreach (var group in FilteredEmojiGroups)
+                                        {
+                                            <div style="margin-bottom:.8rem;">
+                                                <strong class="context-card__label">@group.Nombre</strong>
+                                                <div class="conversations-composer__actions" style="justify-content:flex-start; flex-wrap:wrap; gap:.35rem; margin-top:.35rem;">
+                                                    @foreach (var emoji in group.Emojis)
+                                                    {
+                                                        <button type="button" class="btn btn--ghost btn--sm" style="min-width:2.1rem; padding-inline:.45rem;" title="Agregar @emoji" @onclick="() => AddEmojiToReply(emoji)">@emoji</button>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    }
+                                    else if (_composerToolTab == ComposerToolTabs.Stickers)
+                                    {
+                                        <div class="conversations-composer__actions" style="justify-content:flex-start; flex-wrap:wrap; gap:.55rem;">
+                                            <label class="btn btn--ghost" title="Cargar sticker WebP" style="cursor:pointer; min-height:62px;">
+                                                <i class="bi bi-plus-lg"></i> Crear
+                                                <InputFile OnChange="HandleStickerSelectedAsync" style="display:none" multiple accept="image/webp,.webp" />
+                                            </label>
+                                    @if (_favoriteStickers.Count == 0)
+                                    {
+                                        <span class="context-card__muted">Todavía no hay stickers favoritos.</span>
+                                    }
+                                    @foreach (var sticker in _favoriteStickers)
+                                    {
+                                        <button type="button"
+                                                class="btn btn--ghost"
+                                                title="@sticker.Nombre"
+                                                @onclick="() => SendFavoriteStickerAsync(sticker.IdFavorito)"
+                                                disabled="@_busyAction">
+                                            <img src="@GetFavoriteStickerUrl(sticker)" alt="@sticker.Nombre" style="width:42px;height:42px;object-fit:contain;" />
+                                        </button>
+                                    }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="conversations-composer__actions" style="justify-content:flex-start; flex-wrap:wrap;">
+                                            <label class="btn btn--ghost" title="Adjuntar archivo" style="cursor:pointer">
+                                                <i class="bi @(_uploadingFile ? "bi-hourglass-split" : "bi-paperclip")"></i> Archivo
+                                                <InputFile OnChange="HandleFileSelectedAsync" style="display:none" multiple accept="image/*,audio/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip,.rar" />
+                                            </label>
+                                            <button type="button" class="btn btn--ghost @(_recording ? "is-recording" : string.Empty)" @onclick="ToggleRecordingAsync" title="@(_recording ? "Detener grabación" : "Grabar mensaje de voz")" disabled="@_uploadingAudio">
+                                                <i class="bi @(_recording ? "bi-stop-circle-fill" : "bi-mic-fill")"></i> Audio
+                                            </button>
+                                        </div>
+                                    }
+                                </div>
+                            }
                         }
 
                         <div class="field">
@@ -725,6 +979,10 @@
     private List<ConversacionEstadoOptionDto> _states = [];
     private List<ConversacionInboxItemDto> _inbox = [];
     private List<ConversacionMensajeDto> _messages = [];
+    private List<ContactoGridItemDto> _contactSuggestions = [];
+    private List<ConversacionInboxItemDto> _conversationSuggestions = [];
+    private readonly Dictionary<long, ConversationViewCache> _conversationCache = [];
+    private readonly Dictionary<string, ConversationChannelCache> _channelCache = [];
     private ConversacionDetalleDto? _selectedConversation;
     private long? _selectedConversationId;
     private bool _loadingInbox;
@@ -742,6 +1000,8 @@
     private DotNetObjectReference<Conversaciones>? _dotNetRef;
     private CancellationTokenSource? _pollingCts;
     private Task? _pollingTask;
+    private CancellationTokenSource? _searchDebounceCts;
+    private CancellationTokenSource? _contactSearchCts;
     private long? _scrollHandlerConversationId;
     private long? _firstNewMessageId;
     private int _newMessagesCount;
@@ -749,18 +1009,46 @@
     private bool _showReturnToLatest;
     private bool _scrollThreadToBottomAfterRender;
     private long? _openAttachmentMenuId;
+    private long? _openReactionMessageId;
+    private ConversacionMensajeDto? _quotedMessage;
     private ConversacionAdjuntoDto? _previewAttachment;
     private ElementReference _replyTextArea;
     private long? _replyEnterHandlerConversationId;
     private List<PendingAttachment> _pendingAttachments = [];
     private List<PendingAttachment> _templatePendingAttachments = [];
+    private List<ConversacionStickerFavoritoDto> _favoriteStickers = [];
+    private bool _showComposerTools;
+    private string _composerToolTab = ComposerToolTabs.Emojis;
+    private string _emojiSearch = string.Empty;
+    private bool _showContactSuggestions;
+    private bool _loadingContactSuggestions;
 
     private static readonly TimeSpan PollingInterval = TimeSpan.FromSeconds(5);
+    private static readonly string[] QuickReactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+    private static readonly IReadOnlyList<EmojiGroup> EmojiGroups =
+    [
+        new("Recientes", ["🤣", "🥰", "👉", "😭", "😔", "😁", "🧘", "😩", "💔", "🙏", "🕯️", "😌", "😂", "😍", "😅", "🤩"]),
+        new("Emoticones y personas", ["😀", "😃", "😄", "😁", "😆", "🥹", "😅", "😂", "🤣", "🙂", "😊", "😇", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚", "😋", "😜", "😝", "😛", "🧐", "🤓", "😎", "🥳", "😴"]),
+        new("Gestos", ["👍", "👎", "👌", "👏", "🙌", "🤝", "🙏", "💪", "✌️", "🤞", "👋", "🤙", "☝️", "👇", "👈", "👉"]),
+        new("Corazones", ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "💕", "💞", "💓", "💗", "💖", "💘"]),
+        new("Objetos", ["✅", "❌", "⚠️", "📌", "📎", "🧾", "📄", "💬", "📞", "📱", "💻", "🔧", "🛠️", "💡", "🚀", "⏰"])
+    ];
+    private IReadOnlyList<EmojiGroup> FilteredEmojiGroups
+        => string.IsNullOrWhiteSpace(_emojiSearch)
+            ? EmojiGroups
+            : EmojiGroups
+                .Select(x => x.Nombre.Contains(_emojiSearch.Trim(), StringComparison.OrdinalIgnoreCase)
+                    ? x
+                    : new EmojiGroup(x.Nombre, x.Emojis.Where(e => e.Contains(_emojiSearch.Trim(), StringComparison.OrdinalIgnoreCase)).ToArray()))
+                .Where(x => x.Emojis.Count > 0)
+                .ToList();
 
     private bool _canSendReply => !_busyAction && _selectedConversation is not null && !IsWhatsAppWindowExpired && (HasReplyText || _pendingAttachments.Count > 0);
     private bool HasReplyText => !string.IsNullOrWhiteSpace(_replyText);
     private bool HasPendingAttachmentError => _pendingAttachments.Any(x => x.HasError);
     private bool _canAddNote => !_busyAction && _selectedConversation is not null && !string.IsNullOrWhiteSpace(_internalNoteText);
+    private bool CanCreateWhatsAppFromSearch => _canalActivo == "WHATSAPP" && !_busyAction && IsPotentialPhone(_filters.Search);
+    private bool ShouldShowContactSuggestions => _canalActivo == "WHATSAPP" && _filters.Search.Trim().Length >= 2;
     private bool ShouldShowLatestButton => _showReturnToLatest || _newMessagesCount > 0;
     private bool IsWhatsAppConversation
         => _selectedConversation is not null
@@ -771,6 +1059,8 @@
            && !_selectedConversation.VentanaWhatsAppActiva;
     private bool CanOpenTemplatePanel
         => !_loadingTemplates && IsWhatsAppConversation;
+    private IReadOnlyList<ConversacionMensajeDto> VisibleMessages
+        => _messages.Where(x => !IsReactionMessage(x)).ToList();
     private ConversacionPlantillaDto? SelectedTemplate
         => _availableTemplates.FirstOrDefault(x => x.IdPlantilla == _selectedTemplateId);
     private IReadOnlyList<string> TemplateValues => ParseTemplateValues(_templateValuesText);
@@ -782,7 +1072,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadLookupsAsync();
+        await Task.WhenAll(LoadLookupsAsync(), LoadFavoriteStickersAsync());
         if (_loadError is null)
             await LoadInboxAsync();
 
@@ -859,8 +1149,83 @@
 
     private async Task HandleSearchEnter(KeyboardEventArgs args)
     {
-        if (args.Key == "Enter")
+        if (args.Key != "Enter")
+            return;
+
+        CancelSearchDebounce();
+        CancelContactSearch();
+        _showContactSuggestions = false;
+        if (CanCreateWhatsAppFromSearch)
+            await CreateWhatsAppFromSearchAsync();
+        else
             await LoadInboxAsync();
+    }
+
+    private async Task HandleSearchInputAsync(ChangeEventArgs args)
+    {
+        _filters.Search = Convert.ToString(args.Value, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+        _actionError = null;
+        if (string.IsNullOrWhiteSpace(_filters.Search))
+        {
+            CancelSearchDebounce();
+            CancelContactSearch();
+            _showContactSuggestions = false;
+            _contactSuggestions = [];
+            _conversationSuggestions = [];
+            await LoadInboxAsync();
+            return;
+        }
+
+        await DebounceContactSuggestionsAsync();
+    }
+
+    private async Task DebounceSearchAsync()
+    {
+        CancelSearchDebounce();
+        var cts = new CancellationTokenSource();
+        _searchDebounceCts = cts;
+
+        try
+        {
+            await Task.Delay(300, cts.Token);
+            if (!cts.IsCancellationRequested)
+                await InvokeAsync(LoadInboxAsync);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task LoadFavoriteStickersAsync()
+    {
+        try
+        {
+            _favoriteStickers = (await ConversacionesSvc.GetFavoriteStickersAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            _actionError = ex.Message;
+        }
+    }
+
+    private void CancelSearchDebounce()
+    {
+        if (_searchDebounceCts is null)
+            return;
+
+        _searchDebounceCts.Cancel();
+        _searchDebounceCts.Dispose();
+        _searchDebounceCts = null;
+    }
+
+    private void CancelContactSearch()
+    {
+        if (_contactSearchCts is null)
+            return;
+
+        _contactSearchCts.Cancel();
+        _contactSearchCts.Dispose();
+        _contactSearchCts = null;
     }
 
     private async Task LoadInboxAsync()
@@ -879,6 +1244,7 @@
             var refreshedInbox = (await ConversacionesSvc.GetInboxAsync(_filters)).ToList();
             TrackInboxNewMessages(previousInbox, refreshedInbox, showLoading);
             _inbox = refreshedInbox;
+            StoreChannelCache(_canalActivo);
 
             if (_selectedConversationId.HasValue && _inbox.Any(x => x.IdConversacion == _selectedConversationId.Value))
                 return;
@@ -935,6 +1301,14 @@
     {
         var conversationChanged = _selectedConversationId != idConversacion;
         _selectedConversationId = idConversacion;
+        var hasWarmCache = _conversationCache.TryGetValue(idConversacion, out var cachedConversation);
+
+        if (hasWarmCache && cachedConversation is not null)
+        {
+            ApplyConversationCache(idConversacion, cachedConversation);
+            showLoading = false;
+        }
+
         if (showLoading)
             _loadingConversation = true;
 
@@ -947,12 +1321,19 @@
 
         try
         {
-            _selectedConversation = await ConversacionesSvc.GetConversationAsync(idConversacion);
-            _messages = (await ConversacionesSvc.GetMessagesAsync(idConversacion)).ToList();
-            var adjuntos = await ConversacionesSvc.GetConversationAttachmentsAsync(idConversacion);
+            var conversationTask = ConversacionesSvc.GetConversationAsync(idConversacion);
+            var messagesTask = ConversacionesSvc.GetMessagesAsync(idConversacion);
+            var attachmentsTask = ConversacionesSvc.GetConversationAttachmentsAsync(idConversacion);
+
+            await Task.WhenAll(conversationTask, messagesTask, attachmentsTask);
+
+            _selectedConversation = await conversationTask;
+            _messages = (await messagesTask).ToList();
+            var adjuntos = await attachmentsTask;
             _adjuntosPorMensaje = adjuntos
                 .GroupBy(a => a.IdMensaje)
                 .ToDictionary(g => g.Key, g => g.ToList());
+            StoreConversationCache(idConversacion);
             _assignmentTechnicianId = _selectedConversation?.IdTecnico ?? string.Empty;
             _statusCode = _selectedConversation?.CodigoEstado ?? (_states.FirstOrDefault()?.CodigoEstado ?? "ABIERTA");
 
@@ -969,8 +1350,6 @@
             {
                 if (conversationChanged)
                     _templateValuesText = string.Empty;
-
-                await LoadTemplatesForConversationAsync();
             }
             else
             {
@@ -989,6 +1368,151 @@
                 _loadingConversation = false;
         }
     }
+
+    private async Task DebounceContactSuggestionsAsync()
+    {
+        CancelContactSearch();
+
+        if (!ShouldShowContactSuggestions)
+        {
+            _showContactSuggestions = false;
+            _contactSuggestions = [];
+            _conversationSuggestions = [];
+            return;
+        }
+
+        _showContactSuggestions = true;
+        _loadingContactSuggestions = true;
+        var cts = new CancellationTokenSource();
+        _contactSearchCts = cts;
+
+        try
+        {
+            await Task.Delay(220, cts.Token);
+            var contactTask = ContactosSvc.SearchAsync(new ContactosFilters
+            {
+                Texto = _filters.Search.Trim(),
+                Activo = true,
+                PageNumber = 1,
+                PageSize = 6
+            }, cts.Token);
+            var conversationTask = ConversacionesSvc.GetInboxAsync(new ConversacionesInboxFilters
+            {
+                Canal = _canalActivo,
+                Modo = _filters.Modo,
+                Search = _filters.Search.Trim(),
+                IdTecnicoActual = _filters.IdTecnicoActual,
+                CodigoEstado = _filters.CodigoEstado,
+                Limit = 6
+            }, cts.Token);
+
+            await Task.WhenAll(contactTask, conversationTask);
+
+            if (!cts.IsCancellationRequested)
+            {
+                _conversationSuggestions = (await conversationTask)
+                    .Where(x => MatchesConversationSearch(x, _filters.Search.Trim()))
+                    .Take(6)
+                    .ToList();
+                _contactSuggestions = (await contactTask).Items
+                    .Where(contact => !_conversationSuggestions.Any(conversation => IsSameContactSuggestion(conversation, contact)))
+                    .Take(6)
+                    .ToList();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _contactSuggestions = [];
+            _conversationSuggestions = [];
+            _actionError = ex.Message;
+        }
+        finally
+        {
+            if (_contactSearchCts == cts)
+            {
+                _loadingContactSuggestions = false;
+                _contactSearchCts = null;
+            }
+        }
+    }
+
+    private void StoreConversationCache(long idConversacion)
+    {
+        if (_selectedConversation is null)
+            return;
+
+        _conversationCache[idConversacion] = new ConversationViewCache(
+            _selectedConversation,
+            _messages.ToList(),
+            _adjuntosPorMensaje.ToDictionary(x => x.Key, x => x.Value.ToList()));
+
+        const int maxCachedConversations = 8;
+        if (_conversationCache.Count <= maxCachedConversations)
+            return;
+
+        var firstKey = _conversationCache.Keys.FirstOrDefault(x => x != idConversacion);
+        if (firstKey > 0)
+            _conversationCache.Remove(firstKey);
+    }
+
+    private void ApplyConversationCache(long idConversacion, ConversationViewCache cache)
+    {
+        _selectedConversation = cache.Conversation;
+        _messages = cache.Messages.ToList();
+        _adjuntosPorMensaje = cache.AttachmentsByMessage.ToDictionary(x => x.Key, x => x.Value.ToList());
+        _assignmentTechnicianId = _selectedConversation.IdTecnico;
+        _statusCode = _selectedConversation.CodigoEstado;
+        _conversationError = null;
+        _scrollThreadToBottomAfterRender = true;
+        _scrollHandlerConversationId = null;
+        RestoreSelectedNewMessageMarker(idConversacion);
+    }
+
+    private void StoreChannelCache(string canal)
+    {
+        _channelCache[canal] = new ConversationChannelCache(
+            CloneFilters(_filters),
+            _inbox.ToList(),
+            _selectedConversationId);
+    }
+
+    private bool TryApplyChannelCache(string canal)
+    {
+        if (!_channelCache.TryGetValue(canal, out var cache))
+            return false;
+
+        _filters = CloneFilters(cache.Filters);
+        _filters.Canal = canal;
+        _inbox = cache.Inbox.ToList();
+
+        if (cache.SelectedConversationId is long selectedId
+            && _conversationCache.TryGetValue(selectedId, out var conversationCache))
+        {
+            _selectedConversationId = selectedId;
+            ApplyConversationCache(selectedId, conversationCache);
+        }
+        else
+        {
+            ClearSelection();
+        }
+
+        return true;
+    }
+
+    private static ConversacionesInboxFilters CloneFilters(ConversacionesInboxFilters filters)
+        => new()
+        {
+            Modo = filters.Modo,
+            Search = filters.Search,
+            IdTecnicoActual = filters.IdTecnicoActual,
+            CodigoEstado = filters.CodigoEstado,
+            Canal = filters.Canal,
+            Limit = filters.Limit,
+            Offset = filters.Offset
+        };
 
     private void StartPolling()
     {
@@ -1153,6 +1677,22 @@
         _showReturnToLatest = true;
     }
 
+    private bool CanQuoteMessage(ConversacionMensajeDto message)
+        => IsWhatsAppConversation
+           && !IsWhatsAppWindowExpired
+           && !string.IsNullOrWhiteSpace(message.WhatsAppMessageId)
+           && !IsReactionMessage(message);
+
+    private void QuoteMessage(ConversacionMensajeDto message)
+    {
+        _quotedMessage = message;
+        _openReactionMessageId = null;
+        _showComposerTools = false;
+    }
+
+    private void ClearQuotedMessage()
+        => _quotedMessage = null;
+
     private async Task SendReplyAsync()
     {
         if (_selectedConversation is null)
@@ -1176,10 +1716,12 @@
                     IdConversacion = _selectedConversation.IdConversacion,
                     Texto = textToSend,
                     MessageType = "TEXT",
+                    WhatsAppReplyToMessageId = _quotedMessage?.WhatsAppMessageId,
                     IdTecnicoAutor = _assignmentTechnicianId
                 });
 
                 _replyText = string.Empty;
+                _quotedMessage = null;
             }
 
             await UploadPendingAttachmentsAsync(attachmentsToSend, RemovePendingAttachment);
@@ -1315,19 +1857,31 @@
             });
 
             var templateAttachmentsToSend = _templatePendingAttachments.ToList();
-            await UploadPendingAttachmentsAsync(templateAttachmentsToSend, RemoveTemplatePendingAttachment);
+            var selectedConversationId = _selectedConversation.IdConversacion;
+            var previewText = RenderTemplatePreview(SelectedTemplate, TemplateValues);
 
-            _actionMessage = templateAttachmentsToSend.Count == 0
-                ? "Plantilla enviada correctamente."
-                : "Plantilla y adjunto(s) enviados correctamente.";
             _showTemplatePanel = false;
             ClearTemplateSelection();
-            await SelectConversationAsync(_selectedConversation.IdConversacion);
+
+            if (templateAttachmentsToSend.Count > 0)
+                await UploadPendingAttachmentsAsync(templateAttachmentsToSend, RemoveTemplatePendingAttachment, allowExpiredWhatsAppWindow: true);
+
+            await SelectConversationAsync(selectedConversationId);
             await LoadInboxAsync();
+            _actionMessage = templateAttachmentsToSend.Count == 0
+                ? $"Plantilla enviada correctamente: {previewText}"
+                : $"Plantilla y adjunto(s) enviados correctamente: {previewText}";
         }
         catch (Exception ex)
         {
-            _actionError = ex.Message;
+            var error = ex.Message;
+            if (_selectedConversation is not null)
+            {
+                await SelectConversationAsync(_selectedConversation.IdConversacion);
+                await LoadInboxAsync();
+            }
+
+            _actionError = error;
         }
         finally
         {
@@ -1439,9 +1993,20 @@
 
     private async Task ChangeCanalAsync(string canal)
     {
+        if (_canalActivo == canal)
+            return;
+
+        StoreChannelCache(_canalActivo);
         _canalActivo = canal;
         _filters.Canal = canal;
         _showNuevoHilo = false;
+
+        if (TryApplyChannelCache(canal))
+        {
+            await RefreshInboxAsync(showLoading: false, allowSelectionChange: true);
+            return;
+        }
+
         ClearSelection();
         await LoadInboxAsync();
     }
@@ -1508,6 +2073,151 @@
         }
     }
 
+    private async Task CreateWhatsAppFromSearchAsync()
+    {
+        if (!IsPotentialPhone(_filters.Search))
+        {
+            _actionError = "Ingresá un número de celular válido para iniciar la conversación.";
+            return;
+        }
+
+        _busyAction = true;
+        _actionMessage = null;
+        _actionError = null;
+
+        try
+        {
+            var result = await ConversacionesSvc.CreateOrGetWhatsAppConversationAsync(new ConversacionCrearWhatsAppRequest
+            {
+                TelefonoWhatsApp = _filters.Search
+            });
+
+            _canalActivo = "WHATSAPP";
+            _filters.Canal = "WHATSAPP";
+            _filters.Search = result.TelefonoWhatsApp;
+
+            await LoadInboxAsync();
+            await SelectConversationAsync(result.IdConversacion);
+
+            var action = result.Creada ? "Conversación creada" : "Conversación existente abierta";
+            var contact = result.ContactoAsociado ? " y asociada al contacto encontrado." : ". No se encontró un contacto existente para asociar.";
+            _actionMessage = $"{action} para {DisplayOrFallback(result.NombreVisible, result.TelefonoWhatsApp)}{contact}";
+        }
+        catch (Exception ex)
+        {
+            _actionError = ex.Message;
+        }
+        finally
+        {
+            _busyAction = false;
+        }
+    }
+
+    private async Task OpenWhatsAppForContactAsync(ContactoGridItemDto contact)
+    {
+        var phone = GetContactPhone(contact);
+        if (string.IsNullOrWhiteSpace(phone))
+        {
+            _actionError = "El contacto no tiene tel\u00e9fono ni celular para iniciar WhatsApp.";
+            return;
+        }
+
+        _filters.Search = phone;
+        CancelContactSearch();
+        _showContactSuggestions = false;
+        await CreateWhatsAppFromSearchAsync();
+    }
+
+    private void CloseContactSuggestions()
+    {
+        _showContactSuggestions = false;
+        _conversationSuggestions = [];
+    }
+
+    private void OpenContactEditor(ContactoGridItemDto contact)
+        => Nav.NavigateTo($"/contactos?editar={contact.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+
+    private void OpenNewContactFromSearch()
+    {
+        var value = _filters.Search.Trim();
+        var query = IsPotentialPhone(value)
+            ? $"nuevo=1&celular={Uri.EscapeDataString(value)}"
+            : $"nuevo=1&nombre={Uri.EscapeDataString(value)}";
+        Nav.NavigateTo($"/contactos?{query}");
+    }
+
+    private void OpenNewContactFromConversation(ConversacionInboxItemDto conversation)
+    {
+        var name = FirstNonEmpty(conversation.ContactoNombre, conversation.NombreVisible, conversation.ClienteNombre, _filters.Search);
+        var phone = FirstNonEmpty(conversation.TelefonoWhatsApp);
+        var query = new List<string> { "nuevo=1" };
+
+        if (!string.IsNullOrWhiteSpace(name))
+            query.Add($"nombre={Uri.EscapeDataString(name)}");
+        if (!string.IsNullOrWhiteSpace(phone))
+            query.Add($"celular={Uri.EscapeDataString(phone)}");
+
+        Nav.NavigateTo($"/contactos?{string.Join("&", query)}");
+    }
+
+    private async Task SelectConversationFromSuggestionAsync(long idConversacion)
+    {
+        _showContactSuggestions = false;
+        await SelectConversationAsync(idConversacion);
+    }
+
+    private ConversacionInboxItemDto? GetBestConversationMatchForSearch()
+    {
+        var search = _filters.Search.Trim();
+        if (search.Length < 2)
+            return null;
+
+        return _inbox.FirstOrDefault(x =>
+            MatchesConversationSearch(x, search));
+    }
+
+    private static bool MatchesConversationSearch(ConversacionInboxItemDto item, string search)
+    {
+        return ContainsSearch(item.NombreVisible, search)
+               || ContainsSearch(item.ContactoNombre, search)
+               || ContainsSearch(item.ClienteNombre, search)
+               || ContainsSearch(item.TelefonoWhatsApp, search)
+               || ContainsPhoneSearch(item.TelefonoWhatsApp, search)
+               || ContainsSearch(item.ResumenUltimoMensaje, search);
+    }
+
+    private static bool HasUsableLinkedContact(ConversacionInboxItemDto conversation)
+        => conversation.IdContacto.HasValue && !string.IsNullOrWhiteSpace(conversation.ContactoNombre);
+
+    private static bool ContainsSearch(string? value, string search)
+        => !string.IsNullOrWhiteSpace(value)
+           && value.Contains(search, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsSameContactSuggestion(ConversacionInboxItemDto conversation, ContactoGridItemDto contact)
+    {
+        if (conversation.IdContacto == contact.Id)
+            return true;
+
+        var contactPhone = GetContactPhone(contact);
+        return ContainsPhoneSearch(conversation.TelefonoWhatsApp, contactPhone)
+               || ContainsPhoneSearch(contactPhone, conversation.TelefonoWhatsApp);
+    }
+
+    private static bool ContainsPhoneSearch(string? value, string search)
+    {
+        var phone = DigitsOnly(value);
+        var query = DigitsOnly(search);
+        return query.Length >= 4 && phone.Contains(query, StringComparison.Ordinal);
+    }
+
+    private static string DigitsOnly(string? value)
+        => string.IsNullOrWhiteSpace(value)
+            ? string.Empty
+            : new string(value.Where(char.IsDigit).ToArray());
+
+    private static string GetContactPhone(ContactoGridItemDto contact)
+        => FirstNonEmpty(contact.Celular, contact.Telefono);
+
     private async Task HandleFileSelectedAsync(InputFileChangeEventArgs e)
     {
         if (_selectedConversation is null) return;
@@ -1527,6 +2237,32 @@
         catch (Exception ex)
         {
             _actionError = $"No se pudo preparar el adjunto: {ex.Message}";
+        }
+        finally
+        {
+            _uploadingFile = false;
+        }
+    }
+
+    private async Task HandleStickerSelectedAsync(InputFileChangeEventArgs e)
+    {
+        if (_selectedConversation is null) return;
+
+        _uploadingFile = true;
+        _actionMessage = null;
+        _actionError = null;
+
+        try
+        {
+            await AddFilesToPendingAttachmentsAsync(e, _pendingAttachments, forcedType: "STICKER");
+
+            _actionMessage = _pendingAttachments.Count == 1
+                ? "Sticker listo para enviar."
+                : $"{_pendingAttachments.Count} adjuntos listos para enviar.";
+        }
+        catch (Exception ex)
+        {
+            _actionError = $"No se pudo preparar el sticker: {ex.Message}";
         }
         finally
         {
@@ -1560,7 +2296,7 @@
         }
     }
 
-    private static async Task AddFilesToPendingAttachmentsAsync(InputFileChangeEventArgs e, List<PendingAttachment> target)
+    private static async Task AddFilesToPendingAttachmentsAsync(InputFileChangeEventArgs e, List<PendingAttachment> target, string? forcedType = null)
     {
         const long maxSize = 25 * 1024 * 1024;
         foreach (var file in e.GetMultipleFiles(10))
@@ -1576,7 +2312,7 @@
             {
                 NombreArchivo = file.Name,
                 MimeType = file.ContentType,
-                TipoArchivo = InferTipoArchivo(file.ContentType),
+                TipoArchivo = string.IsNullOrWhiteSpace(forcedType) ? InferTipoArchivo(file.ContentType) : forcedType,
                 Contenido = buffer.ToArray(),
                 TamanoBytes = file.Size
             });
@@ -1646,7 +2382,103 @@
     private void RemoveTemplatePendingAttachment(Guid id)
         => _templatePendingAttachments.RemoveAll(x => x.Id == id);
 
-    private async Task UploadPendingAttachmentsAsync(IReadOnlyList<PendingAttachment> attachmentsToSend, Action<Guid> removeAttachment)
+    private void AddEmojiToReply(string emoji)
+    {
+        if (string.IsNullOrWhiteSpace(emoji))
+            return;
+
+        _replyText = string.IsNullOrWhiteSpace(_replyText)
+            ? emoji
+            : $"{_replyText}{emoji}";
+    }
+
+    private async Task SendReactionAsync(ConversacionMensajeDto message, string emoji)
+    {
+        if (_selectedConversation is null)
+            return;
+
+        _busyAction = true;
+        _actionMessage = null;
+        _actionError = null;
+
+        try
+        {
+            await ConversacionesSvc.SendReactionAsync(new ConversacionReaccionRequest
+            {
+                IdConversacion = _selectedConversation.IdConversacion,
+                IdMensaje = message.IdMensaje,
+                Emoji = emoji,
+                IdTecnicoAutor = _assignmentTechnicianId
+            });
+
+            _openReactionMessageId = null;
+            await SelectConversationAsync(_selectedConversation.IdConversacion);
+            await LoadInboxAsync();
+            _actionMessage = $"Reacción enviada: {emoji}";
+        }
+        catch (Exception ex)
+        {
+            _actionError = ex.Message;
+        }
+        finally
+        {
+            _busyAction = false;
+        }
+    }
+
+    private void ToggleComposerTools()
+        => _showComposerTools = !_showComposerTools;
+
+    private void HandleEmojiSearchInput(ChangeEventArgs args)
+        => _emojiSearch = Convert.ToString(args.Value, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+
+    private async Task SaveStickerFavoriteAsync(long idAdjunto)
+    {
+        _actionMessage = null;
+        _actionError = null;
+
+        try
+        {
+            await ConversacionesSvc.SaveFavoriteStickerAsync(idAdjunto);
+            await LoadFavoriteStickersAsync();
+            _actionMessage = "Sticker guardado en favoritos.";
+        }
+        catch (Exception ex)
+        {
+            _actionError = ex.Message;
+        }
+    }
+
+    private async Task SendFavoriteStickerAsync(long idFavorito)
+    {
+        if (_selectedConversation is null)
+            return;
+
+        _busyAction = true;
+        _actionMessage = null;
+        _actionError = null;
+
+        try
+        {
+            await ConversacionesSvc.SendFavoriteStickerAsync(_selectedConversation.IdConversacion, idFavorito, _assignmentTechnicianId);
+            await SelectConversationAsync(_selectedConversation.IdConversacion);
+            await LoadInboxAsync();
+            _actionMessage = "Sticker enviado.";
+        }
+        catch (Exception ex)
+        {
+            _actionError = ex.Message;
+        }
+        finally
+        {
+            _busyAction = false;
+        }
+    }
+
+    private async Task UploadPendingAttachmentsAsync(
+        IReadOnlyList<PendingAttachment> attachmentsToSend,
+        Action<Guid> removeAttachment,
+        bool allowExpiredWhatsAppWindow = false)
     {
         if (_selectedConversation is null)
             return;
@@ -1663,7 +2495,8 @@
                 TipoArchivo = attachmentToSend.TipoArchivo,
                 Contenido = stream,
                 TamanoBytes = attachmentToSend.TamanoBytes,
-                IdTecnicoAutor = string.IsNullOrWhiteSpace(_assignmentTechnicianId) ? null : _assignmentTechnicianId
+                IdTecnicoAutor = string.IsNullOrWhiteSpace(_assignmentTechnicianId) ? null : _assignmentTechnicianId,
+                PermitirEnvioConVentanaVencida = allowExpiredWhatsAppWindow
             });
 
             removeAttachment(attachmentToSend.Id);
@@ -1819,6 +2652,9 @@
     private static string OnlyDigits(string? value)
         => new((value ?? string.Empty).Where(char.IsDigit).ToArray());
 
+    private static bool IsPotentialPhone(string? value)
+        => OnlyDigits(value).Length >= 8;
+
     private static string RenderTemplatePreview(ConversacionPlantillaDto template, IReadOnlyList<string> values)
     {
         var result = template.CuerpoTexto ?? string.Empty;
@@ -1859,6 +2695,42 @@
 
     private static bool IsIncomingMessage(ConversacionMensajeDto message)
         => string.Equals(message.Direction, "ENTRANTE", StringComparison.OrdinalIgnoreCase);
+
+    private bool CanReactToMessage(ConversacionMensajeDto message)
+        => IsWhatsAppConversation
+           && !IsWhatsAppWindowExpired
+           && IsIncomingMessage(message)
+           && !string.IsNullOrWhiteSpace(message.WhatsAppMessageId);
+
+    private static bool IsReactionMessage(ConversacionMensajeDto message)
+        => string.Equals(message.MessageType, "REACTION", StringComparison.OrdinalIgnoreCase)
+           || (message.Texto ?? string.Empty).StartsWith("Reacción ", StringComparison.OrdinalIgnoreCase);
+
+    private IReadOnlyList<string> GetInlineReactions(ConversacionMensajeDto message)
+    {
+        if (string.IsNullOrWhiteSpace(message.WhatsAppMessageId))
+            return [];
+
+        return _messages
+            .Where(IsReactionMessage)
+            .Where(x => string.Equals(x.WhatsAppReplyToMessageId, message.WhatsAppMessageId, StringComparison.OrdinalIgnoreCase))
+            .Select(ExtractReactionEmoji)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct()
+            .ToList();
+    }
+
+    private static string ExtractReactionEmoji(ConversacionMensajeDto message)
+    {
+        var text = message.Texto ?? string.Empty;
+        foreach (var emoji in QuickReactionEmojis)
+        {
+            if (text.Contains(emoji, StringComparison.Ordinal))
+                return emoji;
+        }
+
+        return string.Empty;
+    }
 
     private static string DisplayOrFallback(params string?[] values)
         => FirstNonEmpty(values) is { Length: > 0 } found ? found : "Sin dato";
@@ -1913,6 +2785,15 @@
         => IsUnsupportedMessage(message)
             ? "WhatsApp envió un tipo de mensaje que todavía no es compatible con el módulo."
             : message.Texto;
+
+    private static string GetQuotePreview(ConversacionMensajeDto message)
+    {
+        var text = string.IsNullOrWhiteSpace(message.Texto)
+            ? $"[{GetMessageTypeLabel(message)}]"
+            : message.Texto.Trim();
+
+        return text.Length <= 90 ? text : $"{text[..90]}...";
+    }
 
     private static string GetUnsupportedMessageTrace(ConversacionMensajeDto message)
     {
@@ -1998,6 +2879,16 @@
     private void ToggleAttachmentMenu(long idAdjunto)
         => _openAttachmentMenuId = _openAttachmentMenuId == idAdjunto ? null : idAdjunto;
 
+    private void ToggleReactionPicker(long idMensaje)
+        => _openReactionMessageId = _openReactionMessageId == idMensaje ? null : idMensaje;
+
+    private void OpenComposerEmojiPanel()
+    {
+        _showComposerTools = true;
+        _composerToolTab = ComposerToolTabs.Emojis;
+        _openReactionMessageId = null;
+    }
+
     private void OpenAttachmentPreview(ConversacionAdjuntoDto adjunto)
     {
         _openAttachmentMenuId = null;
@@ -2012,6 +2903,9 @@
 
     private static string GetAttachmentDownloadUrl(ConversacionAdjuntoDto adjunto)
         => $"/api/conversaciones/adjuntos/{adjunto.IdAdjunto}?download=1";
+
+    private static string GetFavoriteStickerUrl(ConversacionStickerFavoritoDto sticker)
+        => $"/api/conversaciones/adjuntos/{sticker.IdAdjunto}";
 
     private static string GetAttachmentMime(ConversacionAdjuntoDto adjunto)
     {
@@ -2037,6 +2931,7 @@
         => tipoArchivo switch
         {
             "IMAGE" => "bi-image",
+            "STICKER" => "bi-sticky-fill",
             "AUDIO" => "bi-mic-fill",
             "VIDEO" => "bi-camera-video-fill",
             _ => "bi-file-earmark"
@@ -2106,6 +3001,9 @@
 
     public async ValueTask DisposeAsync()
     {
+        CancelSearchDebounce();
+        CancelContactSearch();
+
         if (_pollingCts is null)
             return;
 
@@ -2149,5 +3047,24 @@
     {
         public string Base64 { get; set; } = string.Empty;
         public string MimeType { get; set; } = string.Empty;
+    }
+
+    private sealed record EmojiGroup(string Nombre, IReadOnlyList<string> Emojis);
+
+    private sealed record ConversationViewCache(
+        ConversacionDetalleDto Conversation,
+        List<ConversacionMensajeDto> Messages,
+        Dictionary<long, List<ConversacionAdjuntoDto>> AttachmentsByMessage);
+
+    private sealed record ConversationChannelCache(
+        ConversacionesInboxFilters Filters,
+        List<ConversacionInboxItemDto> Inbox,
+        long? SelectedConversationId);
+
+    private static class ComposerToolTabs
+    {
+        public const string Emojis = "emojis";
+        public const string Stickers = "stickers";
+        public const string Adjuntos = "adjuntos";
     }
 }

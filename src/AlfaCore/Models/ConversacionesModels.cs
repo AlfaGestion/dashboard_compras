@@ -97,12 +97,30 @@ public sealed class ConversacionAdjuntoDto
     public long TamanoBytes { get; set; }
 }
 
+public sealed class ConversacionStickerFavoritoDto
+{
+    public long IdFavorito { get; set; }
+    public long IdAdjunto { get; set; }
+    public string Nombre { get; set; } = string.Empty;
+    public string MimeType { get; set; } = string.Empty;
+}
+
 public sealed class ConversacionSendMessageRequest
 {
     public long IdConversacion { get; set; }
     public string Texto { get; set; } = string.Empty;
     public string MessageType { get; set; } = "TEXT";
     public string? WhatsAppReplyToMessageId { get; set; }
+    public string? IdTecnicoAutor { get; set; }
+    public string? UsuarioAccion { get; set; }
+    public string? SistemaAccion { get; set; }
+}
+
+public sealed class ConversacionReaccionRequest
+{
+    public long IdConversacion { get; set; }
+    public long IdMensaje { get; set; }
+    public string Emoji { get; set; } = string.Empty;
     public string? IdTecnicoAutor { get; set; }
     public string? UsuarioAccion { get; set; }
     public string? SistemaAccion { get; set; }
@@ -160,6 +178,7 @@ public sealed class ConversacionUploadAdjuntoRequest
     public string? IdTecnicoAutor { get; set; }
     public string? UsuarioAccion { get; set; }
     public string? SistemaAccion { get; set; }
+    public bool PermitirEnvioConVentanaVencida { get; set; }
 }
 
 public sealed class ConversacionAdjuntoServeDto
@@ -175,6 +194,23 @@ public sealed class ConversacionCrearHiloInternoRequest
     public string? IdTecnico { get; set; }
     public string? UsuarioAccion { get; set; }
     public string? SistemaAccion { get; set; }
+}
+
+public sealed class ConversacionCrearWhatsAppRequest
+{
+    public string TelefonoWhatsApp { get; set; } = string.Empty;
+    public string? IdTecnico { get; set; }
+    public string? UsuarioAccion { get; set; }
+    public string? SistemaAccion { get; set; }
+}
+
+public sealed class ConversacionCrearWhatsAppResultDto
+{
+    public long IdConversacion { get; set; }
+    public bool Creada { get; set; }
+    public bool ContactoAsociado { get; set; }
+    public string TelefonoWhatsApp { get; set; } = string.Empty;
+    public string NombreVisible { get; set; } = string.Empty;
 }
 
 public sealed class ConversacionWebhookRequest

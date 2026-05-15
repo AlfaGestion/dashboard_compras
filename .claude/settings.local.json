@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"c:\\\\dev\\\\AlfaCore\" -Recurse -Filter \"*onversacion*\" -Force)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(xargs grep -l \"Conversacion\")",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\dev\\\\AlfaCore\\\\src\\\\AlfaCore\" -Recurse -Directory | Select-Object -ExpandProperty FullName | Where-Object { $_ -match \"\\(Service|Repository|Model|Component|Dto\\)\" })",
+      "Bash(git add *)",
+      "Bash(git commit *)"
+    ]
+  }
+}

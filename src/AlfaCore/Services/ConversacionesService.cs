@@ -18,6 +18,8 @@ public sealed class ConversacionesService(
     IWebHostEnvironment environment) : IConversacionesService
 {
     private readonly IAppEventService _appEvents = appEvents;
+    private const string ManualWhatsAppConversationSummary = "Conversaci\u00f3n iniciada manualmente.";
+    private const string ManualWhatsAppInitialState = "PENDIENTE";
     private static readonly ConcurrentDictionary<long, byte> MediaHydrationAttempts = new();
     private static readonly string[] DebtSourceCandidates =
     [
@@ -52,6 +54,7 @@ public sealed class ConversacionesService(
             var items = new List<ConversacionTecnicoOptionDto>();
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync(token);
+
             await using var cmd = new SqlCommand(sql, cn);
             await using var rd = await cmd.ExecuteReaderAsync(token);
             while (await rd.ReadAsync(token))
@@ -86,6 +89,8 @@ public sealed class ConversacionesService(
             var items = new List<ConversacionEstadoOptionDto>();
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync(token);
+            await ConsolidateExistingDuplicateWhatsAppConversationsAsync(cn, token);
+
             await using var cmd = new SqlCommand(sql, cn);
             await using var rd = await cmd.ExecuteReaderAsync(token);
             while (await rd.ReadAsync(token))
@@ -107,7 +112,9 @@ public sealed class ConversacionesService(
         {
             filters ??= new();
             var items = new List<ConversacionInboxItemDto>();
-            var sql = """
+            var searchPhone = NormalizePhone(filters.Search);
+            var searchPhoneTail = GetPhoneComparableTail(searchPhone);
+            var sql = $"""
                 SELECT
                     c.IdConversacion,
                     ISNULL(c.TelefonoWhatsApp, ''),
@@ -151,6 +158,16 @@ public sealed class ConversacionesService(
                         OR cli.RAZON_SOCIAL LIKE @Search
                         OR mc.Nombre_y_Apellido LIKE @Search
                         OR c.ResumenUltimoMensaje LIKE @Search
+                        OR (
+                            @SearchPhone IS NOT NULL
+                            AND (
+                                {SqlPhoneEquivalentPredicate("c.TelefonoWhatsApp", "@SearchPhone", "@SearchPhoneTail")}
+                                OR {SqlPhoneEquivalentPredicate("mc.Telefono", "@SearchPhone", "@SearchPhoneTail")}
+                                OR {SqlPhoneEquivalentPredicate("mc.Celular", "@SearchPhone", "@SearchPhoneTail")}
+                                OR {SqlPhoneEquivalentPredicate("mc.TelefonoPart", "@SearchPhone", "@SearchPhoneTail")}
+                                OR {SqlPhoneEquivalentPredicate("mc.CelularPart", "@SearchPhone", "@SearchPhoneTail")}
+                            )
+                        )
                     )
                     AND (
                         @Modo = 'todas'
@@ -159,18 +176,33 @@ public sealed class ConversacionesService(
                         OR (@Modo = 'pendientes' AND ISNULL(e.EsCerrado, 0) = 0)
                         OR (@Modo = 'cerradas' AND ISNULL(e.EsCerrado, 0) = 1)
                     )
+                    AND NOT (
+                        c.Canal = N'WHATSAPP'
+                        AND ISNULL(c.ResumenUltimoMensaje, N'') = @ManualWhatsAppConversationSummary
+                        AND NOT EXISTS (
+                            SELECT 1
+                            FROM dbo.CONV_MENSAJES msg
+                            WHERE msg.IdConversacion = c.IdConversacion
+                        )
+                    )
                 ORDER BY c.FechaHoraUltimoMensaje DESC
                 OFFSET @Offset ROWS FETCH NEXT @Limit ROWS ONLY
                 """;
 
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync(token);
+            await LinkUnassociatedWhatsAppConversationsByPhoneAsync(cn, token);
+            await ConsolidateExistingDuplicateWhatsAppConversationsAsync(cn, token);
+
             await using var cmd = new SqlCommand(sql, cn);
             cmd.Parameters.AddWithValue("@Canal", DbNullable(filters.Canal));
             cmd.Parameters.AddWithValue("@CodigoEstado", DbNullable(filters.CodigoEstado));
             cmd.Parameters.AddWithValue("@Search", DbNullable(Like(filters.Search)));
+            cmd.Parameters.AddWithValue("@SearchPhone", DbNullable(searchPhone));
+            cmd.Parameters.AddWithValue("@SearchPhoneTail", DbNullable(searchPhoneTail));
             cmd.Parameters.AddWithValue("@Modo", NormalizeMode(filters.Modo));
             cmd.Parameters.AddWithValue("@IdTecnicoActual", DbNullable(filters.IdTecnicoActual));
+            cmd.Parameters.AddWithValue("@ManualWhatsAppConversationSummary", ManualWhatsAppConversationSummary);
             cmd.Parameters.AddWithValue("@Offset", Math.Max(0, filters.Offset));
             cmd.Parameters.AddWithValue("@Limit", Math.Clamp(filters.Limit, 1, 200));
 
@@ -201,7 +233,7 @@ public sealed class ConversacionesService(
             foreach (var item in items)
                 ApplyWhatsAppWindow(item);
 
-            return (IReadOnlyList<ConversacionInboxItemDto>)items;
+            return DeduplicateInboxItems(items);
         }, "No se pudieron cargar las conversaciones.", ct);
 
     public Task<ConversacionDetalleDto?> GetConversationAsync(long conversationId, CancellationToken ct = default)
@@ -254,6 +286,7 @@ public sealed class ConversacionesService(
 
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync(token);
+            await LinkUnassociatedWhatsAppConversationsByPhoneAsync(cn, token, conversationId);
             await using var cmd = new SqlCommand(sql, cn);
             cmd.Parameters.AddWithValue("@IdConversacion", conversationId);
             await using var rd = await cmd.ExecuteReaderAsync(token);
@@ -322,10 +355,9 @@ public sealed class ConversacionesService(
                     ON t.IdTecnico = m.IdTecnicoAutor
                 WHERE m.IdConversacion = @IdConversacion
                 ORDER BY m.FechaHora ASC, m.IdMensaje ASC
-                """;
+            """;
 
             var items = new List<ConversacionMensajeDto>();
-            var pendingMediaHydration = new List<PendingMediaHydration>();
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync(token);
             await using var cmd = new SqlCommand(sql, cn);
@@ -353,21 +385,8 @@ public sealed class ConversacionesService(
                     TieneAdjuntos = GetInt(rd, 15) == 1
                 };
 
-                var payloadJson = item.PayloadJson;
-                if (ShouldHydrateIncomingMedia(item, payloadJson))
-                {
-                    pendingMediaHydration.Add(new PendingMediaHydration
-                    {
-                        Message = item,
-                        PayloadJson = payloadJson
-                    });
-                }
-
                 items.Add(item);
             }
-
-            if (pendingMediaHydration.Count > 0)
-                await HydrateMissingIncomingMediaAsync(pendingMediaHydration, token);
 
             return (IReadOnlyList<ConversacionMensajeDto>)items;
         }, "No se pudieron cargar los mensajes.", ct);
@@ -444,6 +463,58 @@ public sealed class ConversacionesService(
                 WhatsAppMessageId = whatsAppMessageId
             };
         }, "No se pudo registrar el mensaje saliente.", ct);
+
+    public Task<ConversacionMessageResultDto> SendReactionAsync(ConversacionReaccionRequest request, CancellationToken ct = default)
+        => ExecuteLoggedAsync("Conversaciones", "SendReaction", async token =>
+        {
+            if (request.IdConversacion <= 0)
+                throw new InvalidOperationException("La conversación es obligatoria.");
+            if (request.IdMensaje <= 0)
+                throw new InvalidOperationException("El mensaje a reaccionar es obligatorio.");
+
+            var emoji = NormalizeReactionEmoji(request.Emoji);
+            if (string.IsNullOrWhiteSpace(emoji))
+                throw new InvalidOperationException("Elegí una reacción válida.");
+
+            var conversation = await RequireConversationAsync(request.IdConversacion, token);
+            if (!string.Equals(conversation.Canal, "WHATSAPP", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Las reacciones solo se envían por WhatsApp.");
+
+            var target = await RequireMessageForReactionAsync(request.IdConversacion, request.IdMensaje, token);
+            if (string.IsNullOrWhiteSpace(target.WhatsAppMessageId))
+                throw new InvalidOperationException("Este mensaje todavía no tiene ID de WhatsApp para reaccionar.");
+
+            var config = await conversacionesConfigService.GetWhatsAppConfigAsync(token);
+            var now = DateTime.Now;
+            var text = $"Reacción enviada: {emoji}";
+
+            var messageId = await InsertMessageAsync(new PendingMessageInsert
+            {
+                ConversationId = request.IdConversacion,
+                Phone = conversation.TelefonoWhatsApp,
+                ReplyToMessageId = target.WhatsAppMessageId,
+                MessageType = "TEXT",
+                Direction = "SALIENTE",
+                EstadoEnvio = "PENDIENTE",
+                Text = text,
+                PayloadJson = string.Empty,
+                FechaHora = now,
+                UsuarioAutor = request.UsuarioAccion,
+                SistemaAutor = request.SistemaAccion,
+                IdTecnicoAutor = request.IdTecnicoAutor
+            }, token);
+
+            var sendResult = await SendReactionToWhatsAppAsync(config, conversation.TelefonoWhatsApp, target.WhatsAppMessageId, emoji, token);
+            await UpdateMessageDeliveryAsync(messageId, sendResult.EstadoEnvio, sendResult.WhatsAppMessageId, sendResult.PayloadJson, token);
+            await RefreshConversationAsync(request.IdConversacion, now, text, token);
+
+            return new ConversacionMessageResultDto
+            {
+                IdMensaje = messageId,
+                EstadoEnvio = sendResult.EstadoEnvio,
+                WhatsAppMessageId = sendResult.WhatsAppMessageId
+            };
+        }, "No se pudo enviar la reacción por WhatsApp.", ct);
 
     public Task<IReadOnlyList<ConversacionPlantillaDto>> GetTemplatesAsync(ConversacionPlantillaFilters filters, CancellationToken ct = default)
         => ExecuteLoggedAsync("Conversaciones", "GetTemplates", async token =>
@@ -993,7 +1064,8 @@ public sealed class ConversacionesService(
                     UsuarioAutor = string.Empty,
                     SistemaAutor = string.Empty,
                     IdTecnicoAutor = string.Empty,
-                    WhatsAppMessageId = incoming.WhatsAppMessageId
+                    WhatsAppMessageId = incoming.WhatsAppMessageId,
+                    ReplyToMessageId = incoming.WhatsAppReplyToMessageId
                 }, token);
 
                 if (incoming.Attachments.Count > 0 && whatsAppConfig is not null)
@@ -1074,6 +1146,113 @@ public sealed class ConversacionesService(
             return id;
         }, "No se pudo crear el hilo interno.", ct);
 
+    public Task<ConversacionCrearWhatsAppResultDto> CreateOrGetWhatsAppConversationAsync(ConversacionCrearWhatsAppRequest request, CancellationToken ct = default)
+        => ExecuteLoggedAsync("Conversaciones", "CreateOrGetWhatsAppConversation", async token =>
+        {
+            var phone = NormalizePhone(request.TelefonoWhatsApp);
+            if (string.IsNullOrWhiteSpace(phone))
+                throw new InvalidOperationException("Ingresá un número de celular para crear la conversación.");
+            if (phone.Length < 8)
+                throw new InvalidOperationException("El número de celular parece incompleto.");
+
+            if (!string.IsNullOrWhiteSpace(request.IdTecnico))
+                await ValidateTechnicianExistsAsync(request.IdTecnico, token);
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+
+            var contact = await TryFindContactByPhoneAsync(cn, phone, token);
+            var existing = await FindWhatsAppConversationByPhoneAsync(cn, phone, contact.IdContact, token);
+            if (existing is not null)
+            {
+                if (contact.IdContact.HasValue)
+                    await AssociateContactIfMissingAsync(cn, existing.IdConversacion, contact, token);
+
+                await MergeDuplicateWhatsAppConversationsAsync(cn, existing.IdConversacion, phone, contact.IdContact, token);
+
+                await _appEvents.LogAuditAsync(
+                    "Conversaciones",
+                    "CreateOrGetWhatsAppConversation",
+                    "CONV_CONVERSACIONES",
+                    existing.IdConversacion.ToString(CultureInfo.InvariantCulture),
+                    "Conversación de WhatsApp existente abierta desde búsqueda.",
+                    new { TelefonoWhatsApp = phone, ContactoAsociado = contact.IdContact.HasValue },
+                    token);
+
+                return new ConversacionCrearWhatsAppResultDto
+                {
+                    IdConversacion = existing.IdConversacion,
+                    Creada = false,
+                    ContactoAsociado = contact.IdContact.HasValue || existing.IdContacto.HasValue,
+                    TelefonoWhatsApp = phone,
+                    NombreVisible = FirstNonEmpty(existing.NombreVisible, contact.Name, phone)
+                };
+            }
+
+            const string insertSql = """
+                INSERT INTO dbo.CONV_CONVERSACIONES
+                (
+                    Canal,
+                    TelefonoWhatsApp,
+                    NombreVisible,
+                    ClienteCodigo,
+                    IdContacto,
+                    CodigoEstado,
+                    IdTecnico,
+                    ResumenUltimoMensaje,
+                    FechaHoraPrimerMensaje,
+                    FechaHoraUltimoMensaje,
+                    FechaHora_Grabacion
+                )
+                VALUES
+                (
+                    N'WHATSAPP',
+                    @TelefonoWhatsApp,
+                    @NombreVisible,
+                    @ClienteCodigo,
+                    @IdContacto,
+                    @CodigoEstadoInicial,
+                    @IdTecnico,
+                    @ResumenInicial,
+                    GETDATE(),
+                    GETDATE(),
+                    GETDATE()
+                );
+
+                SELECT CAST(SCOPE_IDENTITY() AS bigint);
+                """;
+
+            var displayName = FirstNonEmpty(contact.Name, phone);
+            await using var cmd = new SqlCommand(insertSql, cn);
+            cmd.Parameters.AddWithValue("@TelefonoWhatsApp", phone);
+            cmd.Parameters.AddWithValue("@NombreVisible", DbNullable(displayName));
+            cmd.Parameters.AddWithValue("@ClienteCodigo", DbNullable(contact.ClientCode));
+            cmd.Parameters.AddWithValue("@IdContacto", contact.IdContact.HasValue ? contact.IdContact.Value : DBNull.Value);
+            cmd.Parameters.AddWithValue("@CodigoEstadoInicial", ManualWhatsAppInitialState);
+            cmd.Parameters.AddWithValue("@IdTecnico", DbNullable(request.IdTecnico));
+            cmd.Parameters.AddWithValue("@ResumenInicial", ManualWhatsAppConversationSummary);
+            var result = await cmd.ExecuteScalarAsync(token);
+            var id = Convert.ToInt64(result, CultureInfo.InvariantCulture);
+
+            await _appEvents.LogAuditAsync(
+                "Conversaciones",
+                "CreateOrGetWhatsAppConversation",
+                "CONV_CONVERSACIONES",
+                id.ToString(CultureInfo.InvariantCulture),
+                "Conversación de WhatsApp creada manualmente.",
+                new { TelefonoWhatsApp = phone, ContactoAsociado = contact.IdContact.HasValue, contact.ClientCode, request.IdTecnico },
+                token);
+
+            return new ConversacionCrearWhatsAppResultDto
+            {
+                IdConversacion = id,
+                Creada = true,
+                ContactoAsociado = contact.IdContact.HasValue,
+                TelefonoWhatsApp = phone,
+                NombreVisible = displayName
+            };
+        }, "No se pudo crear la conversación de WhatsApp.", ct);
+
     public Task<ConversacionAdjuntoDto> UploadAttachmentAsync(ConversacionUploadAdjuntoRequest request, CancellationToken ct = default)
         => ExecuteLoggedAsync("Conversaciones", "UploadAttachment", async token =>
         {
@@ -1100,7 +1279,7 @@ public sealed class ConversacionesService(
             {
                 whatsAppConfig = await conversacionesConfigService.GetWhatsAppConfigAsync(token);
                 var windowActive = await IsWhatsAppWindowActiveAsync(request.IdConversacion, token);
-                if (!windowActive)
+                if (!windowActive && !request.PermitirEnvioConVentanaVencida)
                     throw new InvalidOperationException("La ventana de WhatsApp está vencida. Para retomar la conversación tenés que enviar una plantilla aprobada.");
 
                 initialState = whatsAppConfig.IsConfiguredForSend ? "PENDIENTE" : "PENDIENTE_CONFIG";
@@ -1218,6 +1397,81 @@ public sealed class ConversacionesService(
 
             return (IReadOnlyList<ConversacionAdjuntoDto>)items;
         }, "No se pudieron cargar los adjuntos.", ct);
+
+    public Task<IReadOnlyList<ConversacionStickerFavoritoDto>> GetFavoriteStickersAsync(CancellationToken ct = default)
+        => ExecuteLoggedAsync("Conversaciones", "GetFavoriteStickers", async token =>
+        {
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+            await EnsureFavoriteStickersTableAsync(cn, token);
+
+            const string sql = """
+                SELECT f.IdFavorito, f.IdAdjunto, ISNULL(f.Nombre, ''), ISNULL(a.MimeType, 'image/webp')
+                FROM dbo.CONV_STICKERS_FAVORITOS f
+                INNER JOIN dbo.CONV_ADJUNTOS a ON a.IdAdjunto = f.IdAdjunto
+                ORDER BY f.FechaHora_Grabacion DESC
+                """;
+
+            var items = new List<ConversacionStickerFavoritoDto>();
+            await using var cmd = new SqlCommand(sql, cn);
+            await using var rd = await cmd.ExecuteReaderAsync(token);
+            while (await rd.ReadAsync(token))
+            {
+                items.Add(new ConversacionStickerFavoritoDto
+                {
+                    IdFavorito = rd.GetInt64(0),
+                    IdAdjunto = rd.GetInt64(1),
+                    Nombre = GetString(rd, 2),
+                    MimeType = GetString(rd, 3)
+                });
+            }
+
+            return (IReadOnlyList<ConversacionStickerFavoritoDto>)items;
+        }, "No se pudieron cargar los stickers favoritos.", ct);
+
+    public async Task SaveFavoriteStickerAsync(long idAdjunto, CancellationToken ct = default)
+    {
+        await ExecuteLoggedAsync("Conversaciones", "SaveFavoriteSticker", async token =>
+        {
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(token);
+            await EnsureFavoriteStickersTableAsync(cn, token);
+
+            const string sql = """
+                INSERT INTO dbo.CONV_STICKERS_FAVORITOS (IdAdjunto, Nombre, FechaHora_Grabacion)
+                SELECT @IdAdjunto, ISNULL(NULLIF(a.NombreArchivo, ''), N'Sticker'), GETDATE()
+                FROM dbo.CONV_ADJUNTOS a
+                WHERE a.IdAdjunto = @IdAdjunto
+                  AND (UPPER(a.TipoArchivo) = N'STICKER' OR LOWER(ISNULL(a.MimeType, '')) = N'image/webp')
+                  AND NOT EXISTS (SELECT 1 FROM dbo.CONV_STICKERS_FAVORITOS f WHERE f.IdAdjunto = a.IdAdjunto)
+                """;
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.AddWithValue("@IdAdjunto", idAdjunto);
+            var rows = await cmd.ExecuteNonQueryAsync(token);
+            if (rows == 0)
+                throw new InvalidOperationException("El sticker ya estaba en favoritos o no es un sticker válido.");
+
+            return true;
+        }, "No se pudo guardar el sticker favorito.", ct);
+    }
+
+    public Task<ConversacionAdjuntoDto> SendFavoriteStickerAsync(long idConversacion, long idFavorito, string? idTecnicoAutor = null, CancellationToken ct = default)
+        => ExecuteLoggedAsync("Conversaciones", "SendFavoriteSticker", async token =>
+        {
+            var sticker = await GetFavoriteStickerFileAsync(idFavorito, token);
+            await using var stream = File.OpenRead(sticker.RutaLocal);
+            return await UploadAttachmentAsync(new ConversacionUploadAdjuntoRequest
+            {
+                IdConversacion = idConversacion,
+                NombreArchivo = sticker.NombreArchivo,
+                MimeType = string.IsNullOrWhiteSpace(sticker.MimeType) ? "image/webp" : sticker.MimeType,
+                TipoArchivo = "STICKER",
+                Contenido = stream,
+                TamanoBytes = new FileInfo(sticker.RutaLocal).Length,
+                IdTecnicoAutor = idTecnicoAutor
+            }, token);
+        }, "No se pudo enviar el sticker favorito.", ct);
 
     public Task<ConversacionAdjuntoServeDto?> GetAttachmentForServeAsync(long idAdjunto, CancellationToken ct = default)
         => ExecuteLoggedAsync("Conversaciones", "GetAttachmentForServe", async token =>
@@ -1724,25 +1978,21 @@ public sealed class ConversacionesService(
 
     private async Task<long> EnsureConversationAsync(IncomingWhatsAppMessage incoming, CancellationToken ct)
     {
-        const string findSql = """
-            SELECT TOP (1) IdConversacion
-            FROM dbo.CONV_CONVERSACIONES
-            WHERE TelefonoWhatsApp = @TelefonoWhatsApp
-            ORDER BY FechaHoraUltimoMensaje DESC, IdConversacion DESC
-            """;
-
         await using var cn = new SqlConnection(ConnectionString);
         await cn.OpenAsync(ct);
 
-        await using (var findCmd = new SqlCommand(findSql, cn))
+        var contact = await TryFindContactByPhoneAsync(cn, incoming.Phone, ct);
+        var existing = await FindWhatsAppConversationByPhoneAsync(cn, incoming.Phone, contact.IdContact, ct);
+        if (existing is not null)
         {
-            findCmd.Parameters.AddWithValue("@TelefonoWhatsApp", incoming.Phone);
-            var existing = await findCmd.ExecuteScalarAsync(ct);
-            if (existing is not null && existing is not DBNull)
-                return Convert.ToInt64(existing, CultureInfo.InvariantCulture);
+            if (contact.IdContact.HasValue)
+                await AssociateContactIfMissingAsync(cn, existing.IdConversacion, contact, ct);
+
+            await MergeDuplicateWhatsAppConversationsAsync(cn, existing.IdConversacion, incoming.Phone, contact.IdContact, ct);
+
+            return existing.IdConversacion;
         }
 
-        var contact = await TryFindContactByPhoneAsync(cn, incoming.Phone, ct);
         var displayName = !string.IsNullOrWhiteSpace(incoming.ContactName)
             ? incoming.ContactName
             : contact.Name;
@@ -1816,6 +2066,36 @@ public sealed class ConversacionesService(
             IdConversacion = rd.GetInt64(0),
             TelefonoWhatsApp = GetString(rd, 1),
             Canal = GetString(rd, 2)
+        };
+    }
+
+    private async Task<MessageReactionTarget> RequireMessageForReactionAsync(long idConversacion, long idMensaje, CancellationToken ct)
+    {
+        const string sql = """
+            SELECT TOP (1)
+                IdMensaje,
+                ISNULL(WhatsAppMessageId, ''),
+                ISNULL(Direction, '')
+            FROM dbo.CONV_MENSAJES
+            WHERE IdConversacion = @IdConversacion
+              AND IdMensaje = @IdMensaje
+            """;
+
+        await using var cn = new SqlConnection(ConnectionString);
+        await cn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, cn);
+        cmd.Parameters.AddWithValue("@IdConversacion", idConversacion);
+        cmd.Parameters.AddWithValue("@IdMensaje", idMensaje);
+        await using var rd = await cmd.ExecuteReaderAsync(ct);
+
+        if (!await rd.ReadAsync(ct))
+            throw new InvalidOperationException("El mensaje indicado no existe en esta conversación.");
+
+        return new MessageReactionTarget
+        {
+            IdMensaje = rd.GetInt64(0),
+            WhatsAppMessageId = GetString(rd, 1),
+            Direction = GetString(rd, 2)
         };
     }
 
@@ -2182,6 +2462,41 @@ public sealed class ConversacionesService(
         };
     }
 
+    private async Task<WhatsAppSendResult> SendReactionToWhatsAppAsync(ConversacionWhatsAppConfigDto config, string phone, string targetMessageId, string emoji, CancellationToken ct)
+    {
+        var url = $"https://graph.facebook.com/{config.ApiVersion}/{config.PhoneNumberId}/messages";
+        using var request = new HttpRequestMessage(HttpMethod.Post, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", config.AccessToken.Trim());
+
+        var payload = new Dictionary<string, object?>
+        {
+            ["messaging_product"] = "whatsapp",
+            ["to"] = phone,
+            ["type"] = "reaction",
+            ["reaction"] = new Dictionary<string, object?>
+            {
+                ["message_id"] = targetMessageId.Trim(),
+                ["emoji"] = emoji
+            }
+        };
+
+        request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+        var client = httpClientFactory.CreateClient();
+        using var response = await client.SendAsync(request, ct);
+        var responseBody = await response.Content.ReadAsStringAsync(ct);
+
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException($"Meta devolvio {(int)response.StatusCode} al enviar reacción: {responseBody}");
+
+        var messageId = ExtractSentMessageId(responseBody);
+        return new WhatsAppSendResult
+        {
+            EstadoEnvio = string.IsNullOrWhiteSpace(messageId) ? "ENVIADO" : "ENVIADO_META",
+            WhatsAppMessageId = messageId,
+            PayloadJson = responseBody
+        };
+    }
+
     private async Task<WhatsAppSendResult> SendAttachmentToWhatsAppAsync(
         ConversacionWhatsAppConfigDto config,
         string phone,
@@ -2373,6 +2688,7 @@ public sealed class ConversacionesService(
         if (string.IsNullOrWhiteSpace(normalizedPhone))
             return ContactLookupResult.Empty;
 
+        var phoneTail = GetPhoneComparableTail(normalizedPhone);
         var sql = $"""
             SELECT TOP (1)
                 id,
@@ -2380,15 +2696,16 @@ public sealed class ConversacionesService(
                 ISNULL(Nombre_y_Apellido, '')
             FROM dbo.MA_CONTACTOS
             WHERE
-                {SqlNormalizePhone("Telefono")} = @Telefono
-                OR {SqlNormalizePhone("Celular")} = @Telefono
-                OR {SqlNormalizePhone("TelefonoPart")} = @Telefono
-                OR {SqlNormalizePhone("CelularPart")} = @Telefono
+                {SqlPhoneEquivalentPredicate("Telefono", "@Telefono", "@TelefonoTail")}
+                OR {SqlPhoneEquivalentPredicate("Celular", "@Telefono", "@TelefonoTail")}
+                OR {SqlPhoneEquivalentPredicate("TelefonoPart", "@Telefono", "@TelefonoTail")}
+                OR {SqlPhoneEquivalentPredicate("CelularPart", "@Telefono", "@TelefonoTail")}
             ORDER BY id DESC
             """;
 
         await using var cmd = new SqlCommand(sql, cn);
         cmd.Parameters.AddWithValue("@Telefono", normalizedPhone);
+        cmd.Parameters.AddWithValue("@TelefonoTail", DbNullable(phoneTail));
         await using var rd = await cmd.ExecuteReaderAsync(ct);
         if (!await rd.ReadAsync(ct))
             return ContactLookupResult.Empty;
@@ -2399,6 +2716,319 @@ public sealed class ConversacionesService(
             ClientCode = GetString(rd, 1),
             Name = GetString(rd, 2)
         };
+    }
+
+    private static async Task<ConversationLookupResult?> FindWhatsAppConversationByPhoneAsync(SqlConnection cn, string phone, int? idContact, CancellationToken ct)
+    {
+        var normalizedPhone = NormalizePhone(phone);
+        if (string.IsNullOrWhiteSpace(normalizedPhone))
+            return null;
+
+        var phoneTail = GetPhoneComparableTail(normalizedPhone);
+        var sql = $"""
+            SELECT TOP (1)
+                IdConversacion,
+                ISNULL(NombreVisible, ''),
+                IdContacto
+            FROM dbo.CONV_CONVERSACIONES
+            WHERE Canal = N'WHATSAPP'
+              AND (
+                    {SqlPhoneEquivalentPredicate("TelefonoWhatsApp", "@TelefonoWhatsApp", "@TelefonoWhatsAppTail")}
+                    OR (@IdContacto IS NOT NULL AND IdContacto = @IdContacto)
+                  )
+            ORDER BY IdConversacion ASC
+            """;
+
+        await using var cmd = new SqlCommand(sql, cn);
+        cmd.Parameters.AddWithValue("@TelefonoWhatsApp", normalizedPhone);
+        cmd.Parameters.AddWithValue("@TelefonoWhatsAppTail", DbNullable(phoneTail));
+        cmd.Parameters.AddWithValue("@IdContacto", idContact.HasValue ? idContact.Value : DBNull.Value);
+        await using var rd = await cmd.ExecuteReaderAsync(ct);
+        if (!await rd.ReadAsync(ct))
+            return null;
+
+        return new ConversationLookupResult
+        {
+            IdConversacion = rd.GetInt64(0),
+            NombreVisible = GetString(rd, 1),
+            IdContacto = rd.IsDBNull(2) ? null : rd.GetInt32(2)
+        };
+    }
+
+    private static async Task AssociateContactIfMissingAsync(SqlConnection cn, long idConversacion, ContactLookupResult contact, CancellationToken ct)
+    {
+        if (!contact.IdContact.HasValue)
+            return;
+
+        const string sql = """
+            UPDATE dbo.CONV_CONVERSACIONES
+            SET
+                IdContacto = CASE WHEN IdContacto IS NULL THEN @IdContacto ELSE IdContacto END,
+                ClienteCodigo = CASE
+                    WHEN ClienteCodigo IS NULL OR LTRIM(RTRIM(ClienteCodigo)) = '' THEN @ClienteCodigo
+                    ELSE ClienteCodigo
+                END,
+                NombreVisible = CASE
+                    WHEN (NombreVisible IS NULL OR LTRIM(RTRIM(NombreVisible)) = '' OR NombreVisible = TelefonoWhatsApp)
+                         AND @NombreVisible IS NOT NULL THEN @NombreVisible
+                    ELSE NombreVisible
+                END
+            WHERE IdConversacion = @IdConversacion
+            """;
+
+        await using var cmd = new SqlCommand(sql, cn);
+        cmd.Parameters.AddWithValue("@IdConversacion", idConversacion);
+        cmd.Parameters.AddWithValue("@IdContacto", contact.IdContact.Value);
+        cmd.Parameters.AddWithValue("@ClienteCodigo", DbNullable(contact.ClientCode));
+        cmd.Parameters.AddWithValue("@NombreVisible", DbNullable(contact.Name));
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    private async Task LinkUnassociatedWhatsAppConversationsByPhoneAsync(SqlConnection cn, CancellationToken ct, long? idConversacion = null)
+    {
+        const string sql = """
+            SELECT TOP (200)
+                IdConversacion,
+                ISNULL(TelefonoWhatsApp, '')
+            FROM dbo.CONV_CONVERSACIONES
+            WHERE Canal = N'WHATSAPP'
+              AND IdContacto IS NULL
+              AND TelefonoWhatsApp IS NOT NULL
+              AND LTRIM(RTRIM(TelefonoWhatsApp)) <> ''
+              AND (@IdConversacion IS NULL OR IdConversacion = @IdConversacion)
+            ORDER BY FechaHoraUltimoMensaje DESC, IdConversacion DESC
+            """;
+
+        var pending = new List<(long IdConversacion, string TelefonoWhatsApp)>();
+        await using (var cmd = new SqlCommand(sql, cn))
+        {
+            cmd.Parameters.AddWithValue("@IdConversacion", idConversacion.HasValue ? idConversacion.Value : DBNull.Value);
+            await using var rd = await cmd.ExecuteReaderAsync(ct);
+            while (await rd.ReadAsync(ct))
+                pending.Add((rd.GetInt64(0), GetString(rd, 1)));
+        }
+
+        var linked = 0;
+        foreach (var item in pending)
+        {
+            var contact = await TryFindContactByPhoneAsync(cn, item.TelefonoWhatsApp, ct);
+            if (!contact.IdContact.HasValue)
+                continue;
+
+            await AssociateContactIfMissingAsync(cn, item.IdConversacion, contact, ct);
+            linked++;
+        }
+
+        if (linked > 0)
+        {
+            await _appEvents.LogAuditAsync(
+                "Conversaciones",
+                "LinkUnassociatedWhatsAppConversationsByPhone",
+                "CONV_CONVERSACIONES",
+                idConversacion?.ToString(CultureInfo.InvariantCulture) ?? "AUTO",
+                "Conversaciones vinculadas automáticamente a contactos por teléfono equivalente.",
+                new { ConversacionesVinculadas = linked, IdConversacion = idConversacion },
+                ct);
+        }
+    }
+
+    private async Task MergeDuplicateWhatsAppConversationsAsync(SqlConnection cn, long canonicalId, string phone, int? idContact, CancellationToken ct)
+    {
+        var duplicates = await FindDuplicateWhatsAppConversationIdsAsync(cn, canonicalId, phone, idContact, ct);
+        foreach (var duplicateId in duplicates)
+        {
+            await MergeDuplicateWhatsAppConversationAsync(cn, canonicalId, duplicateId, ct);
+
+            await _appEvents.LogAuditAsync(
+                "Conversaciones",
+                "MergeDuplicateWhatsAppConversation",
+                "CONV_CONVERSACIONES",
+                canonicalId.ToString(CultureInfo.InvariantCulture),
+                "Conversación duplicada consolidada por teléfono equivalente.",
+                new { ConversacionConservada = canonicalId, ConversacionDuplicada = duplicateId, TelefonoWhatsApp = NormalizePhone(phone), IdContacto = idContact },
+                ct);
+        }
+    }
+
+    private async Task ConsolidateExistingDuplicateWhatsAppConversationsAsync(SqlConnection cn, CancellationToken ct)
+    {
+        var records = await GetWhatsAppConversationMergeCandidatesAsync(cn, ct);
+        var merged = new HashSet<long>();
+
+        foreach (var group in BuildDuplicateGroups(records))
+        {
+            var activeGroup = group.Where(x => !merged.Contains(x.IdConversacion)).OrderBy(x => x.IdConversacion).ToList();
+            if (activeGroup.Count < 2)
+                continue;
+
+            var canonical = activeGroup[0];
+            foreach (var duplicate in activeGroup.Skip(1))
+            {
+                await MergeDuplicateWhatsAppConversationAsync(cn, canonical.IdConversacion, duplicate.IdConversacion, ct);
+                merged.Add(duplicate.IdConversacion);
+
+                await _appEvents.LogAuditAsync(
+                    "Conversaciones",
+                    "ConsolidateExistingDuplicateWhatsAppConversations",
+                    "CONV_CONVERSACIONES",
+                    canonical.IdConversacion.ToString(CultureInfo.InvariantCulture),
+                    "Conversación duplicada existente consolidada al cargar inbox.",
+                    new { ConversacionConservada = canonical.IdConversacion, ConversacionDuplicada = duplicate.IdConversacion, canonical.TelefonoWhatsApp, canonical.IdContacto },
+                    ct);
+            }
+        }
+    }
+
+    private static async Task<List<ConversationMergeCandidate>> GetWhatsAppConversationMergeCandidatesAsync(SqlConnection cn, CancellationToken ct)
+    {
+        const string sql = """
+            SELECT
+                IdConversacion,
+                ISNULL(TelefonoWhatsApp, ''),
+                IdContacto
+            FROM dbo.CONV_CONVERSACIONES
+            WHERE Canal = N'WHATSAPP'
+            ORDER BY IdConversacion ASC
+            """;
+
+        var result = new List<ConversationMergeCandidate>();
+        await using var cmd = new SqlCommand(sql, cn);
+        await using var rd = await cmd.ExecuteReaderAsync(ct);
+        while (await rd.ReadAsync(ct))
+        {
+            result.Add(new ConversationMergeCandidate
+            {
+                IdConversacion = rd.GetInt64(0),
+                TelefonoWhatsApp = GetString(rd, 1),
+                IdContacto = rd.IsDBNull(2) ? null : rd.GetInt32(2)
+            });
+        }
+
+        return result;
+    }
+
+    private static IEnumerable<IReadOnlyList<ConversationMergeCandidate>> BuildDuplicateGroups(IReadOnlyList<ConversationMergeCandidate> records)
+    {
+        var emitted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var group in records
+                     .Select(x => new { Item = x, Key = GetPhoneComparableTail(x.TelefonoWhatsApp) })
+                     .Where(x => !string.IsNullOrWhiteSpace(x.Key))
+                     .GroupBy(x => x.Key!, StringComparer.OrdinalIgnoreCase))
+        {
+            var items = group.Select(x => x.Item).OrderBy(x => x.IdConversacion).ToList();
+            if (items.Count > 1 && emitted.Add($"TEL:{group.Key}"))
+                yield return items;
+        }
+
+        foreach (var group in records
+                     .Where(x => x.IdContacto.HasValue)
+                     .GroupBy(x => x.IdContacto!.Value))
+        {
+            var items = group.OrderBy(x => x.IdConversacion).ToList();
+            if (items.Count > 1 && emitted.Add($"CONTACTO:{group.Key.ToString(CultureInfo.InvariantCulture)}"))
+                yield return items;
+        }
+    }
+
+    private static async Task<List<long>> FindDuplicateWhatsAppConversationIdsAsync(SqlConnection cn, long canonicalId, string phone, int? idContact, CancellationToken ct)
+    {
+        var normalizedPhone = NormalizePhone(phone);
+        if (string.IsNullOrWhiteSpace(normalizedPhone) && !idContact.HasValue)
+            return [];
+
+        var phoneTail = GetPhoneComparableTail(normalizedPhone);
+        var sql = $"""
+            SELECT IdConversacion
+            FROM dbo.CONV_CONVERSACIONES
+            WHERE Canal = N'WHATSAPP'
+              AND IdConversacion <> @CanonicalId
+              AND (
+                    {SqlPhoneEquivalentPredicate("TelefonoWhatsApp", "@TelefonoWhatsApp", "@TelefonoWhatsAppTail")}
+                    OR (@IdContacto IS NOT NULL AND IdContacto = @IdContacto)
+                  )
+            ORDER BY IdConversacion ASC
+            """;
+
+        var result = new List<long>();
+        await using var cmd = new SqlCommand(sql, cn);
+        cmd.Parameters.AddWithValue("@CanonicalId", canonicalId);
+        cmd.Parameters.AddWithValue("@TelefonoWhatsApp", DbNullable(normalizedPhone));
+        cmd.Parameters.AddWithValue("@TelefonoWhatsAppTail", DbNullable(phoneTail));
+        cmd.Parameters.AddWithValue("@IdContacto", idContact.HasValue ? idContact.Value : DBNull.Value);
+        await using var rd = await cmd.ExecuteReaderAsync(ct);
+        while (await rd.ReadAsync(ct))
+            result.Add(rd.GetInt64(0));
+
+        return result;
+    }
+
+    private static async Task MergeDuplicateWhatsAppConversationAsync(SqlConnection cn, long canonicalId, long duplicateId, CancellationToken ct)
+    {
+        const string sql = """
+            INSERT INTO dbo.CONV_CONVERSACION_ETIQUETAS (IdConversacion, IdEtiqueta, FechaHora_Grabacion)
+            SELECT @CanonicalId, dup.IdEtiqueta, MIN(dup.FechaHora_Grabacion)
+            FROM dbo.CONV_CONVERSACION_ETIQUETAS dup
+            WHERE dup.IdConversacion = @DuplicateId
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM dbo.CONV_CONVERSACION_ETIQUETAS cur
+                  WHERE cur.IdConversacion = @CanonicalId
+                    AND cur.IdEtiqueta = dup.IdEtiqueta
+              )
+            GROUP BY dup.IdEtiqueta;
+
+            DELETE FROM dbo.CONV_CONVERSACION_ETIQUETAS
+            WHERE IdConversacion = @DuplicateId;
+
+            UPDATE dbo.CONV_MENSAJES
+            SET IdConversacion = @CanonicalId
+            WHERE IdConversacion = @DuplicateId;
+
+            UPDATE dbo.CONV_ASIGNACIONES
+            SET IdConversacion = @CanonicalId
+            WHERE IdConversacion = @DuplicateId;
+
+            UPDATE c
+            SET
+                TelefonoWhatsApp = COALESCE(NULLIF(LTRIM(RTRIM(c.TelefonoWhatsApp)), ''), d.TelefonoWhatsApp),
+                NombreVisible = COALESCE(NULLIF(LTRIM(RTRIM(c.NombreVisible)), ''), d.NombreVisible),
+                ClienteCodigo = COALESCE(NULLIF(LTRIM(RTRIM(c.ClienteCodigo)), ''), d.ClienteCodigo),
+                ClienteSucursal = COALESCE(c.ClienteSucursal, d.ClienteSucursal),
+                IdContacto = COALESCE(c.IdContacto, d.IdContacto),
+                CodigoEstado = CASE WHEN d.FechaHoraUltimoMensaje > c.FechaHoraUltimoMensaje THEN d.CodigoEstado ELSE c.CodigoEstado END,
+                IdTecnico = COALESCE(NULLIF(LTRIM(RTRIM(c.IdTecnico)), ''), d.IdTecnico),
+                ResumenUltimoMensaje = CASE
+                    WHEN d.FechaHoraUltimoMensaje > c.FechaHoraUltimoMensaje THEN d.ResumenUltimoMensaje
+                    ELSE c.ResumenUltimoMensaje
+                END,
+                Prioridad = COALESCE(c.Prioridad, d.Prioridad),
+                Bloqueada = CASE WHEN c.Bloqueada = 1 OR d.Bloqueada = 1 THEN 1 ELSE 0 END,
+                Archivada = CASE WHEN c.Archivada = 1 AND d.Archivada = 1 THEN 1 ELSE 0 END,
+                FechaHoraPrimerMensaje = CASE
+                    WHEN c.FechaHoraPrimerMensaje IS NULL THEN d.FechaHoraPrimerMensaje
+                    WHEN d.FechaHoraPrimerMensaje IS NULL THEN c.FechaHoraPrimerMensaje
+                    WHEN d.FechaHoraPrimerMensaje < c.FechaHoraPrimerMensaje THEN d.FechaHoraPrimerMensaje
+                    ELSE c.FechaHoraPrimerMensaje
+                END,
+                FechaHoraUltimoMensaje = CASE
+                    WHEN d.FechaHoraUltimoMensaje > c.FechaHoraUltimoMensaje THEN d.FechaHoraUltimoMensaje
+                    ELSE c.FechaHoraUltimoMensaje
+                END,
+                FechaHora_Modificacion = GETDATE()
+            FROM dbo.CONV_CONVERSACIONES c
+            INNER JOIN dbo.CONV_CONVERSACIONES d
+                ON d.IdConversacion = @DuplicateId
+            WHERE c.IdConversacion = @CanonicalId;
+
+            DELETE FROM dbo.CONV_CONVERSACIONES
+            WHERE IdConversacion = @DuplicateId;
+            """;
+
+        await using var cmd = new SqlCommand(sql, cn);
+        cmd.Parameters.AddWithValue("@CanonicalId", canonicalId);
+        cmd.Parameters.AddWithValue("@DuplicateId", duplicateId);
+        await cmd.ExecuteNonQueryAsync(ct);
     }
 
     private async Task ValidateTechnicianExistsAsync(string idTecnico, CancellationToken ct)
@@ -2417,6 +3047,63 @@ public sealed class ConversacionesService(
         var result = await cmd.ExecuteScalarAsync(ct);
         if (result is null || result is DBNull)
             throw new InvalidOperationException("El técnico indicado no existe o está dado de baja.");
+    }
+
+    private static async Task EnsureFavoriteStickersTableAsync(SqlConnection cn, CancellationToken ct)
+    {
+        const string sql = """
+            IF OBJECT_ID(N'dbo.CONV_STICKERS_FAVORITOS', N'U') IS NULL
+            BEGIN
+                CREATE TABLE dbo.CONV_STICKERS_FAVORITOS
+                (
+                    IdFavorito bigint IDENTITY(1,1) NOT NULL,
+                    IdAdjunto bigint NOT NULL,
+                    Nombre nvarchar(120) NULL,
+                    FechaHora_Grabacion datetime NOT NULL CONSTRAINT DF_CONV_STICKERS_FAVORITOS_FhGrab DEFAULT (GETDATE()),
+                    CONSTRAINT PK_CONV_STICKERS_FAVORITOS PRIMARY KEY CLUSTERED (IdFavorito),
+                    CONSTRAINT UQ_CONV_STICKERS_FAVORITOS_Adjunto UNIQUE (IdAdjunto),
+                    CONSTRAINT FK_CONV_STICKERS_FAVORITOS_ADJUNTO FOREIGN KEY (IdAdjunto)
+                        REFERENCES dbo.CONV_ADJUNTOS (IdAdjunto)
+                );
+            END;
+            """;
+
+        await using var cmd = new SqlCommand(sql, cn);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    private async Task<ConversacionAdjuntoServeDto> GetFavoriteStickerFileAsync(long idFavorito, CancellationToken ct)
+    {
+        const string sql = """
+            SELECT TOP (1)
+                ISNULL(a.RutaLocal, ''),
+                ISNULL(a.MimeType, 'image/webp'),
+                ISNULL(a.NombreArchivo, 'sticker.webp')
+            FROM dbo.CONV_STICKERS_FAVORITOS f
+            INNER JOIN dbo.CONV_ADJUNTOS a ON a.IdAdjunto = f.IdAdjunto
+            WHERE f.IdFavorito = @IdFavorito
+            """;
+
+        await using var cn = new SqlConnection(ConnectionString);
+        await cn.OpenAsync(ct);
+        await EnsureFavoriteStickersTableAsync(cn, ct);
+        await using var cmd = new SqlCommand(sql, cn);
+        cmd.Parameters.AddWithValue("@IdFavorito", idFavorito);
+        await using var rd = await cmd.ExecuteReaderAsync(ct);
+        if (!await rd.ReadAsync(ct))
+            throw new InvalidOperationException("El sticker favorito indicado no existe.");
+
+        var item = new ConversacionAdjuntoServeDto
+        {
+            RutaLocal = GetString(rd, 0),
+            MimeType = GetString(rd, 1),
+            NombreArchivo = GetString(rd, 2)
+        };
+
+        if (string.IsNullOrWhiteSpace(item.RutaLocal) || !File.Exists(item.RutaLocal))
+            throw new InvalidOperationException("El archivo local del sticker favorito no está disponible.");
+
+        return item;
     }
 
     private async Task<bool> GetStateClosedFlagAsync(string codigoEstado, CancellationToken ct)
@@ -2477,6 +3164,7 @@ public sealed class ConversacionesService(
                     var phone = message.TryGetProperty("from", out var fromProp) ? fromProp.GetString() ?? string.Empty : string.Empty;
                     var type = message.TryGetProperty("type", out var typeProp) ? typeProp.GetString() ?? "unknown" : "unknown";
                     var messageId = message.TryGetProperty("id", out var idProp) ? idProp.GetString() ?? string.Empty : string.Empty;
+                    var replyToMessageId = ExtractIncomingReplyToMessageId(message, type);
                     var timestamp = message.TryGetProperty("timestamp", out var tsProp) ? ParseUnixTimestamp(tsProp.GetString()) : DateTime.Now;
                     var text = ExtractIncomingText(message, type);
                     var attachments = ExtractIncomingAttachments(message, type);
@@ -2487,6 +3175,7 @@ public sealed class ConversacionesService(
                         ContactName = contactName,
                         MessageType = NormalizeMessageType(type),
                         WhatsAppMessageId = messageId,
+                        WhatsAppReplyToMessageId = replyToMessageId,
                         Timestamp = timestamp,
                         Text = text,
                         RawJson = message.GetRawText(),
@@ -2580,6 +3269,20 @@ public sealed class ConversacionesService(
         }
 
         return $"[{type}]";
+    }
+
+    private static string ExtractIncomingReplyToMessageId(JsonElement message, string type)
+    {
+        if (string.Equals(type, "reaction", StringComparison.OrdinalIgnoreCase) &&
+            message.TryGetProperty("reaction", out var reaction) &&
+            reaction.TryGetProperty("message_id", out var reactionMessageId))
+            return reactionMessageId.GetString() ?? string.Empty;
+
+        if (message.TryGetProperty("context", out var context) &&
+            context.TryGetProperty("id", out var contextId))
+            return contextId.GetString() ?? string.Empty;
+
+        return string.Empty;
     }
 
     private static string ExtractLocationText(JsonElement message)
@@ -3135,6 +3838,12 @@ public sealed class ConversacionesService(
             throw new InvalidOperationException("El texto del mensaje es obligatorio.");
     }
 
+    private static string NormalizeReactionEmoji(string? emoji)
+    {
+        var value = (emoji ?? string.Empty).Trim();
+        return value is "👍" or "❤️" or "😂" or "😮" or "😢" or "🙏" ? value : string.Empty;
+    }
+
     private static string NormalizeMode(string? mode)
     {
         var normalized = string.IsNullOrWhiteSpace(mode) ? "todas" : mode.Trim().ToLowerInvariant();
@@ -3146,6 +3855,32 @@ public sealed class ConversacionesService(
             "cerradas" => normalized,
             _ => "todas"
         };
+    }
+
+    private static IReadOnlyList<ConversacionInboxItemDto> DeduplicateInboxItems(IReadOnlyList<ConversacionInboxItemDto> items)
+    {
+        var result = new List<ConversacionInboxItemDto>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var item in items)
+        {
+            var key = BuildConversationDedupeKey(item);
+            if (!string.IsNullOrWhiteSpace(key) && !seen.Add(key))
+                continue;
+
+            result.Add(item);
+        }
+
+        return result;
+    }
+
+    private static string BuildConversationDedupeKey(ConversacionInboxItemDto item)
+    {
+        if (item.IdContacto.HasValue)
+            return $"CONTACTO:{item.IdContacto.Value.ToString(CultureInfo.InvariantCulture)}";
+
+        var phoneTail = GetPhoneComparableTail(item.TelefonoWhatsApp);
+        return string.IsNullOrWhiteSpace(phoneTail) ? string.Empty : $"TEL:{phoneTail}";
     }
 
     private static string NormalizeMessageType(string? messageType)
@@ -3237,6 +3972,27 @@ public sealed class ConversacionesService(
 
     private static string SqlNormalizePhone(string columnName)
         => $"REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ISNULL({columnName}, ''), ' ', ''), '-', ''), '+', ''), '(', ''), ')', ''), '.', '')";
+
+    private static string SqlPhoneEquivalentPredicate(string columnName, string phoneParameterName, string tailParameterName)
+    {
+        var normalizedColumn = SqlNormalizePhone(columnName);
+        return $"""
+            (
+                {normalizedColumn} = {phoneParameterName}
+                OR (
+                    {tailParameterName} IS NOT NULL
+                    AND LEN({normalizedColumn}) >= 10
+                    AND RIGHT({normalizedColumn}, 10) = {tailParameterName}
+                )
+            )
+            """;
+    }
+
+    private static string? GetPhoneComparableTail(string? phone)
+    {
+        var normalized = NormalizePhone(phone);
+        return normalized.Length >= 10 ? normalized[^10..] : null;
+    }
 
     private static string? Like(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : $"%{value.Trim()}%";
@@ -3343,6 +4099,13 @@ public sealed class ConversacionesService(
         public string Canal { get; init; } = string.Empty;
     }
 
+    private sealed class MessageReactionTarget
+    {
+        public long IdMensaje { get; init; }
+        public string WhatsAppMessageId { get; init; } = string.Empty;
+        public string Direction { get; init; } = string.Empty;
+    }
+
     private sealed class ContactLookupResult
     {
         public static ContactLookupResult Empty { get; } = new();
@@ -3352,12 +4115,27 @@ public sealed class ConversacionesService(
         public string Name { get; init; } = string.Empty;
     }
 
+    private sealed class ConversationLookupResult
+    {
+        public long IdConversacion { get; init; }
+        public string NombreVisible { get; init; } = string.Empty;
+        public int? IdContacto { get; init; }
+    }
+
+    private sealed class ConversationMergeCandidate
+    {
+        public long IdConversacion { get; init; }
+        public string TelefonoWhatsApp { get; init; } = string.Empty;
+        public int? IdContacto { get; init; }
+    }
+
     private sealed class IncomingWhatsAppMessage
     {
         public string Phone { get; init; } = string.Empty;
         public string ContactName { get; init; } = string.Empty;
         public string MessageType { get; init; } = "TEXT";
         public string WhatsAppMessageId { get; init; } = string.Empty;
+        public string WhatsAppReplyToMessageId { get; init; } = string.Empty;
         public DateTime Timestamp { get; init; }
         public string Text { get; init; } = string.Empty;
         public string RawJson { get; init; } = string.Empty;
