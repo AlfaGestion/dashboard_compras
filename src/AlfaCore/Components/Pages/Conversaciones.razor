@@ -105,7 +105,7 @@
                                                 <button type="button" class="btn btn--primary btn--sm" @onclick="() => SelectConversationFromSuggestionAsync(conversation.IdConversacion)">
                                                     <i class="bi bi-whatsapp"></i> Conversar
                                                 </button>
-                                                @if (!conversation.IdContacto.HasValue)
+                                                @if (!HasUsableLinkedContact(conversation))
                                                 {
                                                     <button type="button" class="btn btn--ghost btn--sm" @onclick="() => OpenNewContactFromConversation(conversation)">
                                                         <i class="bi bi-person-plus-fill"></i> Crear contacto
@@ -2185,6 +2185,9 @@
                || ContainsPhoneSearch(item.TelefonoWhatsApp, search)
                || ContainsSearch(item.ResumenUltimoMensaje, search);
     }
+
+    private static bool HasUsableLinkedContact(ConversacionInboxItemDto conversation)
+        => conversation.IdContacto.HasValue && !string.IsNullOrWhiteSpace(conversation.ContactoNombre);
 
     private static bool ContainsSearch(string? value, string search)
         => !string.IsNullOrWhiteSpace(value)
