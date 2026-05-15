@@ -89,7 +89,7 @@
                                 @if (_conversationSuggestions.Count > 0)
                                 {
                                     <div class="conversations-contact-suggest__header">
-                                        <span>Conversaciones encontradas</span>
+                                        <span>Coincidencias encontradas</span>
                                         <button type="button" class="btn btn--ghost btn--sm" @onclick="CloseContactSuggestions" title="Cerrar">
                                             <i class="bi bi-x-lg"></i>
                                         </button>
@@ -99,16 +99,18 @@
                                         <div class="conversations-contact-suggest__item">
                                             <div class="conversations-contact-suggest__main">
                                                 <strong>@GetDisplayName(conversation)</strong>
-                                                <span>@GetConversationSuggestionDescription(conversation)</span>
                                                 <small>@DisplayOrFallback(conversation.TelefonoWhatsApp)</small>
                                             </div>
                                             <div class="conversations-contact-suggest__actions">
-                                                <button type="button" class="btn btn--ghost btn--sm" @onclick="() => SelectConversationFromSuggestionAsync(conversation.IdConversacion)">
-                                                    <i class="bi bi-chat-left-text"></i> Ver
+                                                <button type="button" class="btn btn--primary btn--sm" @onclick="() => SelectConversationFromSuggestionAsync(conversation.IdConversacion)">
+                                                    <i class="bi bi-whatsapp"></i> Conversar
                                                 </button>
-                                                <button type="button" class="btn btn--primary btn--sm" @onclick="() => OpenNewContactFromConversation(conversation)">
-                                                    <i class="bi bi-person-plus-fill"></i> Crear contacto
-                                                </button>
+                                                @if (!conversation.IdContacto.HasValue)
+                                                {
+                                                    <button type="button" class="btn btn--ghost btn--sm" @onclick="() => OpenNewContactFromConversation(conversation)">
+                                                        <i class="bi bi-person-plus-fill"></i> Crear contacto
+                                                    </button>
+                                                }
                                             </div>
                                         </div>
                                     }
@@ -134,9 +136,6 @@
                                                 <small>@DisplayOrFallback(phone, contact.Email)</small>
                                             </div>
                                             <div class="conversations-contact-suggest__actions">
-                                                <button type="button" class="btn btn--ghost btn--sm" @onclick="() => ToggleContactPreview(contact.Id)">
-                                                    <i class="bi bi-eye"></i> Ver
-                                                </button>
                                                 <button type="button" class="btn btn--primary btn--sm" disabled="@string.IsNullOrWhiteSpace(phone)" @onclick="() => OpenWhatsAppForContactAsync(contact)">
                                                     <i class="bi bi-whatsapp"></i> Conversar
                                                 </button>
@@ -144,15 +143,6 @@
                                                     <i class="bi bi-pencil-square"></i>
                                                 </button>
                                             </div>
-                                            @if (_previewContactId == contact.Id)
-                                            {
-                                                <div class="conversations-contact-suggest__preview">
-                                                    <span><i class="bi bi-telephone"></i> @DisplayOrFallback(contact.Telefono)</span>
-                                                    <span><i class="bi bi-phone"></i> @DisplayOrFallback(contact.Celular)</span>
-                                                    <span><i class="bi bi-envelope"></i> @DisplayOrFallback(contact.Email)</span>
-                                                    <span><i class="bi bi-geo-alt"></i> @DisplayOrFallback(contact.Localidad, contact.ProvinciaDescripcion)</span>
-                                                </div>
-                                            }
                                         </div>
                                     }
                                 }
@@ -173,8 +163,8 @@
                                             <small>@DisplayOrFallback(conversationMatch.TelefonoWhatsApp)</small>
                                         </div>
                                         <div class="conversations-contact-suggest__actions">
-                                            <button type="button" class="btn btn--ghost btn--sm" @onclick="() => SelectConversationFromSuggestionAsync(conversationMatch.IdConversacion)">
-                                                <i class="bi bi-chat-left-text"></i> @("Ver conversaci\u00f3n")
+                                            <button type="button" class="btn btn--primary btn--sm" @onclick="() => SelectConversationFromSuggestionAsync(conversationMatch.IdConversacion)">
+                                                <i class="bi bi-whatsapp"></i> Conversar
                                             </button>
                                             <button type="button" class="btn btn--primary btn--sm" @onclick="() => OpenNewContactFromConversation(conversationMatch)">
                                                 <i class="bi bi-person-plus-fill"></i> Crear contacto vinculado
@@ -1032,7 +1022,6 @@
     private string _emojiSearch = string.Empty;
     private bool _showContactSuggestions;
     private bool _loadingContactSuggestions;
-    private int? _previewContactId;
 
     private static readonly TimeSpan PollingInterval = TimeSpan.FromSeconds(5);
     private static readonly string[] QuickReactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
@@ -1383,7 +1372,6 @@
     private async Task DebounceContactSuggestionsAsync()
     {
         CancelContactSearch();
-        _previewContactId = null;
 
         if (!ShouldShowContactSuggestions)
         {
@@ -1422,9 +1410,12 @@
 
             if (!cts.IsCancellationRequested)
             {
-                _contactSuggestions = (await contactTask).Items.ToList();
                 _conversationSuggestions = (await conversationTask)
                     .Where(x => MatchesConversationSearch(x, _filters.Search.Trim()))
+                    .Take(6)
+                    .ToList();
+                _contactSuggestions = (await contactTask).Items
+                    .Where(contact => !_conversationSuggestions.Any(conversation => IsSameContactSuggestion(conversation, contact)))
                     .Take(6)
                     .ToList();
             }
@@ -2137,13 +2128,9 @@
         await CreateWhatsAppFromSearchAsync();
     }
 
-    private void ToggleContactPreview(int id)
-        => _previewContactId = _previewContactId == id ? null : id;
-
     private void CloseContactSuggestions()
     {
         _showContactSuggestions = false;
-        _previewContactId = null;
         _conversationSuggestions = [];
     }
 
@@ -2199,14 +2186,19 @@
                || ContainsSearch(item.ResumenUltimoMensaje, search);
     }
 
-    private static string GetConversationSuggestionDescription(ConversacionInboxItemDto conversation)
-        => conversation.IdContacto.HasValue
-            ? "Conversaci\u00f3n con contacto asociado"
-            : "Conversaci\u00f3n sin contacto asociado";
-
     private static bool ContainsSearch(string? value, string search)
         => !string.IsNullOrWhiteSpace(value)
            && value.Contains(search, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsSameContactSuggestion(ConversacionInboxItemDto conversation, ContactoGridItemDto contact)
+    {
+        if (conversation.IdContacto == contact.Id)
+            return true;
+
+        var contactPhone = GetContactPhone(contact);
+        return ContainsPhoneSearch(conversation.TelefonoWhatsApp, contactPhone)
+               || ContainsPhoneSearch(contactPhone, conversation.TelefonoWhatsApp);
+    }
 
     private static bool ContainsPhoneSearch(string? value, string search)
     {
