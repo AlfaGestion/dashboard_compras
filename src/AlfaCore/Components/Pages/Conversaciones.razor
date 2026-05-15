@@ -126,13 +126,35 @@
                             }
                             else
                             {
+                                var conversationMatch = GetBestConversationMatchForSearch();
                                 <div class="conversations-contact-suggest__state">
                                     <i class="bi bi-person-plus"></i>
                                     <span>No encontramos contactos con ese texto.</span>
                                 </div>
-                                <button type="button" class="btn btn--primary btn--sm" @onclick="OpenNewContactFromSearch">
-                                    <i class="bi bi-plus-circle-fill"></i> Crear contacto nuevo
-                                </button>
+                                @if (conversationMatch is not null)
+                                {
+                                    <div class="conversations-contact-suggest__item">
+                                        <div class="conversations-contact-suggest__main">
+                                            <strong>@GetDisplayName(conversationMatch)</strong>
+                                            <span>Ya existe conversaciÃ³n sin contacto asociado</span>
+                                            <small>@DisplayOrFallback(conversationMatch.TelefonoWhatsApp)</small>
+                                        </div>
+                                        <div class="conversations-contact-suggest__actions">
+                                            <button type="button" class="btn btn--ghost btn--sm" @onclick="() => SelectConversationFromSuggestionAsync(conversationMatch.IdConversacion)">
+                                                <i class="bi bi-chat-left-text"></i> Ver conversaciÃ³n
+                                            </button>
+                                            <button type="button" class="btn btn--primary btn--sm" @onclick="() => OpenNewContactFromConversation(conversationMatch)">
+                                                <i class="bi bi-person-plus-fill"></i> Crear contacto vinculado
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn--primary btn--sm" @onclick="OpenNewContactFromSearch">
+                                        <i class="bi bi-plus-circle-fill"></i> Crear contacto nuevo
+                                    </button>
+                                }
                             }
                         </div>
                     }
@@ -2071,6 +2093,50 @@
             : $"nuevo=1&nombre={Uri.EscapeDataString(value)}";
         Nav.NavigateTo($"/contactos?{query}");
     }
+
+    private void OpenNewContactFromConversation(ConversacionInboxItemDto conversation)
+    {
+        var name = FirstNonEmpty(conversation.ContactoNombre, conversation.NombreVisible, conversation.ClienteNombre, _filters.Search);
+        var phone = FirstNonEmpty(conversation.TelefonoWhatsApp);
+        var query = new List<string> { "nuevo=1" };
+
+        if (!string.IsNullOrWhiteSpace(name))
+            query.Add($"nombre={Uri.EscapeDataString(name)}");
+        if (!string.IsNullOrWhiteSpace(phone))
+            query.Add($"celular={Uri.EscapeDataString(phone)}");
+
+        Nav.NavigateTo($"/contactos?{string.Join("&", query)}");
+    }
+
+    private async Task SelectConversationFromSuggestionAsync(long idConversacion)
+    {
+        _showContactSuggestions = false;
+        await SelectConversationAsync(idConversacion);
+    }
+
+    private ConversacionInboxItemDto? GetBestConversationMatchForSearch()
+    {
+        var search = _filters.Search.Trim();
+        if (search.Length < 2)
+            return null;
+
+        return _inbox.FirstOrDefault(x =>
+            !x.IdContacto.HasValue
+            && MatchesConversationSearch(x, search));
+    }
+
+    private static bool MatchesConversationSearch(ConversacionInboxItemDto item, string search)
+    {
+        return ContainsSearch(item.NombreVisible, search)
+               || ContainsSearch(item.ContactoNombre, search)
+               || ContainsSearch(item.ClienteNombre, search)
+               || ContainsSearch(item.TelefonoWhatsApp, search)
+               || ContainsSearch(item.ResumenUltimoMensaje, search);
+    }
+
+    private static bool ContainsSearch(string? value, string search)
+        => !string.IsNullOrWhiteSpace(value)
+           && value.Contains(search, StringComparison.OrdinalIgnoreCase);
 
     private static string GetContactPhone(ContactoGridItemDto contact)
         => FirstNonEmpty(contact.Celular, contact.Telefono);
