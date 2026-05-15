@@ -870,6 +870,7 @@
     private List<ConversacionInboxItemDto> _inbox = [];
     private List<ConversacionMensajeDto> _messages = [];
     private readonly Dictionary<long, ConversationViewCache> _conversationCache = [];
+    private readonly Dictionary<string, ConversationChannelCache> _channelCache = [];
     private ConversacionDetalleDto? _selectedConversation;
     private long? _selectedConversationId;
     private bool _loadingInbox;
@@ -955,8 +956,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadLookupsAsync();
-        await LoadFavoriteStickersAsync();
+        await Task.WhenAll(LoadLookupsAsync(), LoadFavoriteStickersAsync());
         if (_loadError is null)
             await LoadInboxAsync();
 
@@ -1105,6 +1105,7 @@
             var refreshedInbox = (await ConversacionesSvc.GetInboxAsync(_filters)).ToList();
             TrackInboxNewMessages(previousInbox, refreshedInbox, showLoading);
             _inbox = refreshedInbox;
+            StoreChannelCache(_canalActivo);
 
             if (_selectedConversationId.HasValue && _inbox.Any(x => x.IdConversacion == _selectedConversationId.Value))
                 return;
@@ -1260,6 +1261,49 @@
         _scrollHandlerConversationId = null;
         RestoreSelectedNewMessageMarker(idConversacion);
     }
+
+    private void StoreChannelCache(string canal)
+    {
+        _channelCache[canal] = new ConversationChannelCache(
+            CloneFilters(_filters),
+            _inbox.ToList(),
+            _selectedConversationId);
+    }
+
+    private bool TryApplyChannelCache(string canal)
+    {
+        if (!_channelCache.TryGetValue(canal, out var cache))
+            return false;
+
+        _filters = CloneFilters(cache.Filters);
+        _filters.Canal = canal;
+        _inbox = cache.Inbox.ToList();
+
+        if (cache.SelectedConversationId is long selectedId
+            && _conversationCache.TryGetValue(selectedId, out var conversationCache))
+        {
+            _selectedConversationId = selectedId;
+            ApplyConversationCache(selectedId, conversationCache);
+        }
+        else
+        {
+            ClearSelection();
+        }
+
+        return true;
+    }
+
+    private static ConversacionesInboxFilters CloneFilters(ConversacionesInboxFilters filters)
+        => new()
+        {
+            Modo = filters.Modo,
+            Search = filters.Search,
+            IdTecnicoActual = filters.IdTecnicoActual,
+            CodigoEstado = filters.CodigoEstado,
+            Canal = filters.Canal,
+            Limit = filters.Limit,
+            Offset = filters.Offset
+        };
 
     private void StartPolling()
     {
@@ -1740,9 +1784,20 @@
 
     private async Task ChangeCanalAsync(string canal)
     {
+        if (_canalActivo == canal)
+            return;
+
+        StoreChannelCache(_canalActivo);
         _canalActivo = canal;
         _filters.Canal = canal;
         _showNuevoHilo = false;
+
+        if (TryApplyChannelCache(canal))
+        {
+            await RefreshInboxAsync(showLoading: false, allowSelectionChange: true);
+            return;
+        }
+
         ClearSelection();
         await LoadInboxAsync();
     }
@@ -2685,6 +2740,11 @@
         ConversacionDetalleDto Conversation,
         List<ConversacionMensajeDto> Messages,
         Dictionary<long, List<ConversacionAdjuntoDto>> AttachmentsByMessage);
+
+    private sealed record ConversationChannelCache(
+        ConversacionesInboxFilters Filters,
+        List<ConversacionInboxItemDto> Inbox,
+        long? SelectedConversationId);
 
     private static class ComposerToolTabs
     {
