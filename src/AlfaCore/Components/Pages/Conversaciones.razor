@@ -99,7 +99,7 @@
                                         <div class="conversations-contact-suggest__item">
                                             <div class="conversations-contact-suggest__main">
                                                 <strong>@GetDisplayName(conversation)</strong>
-                                                <span>@(conversation.IdContacto.HasValue ? "Conversaci&oacute;n con contacto asociado" : "Conversaci&oacute;n sin contacto asociado")</span>
+                                                <span>@GetConversationSuggestionDescription(conversation)</span>
                                                 <small>@DisplayOrFallback(conversation.TelefonoWhatsApp)</small>
                                             </div>
                                             <div class="conversations-contact-suggest__actions">
@@ -169,12 +169,12 @@
                                     <div class="conversations-contact-suggest__item">
                                         <div class="conversations-contact-suggest__main">
                                             <strong>@GetDisplayName(conversationMatch)</strong>
-                                            <span>Ya existe conversaci&oacute;n sin contacto asociado</span>
+                                            <span>@("Ya existe conversaci\u00f3n sin contacto asociado")</span>
                                             <small>@DisplayOrFallback(conversationMatch.TelefonoWhatsApp)</small>
                                         </div>
                                         <div class="conversations-contact-suggest__actions">
                                             <button type="button" class="btn btn--ghost btn--sm" @onclick="() => SelectConversationFromSuggestionAsync(conversationMatch.IdConversacion)">
-                                                <i class="bi bi-chat-left-text"></i> Ver conversaci&oacute;n
+                                                <i class="bi bi-chat-left-text"></i> @("Ver conversaci\u00f3n")
                                             </button>
                                             <button type="button" class="btn btn--primary btn--sm" @onclick="() => OpenNewContactFromConversation(conversationMatch)">
                                                 <i class="bi bi-person-plus-fill"></i> Crear contacto vinculado
@@ -2198,6 +2198,11 @@
                || ContainsPhoneSearch(item.TelefonoWhatsApp, search)
                || ContainsSearch(item.ResumenUltimoMensaje, search);
     }
+
+    private static string GetConversationSuggestionDescription(ConversacionInboxItemDto conversation)
+        => conversation.IdContacto.HasValue
+            ? "Conversaci\u00f3n con contacto asociado"
+            : "Conversaci\u00f3n sin contacto asociado";
 
     private static bool ContainsSearch(string? value, string search)
         => !string.IsNullOrWhiteSpace(value)

@@ -18,6 +18,8 @@ public sealed class ConversacionesService(
     IWebHostEnvironment environment) : IConversacionesService
 {
     private readonly IAppEventService _appEvents = appEvents;
+    private const string ManualWhatsAppConversationSummary = "Conversaci\u00f3n iniciada manualmente.";
+    private const string ManualWhatsAppInitialState = "PENDIENTE";
     private static readonly ConcurrentDictionary<long, byte> MediaHydrationAttempts = new();
     private static readonly string[] DebtSourceCandidates =
     [
@@ -174,6 +176,15 @@ public sealed class ConversacionesService(
                         OR (@Modo = 'pendientes' AND ISNULL(e.EsCerrado, 0) = 0)
                         OR (@Modo = 'cerradas' AND ISNULL(e.EsCerrado, 0) = 1)
                     )
+                    AND NOT (
+                        c.Canal = N'WHATSAPP'
+                        AND ISNULL(c.ResumenUltimoMensaje, N'') = @ManualWhatsAppConversationSummary
+                        AND NOT EXISTS (
+                            SELECT 1
+                            FROM dbo.CONV_MENSAJES msg
+                            WHERE msg.IdConversacion = c.IdConversacion
+                        )
+                    )
                 ORDER BY c.FechaHoraUltimoMensaje DESC
                 OFFSET @Offset ROWS FETCH NEXT @Limit ROWS ONLY
                 """;
@@ -190,6 +201,7 @@ public sealed class ConversacionesService(
             cmd.Parameters.AddWithValue("@SearchPhoneTail", DbNullable(searchPhoneTail));
             cmd.Parameters.AddWithValue("@Modo", NormalizeMode(filters.Modo));
             cmd.Parameters.AddWithValue("@IdTecnicoActual", DbNullable(filters.IdTecnicoActual));
+            cmd.Parameters.AddWithValue("@ManualWhatsAppConversationSummary", ManualWhatsAppConversationSummary);
             cmd.Parameters.AddWithValue("@Offset", Math.Max(0, filters.Offset));
             cmd.Parameters.AddWithValue("@Limit", Math.Clamp(filters.Limit, 1, 200));
 
@@ -1197,9 +1209,9 @@ public sealed class ConversacionesService(
                     @NombreVisible,
                     @ClienteCodigo,
                     @IdContacto,
-                    N'ABIERTA',
+                    @CodigoEstadoInicial,
                     @IdTecnico,
-                    N'Conversación iniciada manualmente.',
+                    @ResumenInicial,
                     GETDATE(),
                     GETDATE(),
                     GETDATE()
@@ -1214,7 +1226,9 @@ public sealed class ConversacionesService(
             cmd.Parameters.AddWithValue("@NombreVisible", DbNullable(displayName));
             cmd.Parameters.AddWithValue("@ClienteCodigo", DbNullable(contact.ClientCode));
             cmd.Parameters.AddWithValue("@IdContacto", contact.IdContact.HasValue ? contact.IdContact.Value : DBNull.Value);
+            cmd.Parameters.AddWithValue("@CodigoEstadoInicial", ManualWhatsAppInitialState);
             cmd.Parameters.AddWithValue("@IdTecnico", DbNullable(request.IdTecnico));
+            cmd.Parameters.AddWithValue("@ResumenInicial", ManualWhatsAppConversationSummary);
             var result = await cmd.ExecuteScalarAsync(token);
             var id = Convert.ToInt64(result, CultureInfo.InvariantCulture);
 
