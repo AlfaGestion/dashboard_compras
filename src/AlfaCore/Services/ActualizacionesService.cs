@@ -12,7 +12,7 @@ public sealed class ActualizacionesService(
     IAppEventService appEvents) : IActualizacionesService
 {
     private const string ConfigGroup = "SISTEMA";
-    private const string FechaUpdateKey = "FECHAUPDATE";
+    private const string FechaUpdateKey = "FECHAUPDATE_CORE";
     private const string RutaRedKey = "ACTUALIZACIONESRUTARED";
     private const string HistoryTable = "dbo.AUX_ACTUALIZACION_HIST";
     private const string LockResourcePrefix = "ALFACORE_DB_UPDATES";

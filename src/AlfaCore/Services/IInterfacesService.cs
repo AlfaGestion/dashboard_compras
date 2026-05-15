@@ -13,6 +13,7 @@ public interface IInterfacesService
     Task AddAttachmentsAsync(InterfacesAgregarAdjuntosRequest request, CancellationToken ct = default);
     Task RemoveAttachmentAsync(InterfacesEliminarAdjuntoRequest request, CancellationToken ct = default);
     Task ChangeStatusAsync(InterfacesCambioEstadoRequest request, CancellationToken ct = default);
+    Task<int> DeleteAsync(InterfacesEliminarComprobantesRequest request, CancellationToken ct = default);
     Task<InterfacesAdjuntoServeDto?> GetAttachmentForServeAsync(long idAdjunto, CancellationToken ct = default);
     Task<InterfacesViewSettingsDto> GetViewSettingsAsync(string userName, CancellationToken ct = default);
     Task SaveViewSettingsAsync(string userName, InterfacesViewSettingsDto settings, CancellationToken ct = default);

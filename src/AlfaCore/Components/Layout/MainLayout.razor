@@ -319,39 +319,42 @@
                 <p class="shell__eyebrow">Alfa Gestión</p>
                 <p class="shell__module">@GetModuleTitle()</p>
             </div>
-            <div class="shell__actions">
-                <button type="button" class="btn btn--ghost no-print" @onclick="ToggleThemeAsync" title="@(_isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro")">
-                    <i class="bi @(_isDark ? "bi-sun" : "bi-moon")"></i>
-                </button>
-                @if (_currentModule == "compras")
-                {
-                    <button type="button" class="btn btn--ghost shell__print no-print" @onclick="ExportCurrentPageToPdfAsync" title="Exportar pantalla actual a PDF">
-                        <i class="bi bi-file-earmark-pdf"></i>
-                        <span>Exportar PDF</span>
+            @if (ShowShellContext)
+            {
+                <div class="shell__actions">
+                    <button type="button" class="btn btn--ghost no-print" @onclick="ToggleThemeAsync" title="@(_isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro")">
+                        <i class="bi @(_isDark ? "bi-sun" : "bi-moon")"></i>
                     </button>
-                }
-                <button class="session-chip no-print" @onclick="() => _drawerOpen = true" title="Gestionar sesiones de base de datos">
-                    <span class="session-chip__dot"></span>
-                    <span class="session-chip__text">@(_activeSession?.Servidor ?? "—") · @(_activeSession?.BaseDatos ?? "—")</span>
-                    <i class="bi bi-chevron-down"></i>
-                </button>
-                @if (AppUserSession.IsAuthenticated && AppUserSession.CurrentUser is not null)
-                {
-                    <button type="button" class="session-chip no-print" @onclick="LogoutAppUser" title="Cerrar sesión del sistema">
+                    @if (_currentModule == "compras")
+                    {
+                        <button type="button" class="btn btn--ghost shell__print no-print" @onclick="ExportCurrentPageToPdfAsync" title="Exportar pantalla actual a PDF">
+                            <i class="bi bi-file-earmark-pdf"></i>
+                            <span>Exportar PDF</span>
+                        </button>
+                    }
+                    <button class="session-chip no-print" @onclick="() => _drawerOpen = true" title="Gestionar sesiones de base de datos">
                         <span class="session-chip__dot"></span>
-                        <span class="session-chip__text">@AppUserSession.CurrentUser.UserName</span>
-                        <i class="bi bi-box-arrow-right"></i>
+                        <span class="session-chip__text">@(_activeSession?.Servidor ?? "—") · @(_activeSession?.BaseDatos ?? "—")</span>
+                        <i class="bi bi-chevron-down"></i>
                     </button>
-                }
-                <div class="shell__status">
-                    <span class="shell__dot"></span>
-                    <span>Actualizado en tiempo real</span>
-                    <span class="shell__date">@DateTime.Now.ToString("dd/MM/yyyy")</span>
-                    <a class="help-btn no-print" href="@(_currentModule == "consultas" ? "/ayuda?topic=consultas" : "/ayuda")" title="Manual de usuario">
-                        <i class="bi bi-question-circle"></i>
-                    </a>
+                    @if (AppUserSession.IsAuthenticated && AppUserSession.CurrentUser is not null)
+                    {
+                        <button type="button" class="session-chip no-print" @onclick="LogoutAppUser" title="Cerrar sesión del sistema">
+                            <span class="session-chip__dot"></span>
+                            <span class="session-chip__text">@AppUserSession.CurrentUser.UserName</span>
+                            <i class="bi bi-box-arrow-right"></i>
+                        </button>
+                    }
+                    <div class="shell__status">
+                        <span class="shell__dot"></span>
+                        <span>Actualizado en tiempo real</span>
+                        <span class="shell__date">@DateTime.Now.ToString("dd/MM/yyyy")</span>
+                        <a class="help-btn no-print" href="@(_currentModule == "consultas" ? "/ayuda?topic=consultas" : "/ayuda")" title="Manual de usuario">
+                            <i class="bi bi-question-circle"></i>
+                        </a>
+                    </div>
                 </div>
-            </div>
+            }
         </header>
 
         <section class="shell__content">
@@ -393,6 +396,7 @@
     private bool _loginBusy;
     private bool _loginShowPassword;
     private string CurrentPageTitle => GetCurrentPageTitle();
+    private bool ShowShellContext => string.IsNullOrWhiteSpace(_currentModule);
 
     private string _currentModule = string.Empty;
 
