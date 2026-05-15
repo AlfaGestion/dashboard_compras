@@ -14,7 +14,7 @@
                 <i class="bi bi-inbox-fill"></i> Inbox
             </a>
             <div style="position: relative;">
-                <button type="button" class="btn btn--primary" style="@CrearButtonStyle" @onclick="ToggleMenuCrear">
+                <button type="button" class="btn btn--primary" style="@CrearButtonStyle" @onclick="HandleCrearPrincipalAsync">
                     <i class="bi @CrearButtonIcon"></i> @CrearButtonLabel
                 </button>
                 @if (_mostrarMenuCrear)
@@ -375,6 +375,21 @@
         {
             _loading = false;
         }
+    }
+
+    private async Task HandleCrearPrincipalAsync()
+    {
+        if (_crearSeleccion == CrearOpciones.Crear)
+        {
+            ToggleMenuCrear();
+            return;
+        }
+
+        _mostrarMenuCrear = false;
+        MarcarOpcionCrear(CrearOpciones.Crear);
+        _filters = new ConversacionPlantillaFilters();
+        await LoadTemplatesAsync();
+        NuevaPlantilla();
     }
 
     private void ToggleMenuCrear()
