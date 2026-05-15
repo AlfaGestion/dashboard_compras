@@ -341,10 +341,9 @@ public sealed class ConversacionesService(
                     ON t.IdTecnico = m.IdTecnicoAutor
                 WHERE m.IdConversacion = @IdConversacion
                 ORDER BY m.FechaHora ASC, m.IdMensaje ASC
-                """;
+            """;
 
             var items = new List<ConversacionMensajeDto>();
-            var pendingMediaHydration = new List<PendingMediaHydration>();
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync(token);
             await using var cmd = new SqlCommand(sql, cn);
@@ -372,21 +371,8 @@ public sealed class ConversacionesService(
                     TieneAdjuntos = GetInt(rd, 15) == 1
                 };
 
-                var payloadJson = item.PayloadJson;
-                if (ShouldHydrateIncomingMedia(item, payloadJson))
-                {
-                    pendingMediaHydration.Add(new PendingMediaHydration
-                    {
-                        Message = item,
-                        PayloadJson = payloadJson
-                    });
-                }
-
                 items.Add(item);
             }
-
-            if (pendingMediaHydration.Count > 0)
-                await HydrateMissingIncomingMediaAsync(pendingMediaHydration, token);
 
             return (IReadOnlyList<ConversacionMensajeDto>)items;
         }, "No se pudieron cargar los mensajes.", ct);

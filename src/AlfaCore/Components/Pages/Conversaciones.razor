@@ -869,6 +869,7 @@
     private List<ConversacionEstadoOptionDto> _states = [];
     private List<ConversacionInboxItemDto> _inbox = [];
     private List<ConversacionMensajeDto> _messages = [];
+    private readonly Dictionary<long, ConversationViewCache> _conversationCache = [];
     private ConversacionDetalleDto? _selectedConversation;
     private long? _selectedConversationId;
     private bool _loadingInbox;
@@ -1160,6 +1161,14 @@
     {
         var conversationChanged = _selectedConversationId != idConversacion;
         _selectedConversationId = idConversacion;
+        var hasWarmCache = _conversationCache.TryGetValue(idConversacion, out var cachedConversation);
+
+        if (hasWarmCache && cachedConversation is not null)
+        {
+            ApplyConversationCache(idConversacion, cachedConversation);
+            showLoading = false;
+        }
+
         if (showLoading)
             _loadingConversation = true;
 
@@ -1184,6 +1193,7 @@
             _adjuntosPorMensaje = adjuntos
                 .GroupBy(a => a.IdMensaje)
                 .ToDictionary(g => g.Key, g => g.ToList());
+            StoreConversationCache(idConversacion);
             _assignmentTechnicianId = _selectedConversation?.IdTecnico ?? string.Empty;
             _statusCode = _selectedConversation?.CodigoEstado ?? (_states.FirstOrDefault()?.CodigoEstado ?? "ABIERTA");
 
@@ -1217,6 +1227,38 @@
             if (showLoading)
                 _loadingConversation = false;
         }
+    }
+
+    private void StoreConversationCache(long idConversacion)
+    {
+        if (_selectedConversation is null)
+            return;
+
+        _conversationCache[idConversacion] = new ConversationViewCache(
+            _selectedConversation,
+            _messages.ToList(),
+            _adjuntosPorMensaje.ToDictionary(x => x.Key, x => x.Value.ToList()));
+
+        const int maxCachedConversations = 8;
+        if (_conversationCache.Count <= maxCachedConversations)
+            return;
+
+        var firstKey = _conversationCache.Keys.FirstOrDefault(x => x != idConversacion);
+        if (firstKey > 0)
+            _conversationCache.Remove(firstKey);
+    }
+
+    private void ApplyConversationCache(long idConversacion, ConversationViewCache cache)
+    {
+        _selectedConversation = cache.Conversation;
+        _messages = cache.Messages.ToList();
+        _adjuntosPorMensaje = cache.AttachmentsByMessage.ToDictionary(x => x.Key, x => x.Value.ToList());
+        _assignmentTechnicianId = _selectedConversation.IdTecnico;
+        _statusCode = _selectedConversation.CodigoEstado;
+        _conversationError = null;
+        _scrollThreadToBottomAfterRender = true;
+        _scrollHandlerConversationId = null;
+        RestoreSelectedNewMessageMarker(idConversacion);
     }
 
     private void StartPolling()
@@ -2638,6 +2680,11 @@
     }
 
     private sealed record EmojiGroup(string Nombre, IReadOnlyList<string> Emojis);
+
+    private sealed record ConversationViewCache(
+        ConversacionDetalleDto Conversation,
+        List<ConversacionMensajeDto> Messages,
+        Dictionary<long, List<ConversacionAdjuntoDto>> AttachmentsByMessage);
 
     private static class ComposerToolTabs
     {
