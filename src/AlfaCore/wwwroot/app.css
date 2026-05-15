@@ -2529,6 +2529,11 @@ tr.row--critical td {
     font-size: .92rem;
 }
 
+.context-card__action {
+    width: fit-content;
+    margin-top: .35rem;
+}
+
 .conversation-row__meta,
 .conversation-row__badges {
     display: flex;

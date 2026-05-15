@@ -700,6 +700,18 @@
                             <span class="context-card__muted">@DisplayOrFallback(_selectedConversation.ContactoCargo)</span>
                             <span class="context-card__muted">@DisplayOrFallback(_selectedConversation.ContactoCelular, _selectedConversation.ContactoTelefono)</span>
                             <span class="context-card__muted">@DisplayOrFallback(_selectedConversation.ContactoEmail)</span>
+                            @if (_selectedConversation.IdContacto.HasValue)
+                            {
+                                <button type="button" class="btn btn--ghost btn--sm context-card__action" @onclick="OpenSelectedContact">
+                                    <i class="bi bi-person-lines-fill"></i> Ver contacto
+                                </button>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn--primary btn--sm context-card__action" @onclick="OpenNewContactFromSelectedConversation">
+                                    <i class="bi bi-person-plus-fill"></i> Crear contacto
+                                </button>
+                            }
                         </div>
 
                         <div class="conversations-context__hint">
@@ -2154,6 +2166,38 @@
 
     private void OpenContactEditor(ContactoGridItemDto contact)
         => Nav.NavigateTo($"/contactos?editar={contact.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+
+    private void OpenSelectedContact()
+    {
+        if (_selectedConversation?.IdContacto is int idContacto)
+            Nav.NavigateTo($"/contactos?editar={idContacto.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+    }
+
+    private void OpenNewContactFromSelectedConversation()
+    {
+        if (_selectedConversation is null)
+            return;
+
+        var name = FirstNonEmpty(
+            _selectedConversation.ContactoNombre,
+            _selectedConversation.NombreVisible,
+            _selectedConversation.ClienteNombre);
+        var phone = FirstNonEmpty(
+            _selectedConversation.ContactoCelular,
+            _selectedConversation.TelefonoWhatsApp,
+            _selectedConversation.ContactoTelefono);
+        var email = FirstNonEmpty(_selectedConversation.ContactoEmail);
+        var query = new List<string> { "nuevo=1" };
+
+        if (!string.IsNullOrWhiteSpace(name))
+            query.Add($"nombre={Uri.EscapeDataString(name)}");
+        if (!string.IsNullOrWhiteSpace(phone))
+            query.Add($"celular={Uri.EscapeDataString(phone)}");
+        if (!string.IsNullOrWhiteSpace(email))
+            query.Add($"email={Uri.EscapeDataString(email)}");
+
+        Nav.NavigateTo($"/contactos?{string.Join("&", query)}");
+    }
 
     private void OpenNewContactFromSearch()
     {
